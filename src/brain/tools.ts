@@ -35,6 +35,45 @@ export const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'reschedule_booking',
+    description:
+      "Move the client's upcoming confirmed booking to a new time. Call check_availability first, confirm the new slot with the client, then call this.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        new_start_at: { type: 'string', description: 'ISO datetime of the new slot' },
+      },
+      required: ['new_start_at'],
+    },
+  },
+  {
+    name: 'cancel_booking',
+    description:
+      "Cancel the client's upcoming confirmed booking. Always confirm they mean to cancel before calling this.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        reason: { type: 'string', description: 'Optional reason given by the client' },
+      },
+    },
+  },
+  {
+    name: 'add_to_waitlist',
+    description:
+      'Add the client to the waitlist for a service when no slot is available. They will be texted automatically when a cancellation opens up.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        service: { type: 'string' },
+        preferred_window: {
+          type: 'string',
+          description: 'e.g. "mornings", "Friday afternoon", "any time"',
+        },
+      },
+      required: ['service'],
+    },
+  },
+  {
     name: 'escalate_to_human',
     description:
       'Flag the conversation for a human when you cannot safely handle it (complex, sensitive, upset, or clinical).',
