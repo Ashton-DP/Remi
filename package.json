@@ -1,0 +1,29 @@
+{
+  "name": "remi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Remi — AI front desk for clinics (WhatsApp MVP)",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "chat": "tsx src/chat.ts",
+    "setup": "tsx src/setup.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest",
+    "@google/genai": "latest",
+    "@supabase/supabase-js": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "googleapis": "latest",
+    "twilio": "latest"
+  },
+  "devDependencies": {
+    "@types/express": "latest",
+    "@types/node": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}
