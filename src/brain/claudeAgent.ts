@@ -15,8 +15,9 @@ export async function runClaudeAgent(
   convo: any,
   history: any[],
   isFirstContact: boolean,
+  isVoice = false,
 ): Promise<string> {
-  const system = buildSystemPrompt(clinic, isFirstContact);
+  const system = buildSystemPrompt(clinic, isFirstContact, isVoice);
   const messages: any[] = [...history];
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {

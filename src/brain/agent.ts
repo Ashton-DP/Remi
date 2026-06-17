@@ -13,9 +13,10 @@ export async function runAgent(
   convo: any,
   history: any[],
   isFirstContact: boolean,
+  isVoice = false,
 ): Promise<string> {
   if (config.aiProvider === 'claude') {
-    return runClaudeAgent(clinic, customer, convo, history, isFirstContact);
+    return runClaudeAgent(clinic, customer, convo, history, isFirstContact, isVoice);
   }
-  return runGeminiAgent(clinic, customer, convo, history, isFirstContact);
+  return runGeminiAgent(clinic, customer, convo, history, isFirstContact, isVoice);
 }

@@ -47,8 +47,9 @@ export async function runGeminiAgent(
   convo: any,
   history: any[],
   isFirstContact: boolean,
+  isVoice = false,
 ): Promise<string> {
-  const systemInstruction = buildSystemPrompt(clinic, isFirstContact);
+  const systemInstruction = buildSystemPrompt(clinic, isFirstContact, isVoice);
   const contents: any[] = history.map((m: any) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],

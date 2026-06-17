@@ -1,4 +1,4 @@
-export function buildSystemPrompt(clinic: any, isFirstContact: boolean): string {
+export function buildSystemPrompt(clinic: any, isFirstContact: boolean, isVoice = false): string {
   const services = (clinic.services_json ?? [])
     .map((s: any) => `- ${s.service}: R${s.price_zar} (${s.duration_min} min)`)
     .join('\n');
@@ -33,5 +33,12 @@ ${services || '(none configured)'}
 FAQs:
 ${faq || '(none)'}
 
-Timezone: ${clinic.timezone ?? 'Africa/Johannesburg'}. Today is ${new Date().toISOString().slice(0, 10)}.`;
+Timezone: ${clinic.timezone ?? 'Africa/Johannesburg'}. Today is ${new Date().toISOString().slice(0, 10)}.${isVoice ? `
+
+VOICE MODE — this reply will be spoken aloud over the phone:
+- No markdown, no asterisks, no bullet points, no emojis.
+- Short natural sentences. Speak as you would on a call.
+- Never say "Reply X" — the caller cannot type.
+- After confirming a booking say: "Great, you're all booked in. Is there anything else I can help you with?"
+- Mirror the caller's language: respond in Afrikaans if they speak Afrikaans.` : ''}`;
 }

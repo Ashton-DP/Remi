@@ -222,6 +222,27 @@ export async function getClientWaitlist(clinicId: string, clientId: string, serv
   return rows[0] ?? null;
 }
 
+/** Recent conversations with the last message body, for the dashboard. */
+export async function getRecentConversations(clinicId: string, limit = 15) {
+  const { data } = await supabase
+    .from('conversations')
+    .select('id,status,channel,last_message_at,clients(phone,name)')
+    .eq('clinic_id', clinicId)
+    .order('last_message_at', { ascending: false })
+    .limit(limit);
+  return data ?? [];
+}
+
+/** Open escalations waiting for a human. */
+export async function getOpenEscalations(clinicId: string) {
+  const { data } = await supabase
+    .from('escalations')
+    .select('id,reason,summary,created_at,conversations(client_id,clients(phone,name))')
+    .eq('status', 'open')
+    .order('created_at', { ascending: false });
+  return data ?? [];
+}
+
 export async function getReportData(clinicId: string, sinceISO: string) {
   const { data: events } = await supabase
     .from('events')

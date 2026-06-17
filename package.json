@@ -25,6 +25,7 @@
   "devDependencies": {
     "@types/express": "latest",
     "@types/node": "latest",
+    "localtunnel": "^2.0.2",
     "tsx": "latest",
     "typescript": "latest"
   }
