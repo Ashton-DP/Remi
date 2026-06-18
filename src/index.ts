@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'node:path';
 import { config } from './config';
 import { handleInboundWhatsApp } from './routes/whatsapp';
 import { handleInboundCall, handleVoiceGather, handleCallStatus } from './routes/voice';
@@ -8,6 +9,7 @@ import { renderDashboard } from './dashboard';
 const app = express();
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
+app.use(express.static(path.join(process.cwd(), 'public')));
 
 // Health
 app.get('/health', (_req, res) => res.json({ ok: true }));
@@ -40,6 +42,7 @@ app.get('/dashboard', (_req, res) => {
   res.status(400).send('Set DEFAULT_CLINIC_ID in .env');
 });
 
-app.listen(config.port, () => {
+const PORT = parseInt(process.env.PORT ?? '3001', 10);
+app.listen(PORT, () => {
   console.log(`Remi listening on :${config.port} (model: ${config.model})`);
 });

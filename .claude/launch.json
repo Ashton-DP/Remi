@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "remi-dev",
+      "runtimeExecutable": "/opt/local/bin/node",
+      "runtimeArgs": ["node_modules/.bin/tsx", "src/index.ts"],
+      "port": 3000
+    }
+  ]
+}
