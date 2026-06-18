@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { config } from '../config';
 import {
   getClinic,
+  getClinicByNumber,
   getOrCreateClient,
   getOrCreateConversation,
   saveMessage,
@@ -16,7 +17,8 @@ export async function handleInboundWhatsApp(req: Request, res: Response) {
     const from = String(req.body.From ?? '');
     const body = String(req.body.Body ?? '').trim();
 
-    const clinic = await getClinic(config.defaultClinicId);
+    const to = String(req.body.To ?? '');
+    const clinic = (await getClinicByNumber(to)) ?? (await getClinic(config.defaultClinicId));
     if (!clinic) {
       res.type('text/xml').send(twimlReply('Sorry, this number is not set up yet.'));
       return;

@@ -3,6 +3,7 @@ import twilio from 'twilio';
 import { config } from '../config';
 import {
   getClinic,
+  getClinicByNumber,
   getOrCreateClient,
   getOrCreateConversation,
   saveMessage,
@@ -49,9 +50,9 @@ export async function handleInboundCall(req: Request, res: Response) {
   try {
     const callSid: string = req.body.CallSid;
     const from: string = req.body.From ?? '';
-    const clinicId = config.defaultClinicId;
+    const to: string = req.body.To ?? '';
 
-    const clinic = await getClinic(clinicId);
+    const clinic = (await getClinicByNumber(to)) ?? (await getClinic(config.defaultClinicId));
     if (!clinic) {
       const vr = voiceResponse();
       vr.say({ voice: SA_ENGLISH_VOICE }, "Sorry, this line isn't set up yet. Please try again later.");
@@ -59,11 +60,11 @@ export async function handleInboundCall(req: Request, res: Response) {
       return res.type('text/xml').send(vr.toString());
     }
 
-    const { client: customer, isNew } = await getOrCreateClient(clinicId, from);
-    const convo = await getOrCreateConversation(clinicId, customer.id);
+    const { client: customer, isNew } = await getOrCreateClient(clinic.id, from);
+    const convo = await getOrCreateConversation(clinic.id, customer.id);
 
     callState.init(callSid, {
-      clinicId,
+      clinicId: clinic.id,
       clientId: customer.id,
       conversationId: convo.id,
       language: 'en-ZA',
@@ -138,7 +139,7 @@ export async function handleCallStatus(req: Request, res: Response) {
 
   if (MISSED_CALL_STATUSES.has(callStatus) && from) {
     try {
-      const clinic = await getClinic(config.defaultClinicId);
+      const clinic = (await getClinicByNumber(req.body.To ?? '')) ?? (await getClinic(config.defaultClinicId));
       if (clinic) {
         const whatsappTo = from.startsWith('whatsapp:') ? from : `whatsapp:${from}`;
         await sendWhatsApp(

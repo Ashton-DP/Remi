@@ -1,9 +1,10 @@
 -- Demo clinic for sandbox testing. Run after schema.sql, then copy the printed
 -- id into DEFAULT_CLINIC_ID in your .env.
 
-insert into clinics (name, timezone, hours_json, services_json, faq_json, tone_notes, escalation_contact, avg_new_client_value_zar)
+insert into clinics (name, twilio_number, timezone, hours_json, services_json, faq_json, tone_notes, escalation_contact, avg_new_client_value_zar)
 values (
   'Demo Aesthetics (George)',
+  null,                              -- set via npm run onboard or UPDATE clinics SET twilio_number='+1...' WHERE id='...'
   'Africa/Johannesburg',
   '{"mon":[["09:00","17:00"]],"tue":[["09:00","17:00"]],"wed":[["09:00","17:00"]],"thu":[["09:00","17:00"]],"fri":[["09:00","16:00"]]}',
   '[

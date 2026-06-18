@@ -6,6 +6,7 @@ create extension if not exists pgcrypto;
 create table if not exists clinics (
   id uuid primary key default gen_random_uuid(),
   name text not null,
+  twilio_number text,                -- E.164 phone number this clinic owns (+27215551234)
   whatsapp_number text,
   timezone text default 'Africa/Johannesburg',
   hours_json jsonb,                 -- {"mon":[["09:00","17:00"]], ...}

@@ -5,6 +5,13 @@ export async function getClinic(id: string) {
   return data;
 }
 
+/** Look up a clinic by its Twilio number (voice or WhatsApp). */
+export async function getClinicByNumber(to: string) {
+  const number = to.replace(/^whatsapp:/, ''); // strip prefix if present
+  const { data } = await supabase.from('clinics').select('*').eq('twilio_number', number).maybeSingle();
+  return data ?? null;
+}
+
 export async function getOrCreateClient(clinicId: string, phone: string) {
   const { data: existing } = await supabase
     .from('clients')
