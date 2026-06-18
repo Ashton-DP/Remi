@@ -5,6 +5,7 @@ import { handleInboundWhatsApp } from './routes/whatsapp';
 import { handleInboundCall, handleVoiceGather, handleCallStatus } from './routes/voice';
 import { generateReport } from './report';
 import { renderDashboard } from './dashboard';
+import { supabase } from './lib/supabase';
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -13,6 +14,25 @@ app.use(express.static(path.join(process.cwd(), 'public')));
 
 // Health
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+// DB diagnostic — reports whether Supabase env vars are present and whether a
+// trivial query succeeds. Safe to expose: returns no secrets, only presence flags.
+app.get('/health/db', async (_req, res) => {
+  const present = {
+    SUPABASE_URL: Boolean(process.env.SUPABASE_URL),
+    SUPABASE_SERVICE_KEY: Boolean(process.env.SUPABASE_SERVICE_KEY),
+    DEFAULT_CLINIC_ID: Boolean(process.env.DEFAULT_CLINIC_ID),
+    AI_PROVIDER: process.env.AI_PROVIDER ?? null,
+    urlHost: (process.env.SUPABASE_URL ?? '').replace(/^https?:\/\//, '').split('.')[0] || null,
+  };
+  try {
+    const { error } = await supabase.from('clinics').select('id').limit(1);
+    if (error) return res.status(500).json({ ok: false, present, queryError: error.message });
+    res.json({ ok: true, present });
+  } catch (e: any) {
+    res.status(500).json({ ok: false, present, error: e?.message ?? String(e) });
+  }
+});
 
 // WhatsApp
 app.post('/webhooks/whatsapp', handleInboundWhatsApp);
