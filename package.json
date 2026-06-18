@@ -18,16 +18,16 @@
     "@anthropic-ai/sdk": "latest",
     "@google/genai": "latest",
     "@supabase/supabase-js": "latest",
+    "@types/express": "latest",
+    "@types/node": "latest",
     "dotenv": "latest",
     "express": "latest",
     "googleapis": "latest",
-    "twilio": "latest"
+    "tsx": "latest",
+    "twilio": "latest",
+    "typescript": "latest"
   },
   "devDependencies": {
-    "@types/express": "latest",
-    "@types/node": "latest",
-    "localtunnel": "^2.0.2",
-    "tsx": "latest",
-    "typescript": "latest"
+    "localtunnel": "^2.0.2"
   }
 }
