@@ -41,8 +41,10 @@ export async function handleAgentTool(req: Request, res: Response) {
   if (!mapInput) return res.status(404).json({ error: `unknown tool: ${tool}` });
 
   try {
-    const { clinic, customer, convo } = await resolveContext(req.body ?? {});
-    const result = await executeTool(clinic, customer, convo, tool, mapInput(req.body ?? {}));
+    // Accept params whether ElevenLabs sends them as query string or JSON body.
+    const params = { ...(req.query as any), ...(req.body as any) };
+    const { clinic, customer, convo } = await resolveContext(params);
+    const result = await executeTool(clinic, customer, convo, tool, mapInput(params));
     res.json(result);
   } catch (e: any) {
     console.error('[agentTools]', tool, e);
