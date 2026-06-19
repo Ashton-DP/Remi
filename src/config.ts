@@ -30,5 +30,15 @@ export const config = {
     calendarId: opt('GOOGLE_CALENDAR_ID', 'primary'),
     serviceAccountJson: opt('GOOGLE_SERVICE_ACCOUNT_JSON'),
   },
+  // WhatsApp Business API approved-template Content SIDs (HX…). Set after Meta
+  // approval; when blank, proactive sends fall back to free-form text (sandbox).
+  // See docs/whatsapp-templates.md.
+  templates: {
+    reminder48h: opt('WA_TEMPLATE_REMINDER_48H'),
+    reminder24h: opt('WA_TEMPLATE_REMINDER_24H'),
+    reminder2h: opt('WA_TEMPLATE_REMINDER_2H'),
+    waitlistOffer: opt('WA_TEMPLATE_WAITLIST_OFFER'),
+    missedCall: opt('WA_TEMPLATE_MISSED_CALL'),
+  },
   defaultClinicId: opt('DEFAULT_CLINIC_ID'),
 };

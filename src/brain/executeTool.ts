@@ -1,6 +1,7 @@
 import { createEvent } from '../lib/googleCalendar';
 import { computeFreeSlots } from '../lib/slots';
-import { sendWhatsApp } from '../lib/twilio';
+import { sendProactiveWhatsApp } from '../lib/twilio';
+import { config } from '../config';
 import {
   createBookingRow, logEvent, createEscalation,
   scheduleReminders, getClientWaitlist, setWaitlistStatus,
@@ -99,10 +100,11 @@ export async function executeTool(
             dateStyle: 'medium',
             timeStyle: 'short',
           });
-          await sendWhatsApp(
-            waiterClient.phone,
-            `Hi ${waiterClient.name ?? 'there'}! A slot just opened for ${existing.service} on ${when}. Would you like to book it? Reply YES and we'll confirm it for you.`,
-          );
+          await sendProactiveWhatsApp(waiterClient.phone, {
+            contentSid: config.templates.waitlistOffer || undefined,
+            variables: { '1': waiterClient.name ?? 'there', '2': existing.service, '3': when },
+            fallbackBody: `Hi ${waiterClient.name ?? 'there'}! A slot just opened for ${existing.service} on ${when}. Would you like to book it? Reply YES and we'll confirm it for you.`,
+          });
           await setWaitlistStatus(waiter.id, 'offered');
         }
       }

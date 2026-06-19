@@ -82,15 +82,19 @@ Hi {{1}} 👋 You just called {{2}} but we missed you. I'm Remi, the virtual ass
 
 ## Approved Content SIDs (fill in after Twilio approval)
 
-| Template | Content SID | Status |
-|---|---|---|
-| appointment_reminder_48h | `HX…` | ⬜ pending |
-| appointment_reminder_24h | `HX…` | ⬜ pending |
-| appointment_reminder_2h  | `HX…` | ⬜ pending |
-| waitlist_slot_offer      | `HX…` | ⬜ pending |
-| missed_call_text_back    | `HX…` | ⬜ pending |
+The code is **already wired** (`lib/twilio.ts` → `sendProactiveWhatsApp`): when the
+matching env var below holds a Content SID, that proactive message is sent as the
+approved template; when blank, it falls back to free-form text (sandbox / 24h
+window). So going live is just **pasting the approved SIDs into env** — no code change.
 
-Once these have SIDs, update `lib/twilio.ts` to send via
-`contentSid` + `contentVariables` for proactive messages (scheduler reminders,
-waitlist offer, missed-call text-back), keeping free-form `body` only for
-in-window replies.
+| Template | Env var to set | Content SID | Status |
+|---|---|---|---|
+| appointment_reminder_48h | `WA_TEMPLATE_REMINDER_48H`  | `HX…` | ⬜ pending |
+| appointment_reminder_24h | `WA_TEMPLATE_REMINDER_24H`  | `HX…` | ⬜ pending |
+| appointment_reminder_2h  | `WA_TEMPLATE_REMINDER_2H`   | `HX…` | ⬜ pending |
+| waitlist_slot_offer      | `WA_TEMPLATE_WAITLIST_OFFER`| `HX…` | ⬜ pending |
+| missed_call_text_back    | `WA_TEMPLATE_MISSED_CALL`   | `HX…` | ⬜ pending |
+
+After Meta approves each template in Twilio, copy its Content SID into the env var
+(locally in `.env` and in Render's Environment), redeploy, and proactive sends
+switch to templates automatically.

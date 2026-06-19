@@ -11,7 +11,7 @@ import {
   logEvent,
 } from '../db';
 import { runAgent } from '../brain/agent';
-import { sendWhatsApp } from '../lib/twilio';
+import { sendProactiveWhatsApp } from '../lib/twilio';
 import { callState } from '../lib/callState';
 
 // Polly.Ayanda = AWS Polly South African English (female). Cast needed — SDK types lag.
@@ -142,10 +142,11 @@ export async function handleCallStatus(req: Request, res: Response) {
       const clinic = (await getClinicByNumber(req.body.To ?? '')) ?? (await getClinic(config.defaultClinicId));
       if (clinic) {
         const whatsappTo = from.startsWith('whatsapp:') ? from : `whatsapp:${from}`;
-        await sendWhatsApp(
-          whatsappTo,
-          `Hey! 👋 You just called ${clinic.name} but we missed you. I'm Remi, the virtual assistant — I can help you book an appointment or answer any questions right here on WhatsApp. What can I help you with?`,
-        );
+        await sendProactiveWhatsApp(whatsappTo, {
+          contentSid: config.templates.missedCall || undefined,
+          variables: { '1': 'there', '2': clinic.name },
+          fallbackBody: `Hi there 👋 You just called ${clinic.name} but we missed you. I'm Remi, the virtual assistant — I can help you book an appointment or answer any questions right here on WhatsApp. What can I help you with?`,
+        });
         await logEvent(clinic.id, 'missed_call', 0);
         console.log(`[voice] missed call from ${from} — WhatsApp sent`);
       }
