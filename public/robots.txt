@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /report
+Disallow: /health
+Disallow: /webhooks
+
+Sitemap: https://remi-x01j.onrender.com/sitemap.xml
