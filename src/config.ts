@@ -30,6 +30,16 @@ export const config = {
     calendarId: opt('GOOGLE_CALENDAR_ID', 'primary'),
     serviceAccountJson: opt('GOOGLE_SERVICE_ACCOUNT_JSON'),
   },
+  // Voice mode: 'gather' (TwiML <Gather>/<Say> — works today) or 'conversationrelay'
+  // (real-time WebSocket + ElevenLabs natural voice — needs Twilio CR onboarding).
+  voice: {
+    mode: opt('VOICE_MODE', 'gather'),
+    elevenLabsVoiceId: opt('ELEVENLABS_VOICE_ID'),
+    // Public wss:// URL of this server's ConversationRelay WebSocket endpoint.
+    wsUrl: opt('PUBLIC_WS_URL', 'wss://www.remireception.com/ws/voice'),
+    ttsProvider: opt('CR_TTS_PROVIDER', 'ElevenLabs'),
+    transcriptionProvider: opt('CR_STT_PROVIDER', 'Deepgram'),
+  },
   // WhatsApp Business API approved-template Content SIDs (HX…). Set after Meta
   // approval; when blank, proactive sends fall back to free-form text (sandbox).
   // See docs/whatsapp-templates.md.

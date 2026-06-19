@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'node:http';
 import path from 'node:path';
 import { config } from './config';
 import { handleInboundWhatsApp } from './routes/whatsapp';
@@ -8,6 +9,7 @@ import { renderDashboard } from './dashboard';
 import { supabase } from './lib/supabase';
 import { validateTwilioWebhook } from './lib/twilioWebhook';
 import { startScheduler } from './scheduler';
+import { attachVoiceRelay } from './routes/voiceRelay';
 
 const app = express();
 // Render terminates TLS and forwards — trust the proxy so forwarded host/proto
@@ -68,8 +70,11 @@ app.get('/dashboard', (_req, res) => {
 });
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
-app.listen(PORT, () => {
-  console.log(`Remi listening on :${config.port} (model: ${config.model})`);
+// Use an explicit HTTP server so the ConversationRelay WebSocket can share the port.
+const server = http.createServer(app);
+attachVoiceRelay(server); // mounts the /ws/voice WebSocket endpoint
+server.listen(PORT, () => {
+  console.log(`Remi listening on :${config.port} (model: ${config.model}, voice: ${config.voice.mode})`);
   // Run the reminder scheduler in-process unless explicitly disabled. For a
   // single web instance this avoids needing a separate worker. When scaling to
   // multiple instances, set RUN_SCHEDULER=false here and run one dedicated worker.

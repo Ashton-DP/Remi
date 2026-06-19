@@ -20,12 +20,14 @@
     "@supabase/supabase-js": "latest",
     "@types/express": "latest",
     "@types/node": "latest",
+    "@types/ws": "^8.18.1",
     "dotenv": "latest",
     "express": "latest",
     "googleapis": "latest",
     "tsx": "latest",
     "twilio": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "localtunnel": "^2.0.2"

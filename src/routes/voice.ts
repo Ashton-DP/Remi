@@ -13,6 +13,7 @@ import {
 import { runAgent } from '../brain/agent';
 import { sendProactiveWhatsApp } from '../lib/twilio';
 import { callState } from '../lib/callState';
+import { buildConversationRelayTwiml } from './voiceRelay';
 
 // Twilio TTS voice names are provider-prefixed (see the Say voices table).
 // Polly.Ayanda-Generative = AWS Polly South African English (female), the
@@ -79,6 +80,12 @@ export async function handleInboundCall(req: Request, res: Response) {
       vr.say({ voice: SA_ENGLISH_VOICE }, "Sorry, this line isn't set up yet. Please try again later.");
       vr.hangup();
       return res.type('text/xml').send(vr.toString());
+    }
+
+    // Natural-voice mode: hand the call to ConversationRelay (the WS server runs
+    // the AI + ElevenLabs TTS). Falls through to the <Gather>/<Say> flow otherwise.
+    if (config.voice.mode === 'conversationrelay') {
+      return res.type('text/xml').send(buildConversationRelayTwiml(clinic, from));
     }
 
     const { client: customer, isNew } = await getOrCreateClient(clinic.id, from);
