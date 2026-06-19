@@ -15,14 +15,24 @@ import { sendProactiveWhatsApp } from '../lib/twilio';
 import { callState } from '../lib/callState';
 
 // Twilio TTS voice names are provider-prefixed (see the Say voices table).
-// Polly.Ayanda-Neural = AWS Polly South African English (female, GA neural).
+// Polly.Ayanda-Generative = AWS Polly South African English (female), the
+// GENERATIVE tier — most human-like / least robotic (Neural sounded flat & "American").
 // Afrikaans replies use Google's af-ZA voice for correct pronunciation.
-const SA_ENGLISH_VOICE = 'Polly.Ayanda-Neural' as any;
+const SA_ENGLISH_VOICE = 'Polly.Ayanda-Generative' as any;
 const AFRIKAANS_VOICE = 'Google.af-ZA-Standard-A' as any;
 // Speech-RECOGNITION language for <Gather>. en-ZA is NOT a supported Gather
 // language (and af-ZA recognition is unconfirmed), so we recognise as en-GB —
 // good for SA English accents. Afrikaans support here can be revisited later.
 const RECOGNITION_LANG = 'en-GB' as any;
+// Bias speech recognition toward the words callers actually say at a clinic.
+// (comma-separated entries, max 500 — improves accuracy a lot on phone audio)
+const SPEECH_HINTS = [
+  'Botox', 'filler', 'dermal filler', 'lip filler', 'consultation', 'chemical peel',
+  'microneedling', 'laser', 'skin treatment', 'facial',
+  'book an appointment', 'make a booking', 'reschedule', 'cancel', 'confirm',
+  'yes', 'no', 'today', 'tomorrow', 'morning', 'afternoon', 'next week',
+  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+].join(', ');
 const MISSED_CALL_STATUSES = new Set(['no-answer', 'busy', 'failed']);
 
 /** Detect Afrikaans from common words in the caller's speech. */
@@ -44,8 +54,11 @@ function gatherReply(text: string, lang: 'en-GB' | 'af-ZA'): string {
     action: '/webhooks/voice/gather',
     method: 'POST',
     language: RECOGNITION_LANG, // recognition stays en-GB regardless of reply language
+    speechModel: 'phone_call', // telephony-optimized model
+    enhanced: true, // premium phone_call model — ~54% fewer errors on phone audio (en-GB supported)
+    hints: SPEECH_HINTS,
     speechTimeout: 'auto',
-  });
+  } as any);
   const voice = lang === 'af-ZA' ? AFRIKAANS_VOICE : SA_ENGLISH_VOICE;
   gather.say({ voice }, text);
   // Fallback if caller stays silent: redirect back to gather
