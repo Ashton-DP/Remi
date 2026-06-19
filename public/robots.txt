@@ -5,4 +5,4 @@ Disallow: /report
 Disallow: /health
 Disallow: /webhooks
 
-Sitemap: https://remireception.com/sitemap.xml
+Sitemap: https://www.remireception.com/sitemap.xml
