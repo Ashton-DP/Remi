@@ -41,7 +41,7 @@ export const config = {
     transcriptionProvider: opt('CR_STT_PROVIDER', 'Deepgram'),
     // Optional ElevenLabs model suffix appended to the voice id (e.g. 'turbo_v2_5'
     // for more natural output than the default 'flash_v2_5'). Blank = Twilio default.
-    elevenLabsModel: opt('CR_ELEVENLABS_MODEL', 'turbo_v2_5'),
+    elevenLabsModel: opt('CR_ELEVENLABS_MODEL', ''),
   },
   // WhatsApp Business API approved-template Content SIDs (HX…). Set after Meta
   // approval; when blank, proactive sends fall back to free-form text (sandbox).
