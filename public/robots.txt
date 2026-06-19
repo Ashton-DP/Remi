@@ -5,4 +5,4 @@ Disallow: /report
 Disallow: /health
 Disallow: /webhooks
 
-Sitemap: https://remi-x01j.onrender.com/sitemap.xml
+Sitemap: https://remireception.com/sitemap.xml
