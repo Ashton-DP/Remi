@@ -29,9 +29,9 @@ Remi currently writes to a Google Calendar in demo mode. A real clinic books in
 - ⬜ **Real availability logic** against their actual diary (no double-booking).
 
 ### C. Compliance & legal (non-negotiable for health data)
-- ⬜ **POPIA Operator Agreement** — written contract between the clinic (responsible party) and Remi/your SA company (operator). Template + sign per clinic.
+- 🟡 **POPIA Operator Agreement** — *draft ready* at `docs/legal/POPIA_OPERATOR_AGREEMENT.md`. Fill placeholders + have a SA attorney review, then sign per clinic.
 - ⬜ **Register an Information Officer** for your SA company with the Information Regulator (free, online).
-- ⬜ **Privacy Policy + Terms of Service** published on the site and linked from WhatsApp/voice first-contact.
+- 🟡 **Privacy Policy** — *draft ready* at `docs/legal/PRIVACY_POLICY.md`. Fill placeholders, attorney-review, publish at `/privacy`, link from first-contact. (A separate **Terms of Service** is still ⬜.)
 - ⬜ **Consent line on first contact** — already in code ("By replying you're happy for us to message you about your booking"). Confirm it's POPIA-sufficient for service messages; add explicit opt-in if you ever do reactivation/marketing.
 - ⬜ **STOP/opt-out handling** — already in code; confirm it logs and suppresses future sends.
 - ⬜ **Switch off Gemini free tier** → paid Gemini or Claude. The free tier may train on prompts = a POPIA breach for patient data. *(Flip `AI_PROVIDER`/keys before ANY real patient traffic.)*
@@ -44,8 +44,8 @@ Remi currently writes to a Google Calendar in demo mode. A real clinic books in
 
 ### E. Make the deployment production-safe (currently a free-tier demo)
 - ⬜ **Upgrade Render to a paid tier** (no cold-start sleep — Twilio times out at 15s).
-- ⬜ **Run the scheduler as a real worker** — reminders/backfill DON'T fire on the current setup. Add a Render **Background Worker** (`npm run scheduler`) or a cron. *(Without this, the whole no-show-reminder value prop is silently off.)*
-- ⬜ **Validate Twilio webhook signatures** — `/webhooks/*` currently accept any POST (I proved this by curling it). Add `twilio.validateRequest` middleware so randoms can't trigger bookings/AI spend.
+- ✅ **Reminders now run** — the scheduler runs **in-process** on the web service (env `RUN_SCHEDULER`, default on). *At multi-instance scale*, set `RUN_SCHEDULER=false` on web and run one dedicated Render Background Worker (`node dist/scheduler.js`) to avoid duplicate sends.
+- ✅ **Twilio webhook signatures validated** — `validateTwilioWebhook` middleware on all `/webhooks/*` (unsigned POSTs now return 403; `TWILIO_SKIP_VALIDATION=true` bypasses for testing).
 - ⬜ **Rotate the leaked secrets** — Supabase service_role key + Twilio auth token were shown in chat. Rotate both; update Render + `.env`.
 - ⬜ **Custom domain** — point e.g. `remi.co.za` / `getremi.app` at Render (cleaner than onrender.com for the Meta app + sales).
 

@@ -6,8 +6,13 @@ import { handleInboundCall, handleVoiceGather, handleCallStatus } from './routes
 import { generateReport } from './report';
 import { renderDashboard } from './dashboard';
 import { supabase } from './lib/supabase';
+import { validateTwilioWebhook } from './lib/twilioWebhook';
+import { startScheduler } from './scheduler';
 
 const app = express();
+// Render terminates TLS and forwards — trust the proxy so forwarded host/proto
+// are honoured (needed for correct Twilio signature validation).
+app.set('trust proxy', true);
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(express.static(path.join(process.cwd(), 'public')));
@@ -34,13 +39,13 @@ app.get('/health/db', async (_req, res) => {
   }
 });
 
-// WhatsApp
-app.post('/webhooks/whatsapp', handleInboundWhatsApp);
+// WhatsApp (signature-validated)
+app.post('/webhooks/whatsapp', validateTwilioWebhook, handleInboundWhatsApp);
 
-// Voice
-app.post('/webhooks/voice/inbound', handleInboundCall);
-app.post('/webhooks/voice/gather', handleVoiceGather);
-app.post('/webhooks/voice/status', handleCallStatus);
+// Voice (signature-validated)
+app.post('/webhooks/voice/inbound', validateTwilioWebhook, handleInboundCall);
+app.post('/webhooks/voice/gather', validateTwilioWebhook, handleVoiceGather);
+app.post('/webhooks/voice/status', validateTwilioWebhook, handleCallStatus);
 
 // Report (text)
 app.get('/report/:clinicId', async (req, res) => {
@@ -65,4 +70,8 @@ app.get('/dashboard', (_req, res) => {
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 app.listen(PORT, () => {
   console.log(`Remi listening on :${config.port} (model: ${config.model})`);
+  // Run the reminder scheduler in-process unless explicitly disabled. For a
+  // single web instance this avoids needing a separate worker. When scaling to
+  // multiple instances, set RUN_SCHEDULER=false here and run one dedicated worker.
+  if (process.env.RUN_SCHEDULER !== 'false') startScheduler();
 });

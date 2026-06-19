@@ -63,12 +63,25 @@ async function tick() {
   }
 }
 
-async function run() {
+let _started = false;
+
+/**
+ * Start the reminder poll loop. Safe to call from inside the web process
+ * (single instance) or from a standalone worker. Idempotent.
+ *
+ * NOTE: if you ever scale the web service to multiple instances, run the
+ * scheduler as ONE dedicated worker instead (set RUN_SCHEDULER=false on web)
+ * to avoid duplicate reminder sends.
+ */
+export function startScheduler() {
+  if (_started) return;
+  _started = true;
   console.log('[scheduler] started — checking every 60s');
-  await tick().catch((e) => console.error('[scheduler] tick error:', e));
+  tick().catch((e) => console.error('[scheduler] tick error:', e));
   setInterval(() => {
     tick().catch((e) => console.error('[scheduler] tick error:', e));
   }, 60_000);
 }
 
-run();
+// Run standalone when invoked directly (e.g. a dedicated Render worker).
+if (require.main === module) startScheduler();
