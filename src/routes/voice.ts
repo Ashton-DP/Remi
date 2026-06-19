@@ -14,8 +14,15 @@ import { runAgent } from '../brain/agent';
 import { sendProactiveWhatsApp } from '../lib/twilio';
 import { callState } from '../lib/callState';
 
-// Polly.Ayanda = AWS Polly South African English (female). Cast needed — SDK types lag.
-const SA_ENGLISH_VOICE = 'Polly.Ayanda' as any;
+// Twilio TTS voice names are provider-prefixed (see the Say voices table).
+// Polly.Ayanda-Neural = AWS Polly South African English (female, GA neural).
+// Afrikaans replies use Google's af-ZA voice for correct pronunciation.
+const SA_ENGLISH_VOICE = 'Polly.Ayanda-Neural' as any;
+const AFRIKAANS_VOICE = 'Google.af-ZA-Standard-A' as any;
+// Speech-RECOGNITION language for <Gather>. en-ZA is NOT a supported Gather
+// language (and af-ZA recognition is unconfirmed), so we recognise as en-GB —
+// good for SA English accents. Afrikaans support here can be revisited later.
+const RECOGNITION_LANG = 'en-GB' as any;
 const MISSED_CALL_STATUSES = new Set(['no-answer', 'busy', 'failed']);
 
 /** Detect Afrikaans from common words in the caller's speech. */
@@ -29,17 +36,18 @@ function voiceResponse() {
   return new twilio.twiml.VoiceResponse();
 }
 
-/** Build a gather-loop TwiML: say `text`, then listen for speech. */
-function gatherReply(text: string, lang: 'en-ZA' | 'af-ZA'): string {
+/** Build a gather-loop TwiML: say `text` (in the reply language's voice), then listen. */
+function gatherReply(text: string, lang: 'en-GB' | 'af-ZA'): string {
   const vr = voiceResponse();
   const gather = vr.gather({
     input: ['speech'],
     action: '/webhooks/voice/gather',
     method: 'POST',
-    language: lang,
+    language: RECOGNITION_LANG, // recognition stays en-GB regardless of reply language
     speechTimeout: 'auto',
   });
-  gather.say({ voice: SA_ENGLISH_VOICE }, text);
+  const voice = lang === 'af-ZA' ? AFRIKAANS_VOICE : SA_ENGLISH_VOICE;
+  gather.say({ voice }, text);
   // Fallback if caller stays silent: redirect back to gather
   vr.redirect({ method: 'POST' }, '/webhooks/voice/gather');
   return vr.toString();
@@ -67,12 +75,12 @@ export async function handleInboundCall(req: Request, res: Response) {
       clinicId: clinic.id,
       clientId: customer.id,
       conversationId: convo.id,
-      language: 'en-ZA',
+      language: 'en-GB',
       isFirstTurn: isNew,
     });
 
     const greeting = `Thanks for calling ${clinic.name}. I'm Remi, the virtual assistant. How can I help you today?`;
-    res.type('text/xml').send(gatherReply(greeting, 'en-ZA'));
+    res.type('text/xml').send(gatherReply(greeting, 'en-GB'));
   } catch (e) {
     console.error('[voice] inbound error', e);
     const vr = voiceResponse();
@@ -104,7 +112,7 @@ export async function handleVoiceGather(req: Request, res: Response) {
   }
 
   try {
-    const lang: 'en-ZA' | 'af-ZA' = detectAfrikaans(speechResult) ? 'af-ZA' : session.language;
+    const lang: 'en-GB' | 'af-ZA' = detectAfrikaans(speechResult) ? 'af-ZA' : session.language;
     callState.update(callSid, { language: lang, isFirstTurn: false });
 
     const clinic = await getClinic(session.clinicId);

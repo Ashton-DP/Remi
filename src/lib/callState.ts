@@ -4,7 +4,7 @@ export interface CallSession {
   clinicId: string;
   clientId: string;
   conversationId: string;
-  language: 'en-ZA' | 'af-ZA';
+  language: 'en-GB' | 'af-ZA';
   isFirstTurn: boolean;
 }
 
