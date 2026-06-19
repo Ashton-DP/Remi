@@ -11,6 +11,7 @@ import { validateTwilioWebhook } from './lib/twilioWebhook';
 import { startScheduler } from './scheduler';
 import { attachVoiceRelay } from './routes/voiceRelay';
 import { attachMediaStream } from './routes/mediaStream';
+import { handleAgentTool } from './routes/agentTools';
 
 const app = express();
 // Render terminates TLS and forwards — trust the proxy so forwarded host/proto
@@ -49,6 +50,9 @@ app.post('/webhooks/whatsapp', validateTwilioWebhook, handleInboundWhatsApp);
 app.post('/webhooks/voice/inbound', validateTwilioWebhook, handleInboundCall);
 app.post('/webhooks/voice/gather', validateTwilioWebhook, handleVoiceGather);
 app.post('/webhooks/voice/status', validateTwilioWebhook, handleCallStatus);
+
+// ElevenLabs agent server tools (booking actions during a voice call)
+app.post('/tools/:tool', handleAgentTool);
 
 // Report (text)
 app.get('/report/:clinicId', async (req, res) => {

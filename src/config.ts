@@ -61,4 +61,7 @@ export const config = {
     missedCall: opt('WA_TEMPLATE_MISSED_CALL'),
   },
   defaultClinicId: opt('DEFAULT_CLINIC_ID'),
+  // Shared secret for the /tools/* webhooks the ElevenLabs agent calls. If set,
+  // requests must include header X-Tool-Secret. Blank = open (dev/testing only).
+  toolsSecret: opt('TOOLS_SHARED_SECRET'),
 };
