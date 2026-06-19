@@ -14,6 +14,7 @@ import { runAgent } from '../brain/agent';
 import { sendProactiveWhatsApp } from '../lib/twilio';
 import { callState } from '../lib/callState';
 import { buildConversationRelayTwiml } from './voiceRelay';
+import { buildMediaStreamTwiml } from './mediaStream';
 
 // Twilio TTS voice names are provider-prefixed (see the Say voices table).
 // Polly.Ayanda-Generative = AWS Polly South African English (female), the
@@ -86,6 +87,10 @@ export async function handleInboundCall(req: Request, res: Response) {
     // the AI + ElevenLabs TTS). Falls through to the <Gather>/<Say> flow otherwise.
     if (config.voice.mode === 'conversationrelay') {
       return res.type('text/xml').send(buildConversationRelayTwiml(clinic, from));
+    }
+    // Custom pipeline mode: stream raw audio to our Media Streams WS (own STT/TTS).
+    if (config.voice.mode === 'mediastream') {
+      return res.type('text/xml').send(buildMediaStreamTwiml(clinic, from));
     }
 
     const { client: customer, isNew } = await getOrCreateClient(clinic.id, from);

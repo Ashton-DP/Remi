@@ -42,6 +42,13 @@ export const config = {
     // Optional ElevenLabs model suffix appended to the voice id (e.g. 'turbo_v2_5'
     // for more natural output than the default 'flash_v2_5'). Blank = Twilio default.
     elevenLabsModel: opt('CR_ELEVENLABS_MODEL', ''),
+    // --- Custom Media Streams pipeline (VOICE_MODE=mediastream) ---
+    // Brings our OWN ElevenLabs (premium voices) + Deepgram (streaming STT).
+    elevenLabsApiKey: opt('ELEVENLABS_API_KEY'),
+    elevenLabsTtsModel: opt('ELEVENLABS_TTS_MODEL', 'eleven_turbo_v2_5'),
+    deepgramApiKey: opt('DEEPGRAM_API_KEY'),
+    deepgramModel: opt('DEEPGRAM_MODEL', 'nova-2-phonecall'),
+    mediaWsUrl: opt('PUBLIC_MEDIA_WS_URL', 'wss://www.remireception.com/ws/media'),
   },
   // WhatsApp Business API approved-template Content SIDs (HX…). Set after Meta
   // approval; when blank, proactive sends fall back to free-form text (sandbox).

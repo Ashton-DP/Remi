@@ -22,7 +22,7 @@ export function speechNormalize(text: string): string {
 }
 
 /** XML-escape a value for safe inclusion in TwiML attributes/text. */
-function xmlEscape(s: string): string {
+export function xmlEscape(s: string): string {
   return String(s ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
