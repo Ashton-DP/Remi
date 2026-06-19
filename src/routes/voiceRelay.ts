@@ -10,6 +10,17 @@ import {
 } from '../db';
 import { runAgent } from '../brain/agent';
 
+/**
+ * Normalize text for natural speech (TTS reads symbols/numbers literally otherwise).
+ * "R3,000" / "R3000" / "R3 000" → "3000 rand" so it's spoken "three thousand rand".
+ */
+export function speechNormalize(text: string): string {
+  return String(text ?? '').replace(
+    /R\s?(\d{1,3}(?:[, ]\d{3})+|\d+)/g,
+    (_m, num: string) => `${num.replace(/[, ]/g, '')} rand`,
+  );
+}
+
 /** XML-escape a value for safe inclusion in TwiML attributes/text. */
 function xmlEscape(s: string): string {
   return String(s ?? '')
@@ -27,7 +38,14 @@ function xmlEscape(s: string): string {
  * WS handler has context without re-deriving it.
  */
 export function buildConversationRelayTwiml(clinic: any, from: string): string {
-  const greeting = `Thanks for calling ${clinic?.name ?? 'the clinic'}. I'm Remi, the virtual assistant. How can I help you today?`;
+  const greeting = speechNormalize(
+    `Thanks for calling ${clinic?.name ?? 'the clinic'}. I'm Remi, the virtual assistant. How can I help you today?`,
+  );
+  // Append an ElevenLabs model suffix (e.g. turbo_v2_5) if configured, for a more
+  // natural voice than the default flash model.
+  const voice = config.voice.elevenLabsModel
+    ? `${config.voice.elevenLabsVoiceId}-${config.voice.elevenLabsModel}`
+    : config.voice.elevenLabsVoiceId;
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<Response>',
@@ -35,8 +53,9 @@ export function buildConversationRelayTwiml(clinic: any, from: string): string {
     `    <ConversationRelay url="${xmlEscape(config.voice.wsUrl)}"` +
       ` welcomeGreeting="${xmlEscape(greeting)}"` +
       ` ttsProvider="${xmlEscape(config.voice.ttsProvider)}"` +
-      ` voice="${xmlEscape(config.voice.elevenLabsVoiceId)}"` +
+      ` voice="${xmlEscape(voice)}"` +
       ` transcriptionProvider="${xmlEscape(config.voice.transcriptionProvider)}"` +
+      ` elevenlabsTextNormalization="on"` +
       ` language="en-GB" interruptByDtmf="true">`,
     `      <Parameter name="clinicId" value="${xmlEscape(clinic?.id ?? '')}"/>`,
     `      <Parameter name="from" value="${xmlEscape(from)}"/>`,
@@ -103,7 +122,7 @@ export function attachVoiceRelay(server: Server) {
           );
           session.isFirstTurn = false;
           await saveMessage(session.convo.id, 'out', reply);
-          ws.send(JSON.stringify({ type: 'text', token: reply, last: true }));
+          ws.send(JSON.stringify({ type: 'text', token: speechNormalize(reply), last: true }));
         } catch (e) {
           console.error('[voiceRelay] prompt error', e);
           ws.send(
