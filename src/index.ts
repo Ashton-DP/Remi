@@ -23,7 +23,7 @@ app.set('trust proxy', true);
 app.post('/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
-app.use(express.static(path.join(process.cwd(), 'public')));
+app.use(express.static(path.join(process.cwd(), 'public'), { extensions: ['html'] }));
 
 // Health
 app.get('/health', (_req, res) => res.json({ ok: true }));

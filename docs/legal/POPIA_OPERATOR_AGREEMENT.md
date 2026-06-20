@@ -8,8 +8,8 @@
 **(1) The Responsible Party** — `[CLINIC LEGAL NAME]`, registration no. `[____]`,
 of `[CLINIC ADDRESS]` ("the Clinic"); and
 
-**(2) The Operator** — `[YOUR SA COMPANY LEGAL NAME]` (trading as "Remi"),
-registration no. `[CIPC NUMBER]`, of `34 Prestwich Street, Cape Town, Western Cape 8001`
+**(2) The Operator** — **The Visionaries (Pty) Ltd** (trading as "Remi"),
+registration no. `[CIPC NUMBER]`, of 34 Prestwich Street, Cape Town, Western Cape 8001
 ("Remi").
 
 Effective date: `[DATE]`.
@@ -66,10 +66,11 @@ the contract, or data-subject consent) applies.
 | Sub-operator | Purpose | Data location | Notes |
 |---|---|---|---|
 | Twilio Inc. | Telephony + WhatsApp delivery | USA (+ regional) | Telecoms carrier; processes phone numbers + message/call content |
+| ElevenLabs Inc. | AI voice (call answering) | USA | Speech synthesis + conversational voice agent |
 | Supabase | Database (bookings, conversations) | `[REGION — confirm]` | Primary data store |
 | `[AI PROVIDER — Google Gemini PAID / Anthropic Claude]` | Generating replies | USA | **Must be a PAID tier** — free tiers may train on data |
 | Google LLC | Calendar (if used) | USA | Appointment events |
-| Render | Application hosting | `[REGION]` | Runs the application |
+| Railway | Application hosting | `[REGION]` | Runs the application |
 
 > **Action:** confirm each region and ensure the **paid** AI tier is used before
 > any real patient data flows (a free AI tier that trains on prompts would breach

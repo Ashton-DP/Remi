@@ -1,17 +1,19 @@
 # Privacy Policy
 
-> ⚠️ **Not legal advice.** Template to be reviewed by a South African attorney and
-> published (e.g. at `https://[your-domain]/privacy`). Fill every `[BRACKETED]` value.
+> ⚠️ **Not legal advice.** Attorney review recommended before you rely on this.
+> Fields I could not know are still in `[BRACKETS]` — fill them before launch.
+> Published at `https://www.remireception.com/privacy`.
 
-**Last updated:** `[DATE]`
+**Last updated:** 20 June 2026
 
 ### Who we are
 This service ("Remi") is an AI front-desk assistant operated by
-`[YOUR SA COMPANY LEGAL NAME]` ("we", "us") on behalf of the clinic you contacted
-("the Clinic"). When you message or call the Clinic's number, you may be assisted
-by Remi.
+**The Visionaries (Pty) Ltd** (registration no. `[CIPC NUMBER]`), of
+34 Prestwich Street, Cape Town, Western Cape 8001 ("we", "us") on behalf of the
+clinic you contacted ("the Clinic"). When you message or call the Clinic's number,
+you may be assisted by Remi.
 
-- **Information Officer:** `[NAME]`, `[EMAIL]`, `[PHONE]`
+- **Information Officer:** Ashton de Pontes, hello@remireception.com
 - **Registered with the Information Regulator (South Africa):** `[reference / pending]`
 
 ### What we collect
@@ -32,16 +34,16 @@ health information in chat — discuss that with the Clinic directly.
 
 ### Who we share it with
 The Clinic (your appointment is theirs), and the service providers that make Remi
-work: our telephony/WhatsApp provider (Twilio), our database (Supabase), our AI
-provider (`[Google / Anthropic]`), our hosting (Render), and calendar (Google, if
-used). Some of these process data **outside South Africa**; we only use providers
-bound to protections substantially similar to POPIA, or where another lawful
-ground under POPIA s72 applies.
+work: our telephony/WhatsApp provider (Twilio), our voice provider (ElevenLabs),
+our database (Supabase), our AI provider (Google / Anthropic), our hosting
+(Railway), and calendar (Google, if used). Some of these process data **outside
+South Africa**; we only use providers bound to protections substantially similar
+to POPIA, or where another lawful ground under POPIA s72 applies.
 
 ### How long we keep it
 We keep your information only as long as needed to provide the service and meet
-legal obligations, then delete or anonymise it. Retention period: `[e.g. 24 months
-after your last interaction]`.
+legal obligations, then delete or anonymise it. Retention period: 24 months after
+your last interaction (unless a longer period is required by law).
 
 ### Your rights (POPIA)
 You may request **access** to, or **correction or deletion** of, your personal
