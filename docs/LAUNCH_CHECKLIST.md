@@ -15,23 +15,27 @@ The minimum to legally and technically run one real clinic and get paid.
 - 🟡 **SA +27 phone number** — finish Twilio regulatory bundle (proof of address + CoR15.1A). ~7-day review. *Blocking everything below.*
 - ⬜ **Register the number as a WhatsApp Sender** (Twilio embedded signup → creates the WABA).
 - ⬜ **Meta business verification** — auto-triggers during sender setup; verify the SA company (CoR15.1A ready).
-- ⬜ **Submit the 5 WhatsApp templates** (Content Template Builder) → wait for approval → paste Content SIDs into `WA_TEMPLATE_*` env vars. *(Code already wired — see docs/whatsapp-templates.md.)*
+- ⬜ **Submit the 9 WhatsApp templates** (Content Template Builder) → wait for approval → paste Content SIDs into `WA_TEMPLATE_*` env vars. *(All 9 finalised + code-wired — see docs/whatsapp-templates.md. Note: `reactivation_winback` is MARKETING + consent-gated; the rest are UTILITY.)*
 - ⬜ **Test voice end-to-end** — point the number's voice webhook to `/webhooks/voice/inbound`; call it, confirm Remi answers, books, and the missed-call → WhatsApp fires. *(Built, never tested — no number yet.)*
 - ⬜ **Set the WhatsApp number's inbound webhook** to `https://<prod-url>/webhooks/whatsapp` (the real sender page, not the sandbox).
 
 ### B. Booking system integration (the single biggest product gap)
-Remi currently writes to a Google Calendar in demo mode. A real clinic books in
-*their* system. You must connect to whatever the pilot clinic actually uses:
+Remi connects to whatever booking system a clinic uses, via a **provider-agnostic
+adapter layer** (`src/lib/booking/`). The booking flow (slots + create/reschedule/
+cancel) only talks to the `BookingProvider` interface — adding a system is one new
+file + one registry line, no flow changes.
+- ✅ **Provider abstraction built** — `BookingProvider` interface, `getBookingProvider(clinic)` registry (keys off `clinics.booking_provider`, defaults to Google, falls back safely for unbuilt providers). Migration: `db/migrate_booking_provider.sql`. Tests: `npm test` (10 passing).
+- ✅ **Google Calendar adapter** — the universal default; per-clinic calendar via `clinics.google_calendar_id`. **Now also moves the event on reschedule and deletes it on cancel** (previously only the DB was updated — real bug, fixed).
+- ✅ **Real availability logic** — `computeFreeSlots` reads the provider's busy windows; no double-booking, timezone-correct.
 - ⬜ **Confirm the pilot clinic's booking tool** (Fresha dominates SA spas; allied-health uses Nookal/Acuity; medical uses GoodX/Healthbridge).
-- ⬜ **Integrate read+write** for availability and bookings:
-  - Acuity/Nookal/Cliniko → have real APIs (easiest).
-  - **Fresha → very limited 3rd-party API** → fallback: a dedicated Google Calendar that mirrors their diary, or two-way sync, or run Remi's calendar as the source of truth for the slots it manages.
-- ⬜ **Real availability logic** against their actual diary (no double-booking).
+- ⬜ **Build the pilot's adapter** when known: Acuity/Nookal/Cliniko have real APIs (easiest); **Fresha's 3rd-party API is very limited** → fall back to a dedicated Google Calendar that mirrors their diary, or run Remi's calendar as the source of truth for the slots it manages. Until then, any clinic can run on the Google adapter today.
 
 ### C. Compliance & legal (non-negotiable for health data)
-- 🟡 **POPIA Operator Agreement** — *draft ready* at `docs/legal/POPIA_OPERATOR_AGREEMENT.md`. Fill placeholders + have a SA attorney review, then sign per clinic.
-- ⬜ **Register an Information Officer** for your SA company with the Information Regulator (free, online).
-- 🟡 **Privacy Policy** — *draft ready* at `docs/legal/PRIVACY_POLICY.md`. Fill placeholders, attorney-review, publish at `/privacy`, link from first-contact. (A separate **Terms of Service** is still ⬜.)
+- 🟡 **POPIA Operator Agreement** — at `docs/legal/POPIA_OPERATOR_AGREEMENT.md`. Operator name filled (The Visionaries (Pty) Ltd), sub-operators corrected (Railway, ElevenLabs). **Remaining:** CIPC reg no., Supabase region, attorney review, sign per clinic.
+- ⬜ **Register an Information Officer** for your SA company with the Information Regulator (free, online). *(Ashton de Pontes named as IO in the policy; still needs Regulator registration.)*
+- 🟡 **Privacy Policy** — ✅ **published & live at `/privacy`** (linked in footer); filled with known details. **Remaining:** CIPC reg no., Information Regulator reference, attorney review.
+- 🟡 **Terms of Service** — ✅ **published & live at `/terms`** (`docs/legal/TERMS_OF_SERVICE.md`); linked in footer. **Remaining:** CIPC reg no., attorney review.
+- 🟡 **Client Order Form / Service Agreement** — *draft ready* at `docs/legal/CLIENT_ORDER_FORM.md` (the B2B contract clinics sign — scope, price, trial, cancellation; incorporates ToS + Operator Agreement). Fill per-clinic placeholders + attorney review. *(Also satisfies Tier 0-D "client agreement / order form".)*
 - ⬜ **Consent line on first contact** — already in code ("By replying you're happy for us to message you about your booking"). Confirm it's POPIA-sufficient for service messages; add explicit opt-in if you ever do reactivation/marketing.
 - ⬜ **STOP/opt-out handling** — already in code; confirm it logs and suppresses future sends.
 - ⬜ **Switch off Gemini free tier** → paid Gemini or Claude. The free tier may train on prompts = a POPIA breach for patient data. *(Flip `AI_PROVIDER`/keys before ANY real patient traffic.)*
@@ -39,15 +43,15 @@ Remi currently writes to a Google Calendar in demo mode. A real clinic books in
 ### D. Get paid
 - ⬜ **Choose a payment processor** — Stitch or Peach for recurring debit orders (Paystack if you prefer card + best APIs).
 - ⬜ **Set up recurring billing** for the R2,500 / R4,500 / R6,500 tiers.
-- ⬜ **Client agreement / order form** — scope, price, 2-week trial terms, cancellation.
+- 🟡 **Client agreement / order form** — *draft ready* at `docs/legal/CLIENT_ORDER_FORM.md` (scope, price, 2-week trial, cancellation). Fill per-clinic + attorney review.
 - ⬜ **Invoicing + VAT** — confirm with your accountant whether the SA company must register for VAT yet.
 
-### E. Make the deployment production-safe (currently a free-tier demo)
-- ⬜ **Upgrade Render to a paid tier** (no cold-start sleep — Twilio times out at 15s).
-- ✅ **Reminders now run** — the scheduler runs **in-process** on the web service (env `RUN_SCHEDULER`, default on). *At multi-instance scale*, set `RUN_SCHEDULER=false` on web and run one dedicated Render Background Worker (`node dist/scheduler.js`) to avoid duplicate sends.
+### E. Make the deployment production-safe
+- ✅ **Hosting on Railway** (always-on, no cold-start sleep). **Remaining:** decommission the old Render `remi` service + downgrade the Render workspace to Hobby to stop the $25 (check no other Render service needs Pro first).
+- ✅ **Reminders now run** — the scheduler runs **in-process** on the web service (env `RUN_SCHEDULER`, default on). *At multi-instance scale*, set `RUN_SCHEDULER=false` on web and run one dedicated Background Worker (`node dist/scheduler.js`) to avoid duplicate sends.
 - ✅ **Twilio webhook signatures validated** — `validateTwilioWebhook` middleware on all `/webhooks/*` (unsigned POSTs now return 403; `TWILIO_SKIP_VALIDATION=true` bypasses for testing).
-- ⬜ **Rotate the leaked secrets** — Supabase service_role key + Twilio auth token were shown in chat. Rotate both; update Render + `.env`.
-- ⬜ **Custom domain** — point e.g. `remi.co.za` / `getremi.app` at Render (cleaner than onrender.com for the Meta app + sales).
+- ⬜ **Rotate the leaked secrets** — Supabase service_role key + Twilio auth token were shown in chat. Rotate both; update Railway + `.env`.
+- ✅ **Custom domain** — `www.remireception.com` live (Cloudflare → Railway; apex 301→www).
 
 ---
 

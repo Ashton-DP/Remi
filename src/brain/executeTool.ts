@@ -1,4 +1,4 @@
-import { createEvent } from '../lib/googleCalendar';
+import { getBookingProvider } from '../lib/booking';
 import { computeFreeSlots } from '../lib/slots';
 import { sendProactiveWhatsApp } from '../lib/twilio';
 import { config } from '../config';
@@ -38,7 +38,7 @@ export async function executeTool(
       const start = new Date(input.start_at);
       const end = new Date(start.getTime() + durationMin * 60000);
 
-      const ev = await createEvent({
+      const ev = await getBookingProvider(clinic).createEvent(clinic, {
         summary: `${input.service} — ${input.client_name}`,
         startISO: start.toISOString(),
         endISO: end.toISOString(),
@@ -83,6 +83,8 @@ export async function executeTool(
             timeStyle: 'short',
           });
           await sendProactiveWhatsApp(customer.phone, {
+            contentSid: config.templates.deposit || undefined,
+            variables: { '1': input.service, '2': when, '3': String(depositZar), '4': deposit_link! },
             fallbackBody: `To secure your ${input.service} on ${when}, please pay your R${depositZar} deposit here: ${deposit_link}`,
           });
         } catch (e) {
@@ -105,6 +107,18 @@ export async function executeTool(
       const newEnd = new Date(newStart.getTime() + durationMin * 60000);
 
       await rescheduleBooking(existing.id, newStart.toISOString(), newEnd.toISOString());
+      // Move the appointment on the clinic's actual diary, not just our DB.
+      if (existing.calendar_event_id) {
+        try {
+          await getBookingProvider(clinic).updateEvent(clinic, existing.calendar_event_id, {
+            summary: `${existing.service}`,
+            startISO: newStart.toISOString(),
+            endISO: newEnd.toISOString(),
+          });
+        } catch (e) {
+          console.error('[reschedule] calendar update failed', e);
+        }
+      }
       await scheduleReminders(existing.id, newStart.toISOString());
 
       return { ok: true, when: newStart.toISOString() };
@@ -115,6 +129,14 @@ export async function executeTool(
       if (!existing) return { error: 'No upcoming confirmed booking found to cancel.' };
 
       await setBookingStatus(existing.id, 'cancelled');
+      // Free the slot on the clinic's actual diary, not just our DB.
+      if (existing.calendar_event_id) {
+        try {
+          await getBookingProvider(clinic).cancelEvent(clinic, existing.calendar_event_id);
+        } catch (e) {
+          console.error('[cancel] calendar delete failed', e);
+        }
+      }
 
       // Offer freed slot to the next person on the waitlist for this service
       const waiter = await getNextWaitlist(clinic.id, existing.service);

@@ -1,4 +1,4 @@
-import { getBusy } from './googleCalendar';
+import { getBookingProvider } from './booking';
 
 const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
@@ -38,7 +38,8 @@ export async function computeFreeSlots(
   );
   const durationMin = svc?.duration_min ?? 30;
 
-  const busy = await getBusy(
+  const busy = await getBookingProvider(clinic).getBusy(
+    clinic,
     new Date(`${dateStr}T00:00:00${offset}`).toISOString(),
     new Date(`${dateStr}T23:59:59${offset}`).toISOString(),
   );
