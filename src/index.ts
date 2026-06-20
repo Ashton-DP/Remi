@@ -12,11 +12,15 @@ import { startScheduler } from './scheduler';
 import { attachVoiceRelay } from './routes/voiceRelay';
 import { attachMediaStream } from './routes/mediaStream';
 import { handleAgentTool } from './routes/agentTools';
+import { handleStripeWebhook } from './routes/stripeWebhook';
 
 const app = express();
-// Render terminates TLS and forwards — trust the proxy so forwarded host/proto
-// are honoured (needed for correct Twilio signature validation).
+// Render/Railway terminate TLS and forward — trust the proxy so forwarded
+// host/proto are honoured (needed for correct Twilio signature validation).
 app.set('trust proxy', true);
+// Stripe webhook needs the RAW body for signature verification — must be mounted
+// BEFORE the json/urlencoded parsers so they don't consume the stream.
+app.post('/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(express.static(path.join(process.cwd(), 'public')));

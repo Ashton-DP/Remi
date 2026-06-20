@@ -1,12 +1,13 @@
 import { createEvent } from '../lib/googleCalendar';
 import { computeFreeSlots } from '../lib/slots';
 import { sendProactiveWhatsApp } from '../lib/twilio';
+import { createDepositCheckout, stripeEnabled } from '../lib/stripe';
 import { config } from '../config';
 import {
   createBookingRow, logEvent, createEscalation,
   scheduleReminders, getClientWaitlist, setWaitlistStatus,
   getNextBooking, setBookingStatus, rescheduleBooking,
-  addWaitlist, getNextWaitlist,
+  addWaitlist, getNextWaitlist, setBookingDepositStatus,
 } from '../db';
 
 /** Executes a tool call and performs all side effects. Returns a JSON-able result. */
@@ -64,7 +65,36 @@ export async function executeTool(
 
       await scheduleReminders(booking?.id, start.toISOString());
 
-      return { ok: true, booking_id: booking?.id, when: start.toISOString() };
+      // Deposit: if this clinic uses deposits + Stripe is configured, send a
+      // payment link to secure the slot (big no-show reducer).
+      let deposit_link: string | undefined;
+      const depositZar = clinic.deposit_zar ?? 0;
+      if (stripeEnabled && depositZar > 0 && booking?.id) {
+        try {
+          const url = await createDepositCheckout({
+            amountZar: depositZar,
+            bookingId: booking.id,
+            clinicName: clinic.name,
+            service: input.service,
+          });
+          if (url) {
+            deposit_link = url;
+            await setBookingDepositStatus(booking.id, 'requested');
+            const when = start.toLocaleString('en-ZA', {
+              timeZone: clinic.timezone ?? 'Africa/Johannesburg',
+              dateStyle: 'medium',
+              timeStyle: 'short',
+            });
+            await sendProactiveWhatsApp(customer.phone, {
+              fallbackBody: `To secure your ${input.service} on ${when}, please pay your R${depositZar} deposit here: ${url}`,
+            });
+          }
+        } catch (e) {
+          console.error('[deposit] error', e);
+        }
+      }
+
+      return { ok: true, booking_id: booking?.id, when: start.toISOString(), deposit_link };
     }
 
     case 'reschedule_booking': {

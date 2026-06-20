@@ -184,6 +184,10 @@ export async function setBookingStatus(id: string, status: string) {
   await supabase.from('bookings').update({ status }).eq('id', id);
 }
 
+export async function setBookingDepositStatus(id: string, depositStatus: string) {
+  await supabase.from('bookings').update({ deposit_status: depositStatus }).eq('id', id);
+}
+
 export async function rescheduleBooking(id: string, newStartISO: string, newEndISO: string) {
   await supabase.from('bookings').update({ start_at: newStartISO, end_at: newEndISO }).eq('id', id);
 }

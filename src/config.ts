@@ -64,4 +64,11 @@ export const config = {
   // Shared secret for the /tools/* webhooks the ElevenLabs agent calls. If set,
   // requests must include header X-Tool-Secret. Blank = open (dev/testing only).
   toolsSecret: opt('TOOLS_SHARED_SECRET'),
+  // Stripe deposits. Off unless secretKey + a clinic deposit_zar are set.
+  stripe: {
+    secretKey: opt('STRIPE_SECRET_KEY'),
+    webhookSecret: opt('STRIPE_WEBHOOK_SECRET'),
+    // Where Stripe sends the patient after paying (a simple thank-you page).
+    successUrl: opt('STRIPE_SUCCESS_URL', 'https://www.remireception.com/?deposit=paid'),
+  },
 };

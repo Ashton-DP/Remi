@@ -24,6 +24,7 @@
     "dotenv": "latest",
     "express": "latest",
     "googleapis": "latest",
+    "stripe": "^22.2.2",
     "tsx": "latest",
     "twilio": "latest",
     "typescript": "latest",
