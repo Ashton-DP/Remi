@@ -6,7 +6,7 @@ import {
   createBookingRow, logEvent, createEscalation,
   scheduleReminders, getClientWaitlist, setWaitlistStatus,
   getNextBooking, setBookingStatus, rescheduleBooking,
-  addWaitlist, getNextWaitlist, setBookingDepositStatus,
+  addWaitlist, getNextWaitlist, setBookingDepositStatus, setClientName,
 } from '../db';
 
 /** Executes a tool call and performs all side effects. Returns a JSON-able result. */
@@ -27,6 +27,10 @@ export async function executeTool(
     }
 
     case 'create_booking': {
+      // Save the caller's name to their client record so it shows on the dashboard.
+      if (input.client_name && !customer.name) {
+        await setClientName(customer.id, input.client_name);
+      }
       const svc = (clinic.services_json ?? []).find(
         (s: any) => String(s.service).toLowerCase() === String(input.service ?? '').toLowerCase(),
       );

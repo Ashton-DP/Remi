@@ -184,6 +184,11 @@ export async function setBookingStatus(id: string, status: string) {
   await supabase.from('bookings').update({ status }).eq('id', id);
 }
 
+/** Save a client's name (e.g. captured during booking) so it shows on the dashboard. */
+export async function setClientName(clientId: string, name: string) {
+  await supabase.from('clients').update({ name }).eq('id', clientId);
+}
+
 export async function setBookingDepositStatus(id: string, depositStatus: string) {
   await supabase.from('bookings').update({ deposit_status: depositStatus }).eq('id', id);
 }
