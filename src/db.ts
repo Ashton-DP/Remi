@@ -188,6 +188,11 @@ export async function setBookingDepositStatus(id: string, depositStatus: string)
   await supabase.from('bookings').update({ deposit_status: depositStatus }).eq('id', id);
 }
 
+/** Remi's own subscription billing — which clinics are paid-up (via your Stripe). */
+export async function setClinicSubscriptionStatus(clinicId: string, status: string) {
+  await supabase.from('clinics').update({ subscription_status: status }).eq('id', clinicId);
+}
+
 export async function rescheduleBooking(id: string, newStartISO: string, newEndISO: string) {
   await supabase.from('bookings').update({ start_at: newStartISO, end_at: newEndISO }).eq('id', id);
 }

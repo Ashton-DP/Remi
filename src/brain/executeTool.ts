@@ -1,7 +1,6 @@
 import { createEvent } from '../lib/googleCalendar';
 import { computeFreeSlots } from '../lib/slots';
 import { sendProactiveWhatsApp } from '../lib/twilio';
-import { createDepositCheckout, stripeEnabled } from '../lib/stripe';
 import { config } from '../config';
 import {
   createBookingRow, logEvent, createEscalation,
@@ -65,30 +64,23 @@ export async function executeTool(
 
       await scheduleReminders(booking?.id, start.toISOString());
 
-      // Deposit: if this clinic uses deposits + Stripe is configured, send a
-      // payment link to secure the slot (big no-show reducer).
+      // Deposit (provider-agnostic): if this clinic has a deposit amount + their
+      // own payment link configured, send it to secure the slot. Works with any
+      // SA processor (Yoco/Paystack/PayFast/Stripe) — money goes to the clinic.
       let deposit_link: string | undefined;
       const depositZar = clinic.deposit_zar ?? 0;
-      if (stripeEnabled && depositZar > 0 && booking?.id) {
+      if (depositZar > 0 && clinic.deposit_link && booking?.id) {
         try {
-          const url = await createDepositCheckout({
-            amountZar: depositZar,
-            bookingId: booking.id,
-            clinicName: clinic.name,
-            service: input.service,
+          deposit_link = clinic.deposit_link;
+          await setBookingDepositStatus(booking.id, 'requested');
+          const when = start.toLocaleString('en-ZA', {
+            timeZone: clinic.timezone ?? 'Africa/Johannesburg',
+            dateStyle: 'medium',
+            timeStyle: 'short',
           });
-          if (url) {
-            deposit_link = url;
-            await setBookingDepositStatus(booking.id, 'requested');
-            const when = start.toLocaleString('en-ZA', {
-              timeZone: clinic.timezone ?? 'Africa/Johannesburg',
-              dateStyle: 'medium',
-              timeStyle: 'short',
-            });
-            await sendProactiveWhatsApp(customer.phone, {
-              fallbackBody: `To secure your ${input.service} on ${when}, please pay your R${depositZar} deposit here: ${url}`,
-            });
-          }
+          await sendProactiveWhatsApp(customer.phone, {
+            fallbackBody: `To secure your ${input.service} on ${when}, please pay your R${depositZar} deposit here: ${deposit_link}`,
+          });
         } catch (e) {
           console.error('[deposit] error', e);
         }
