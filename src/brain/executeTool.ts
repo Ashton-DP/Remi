@@ -43,6 +43,11 @@ export async function executeTool(
         startISO: start.toISOString(),
         endISO: end.toISOString(),
         description: `Booked via Remi for ${customer.phone}`,
+        service: input.service,
+        clientId: customer.id,
+        clientName: input.client_name ?? customer.name,
+        clientEmail: customer.email,
+        clientPhone: customer.phone,
       });
 
       const booking = await createBookingRow({

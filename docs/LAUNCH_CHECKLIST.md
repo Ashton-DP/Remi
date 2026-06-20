@@ -27,8 +27,9 @@ file + one registry line, no flow changes.
 - ✅ **Provider abstraction built** — `BookingProvider` interface, `getBookingProvider(clinic)` registry (keys off `clinics.booking_provider`, defaults to Google, falls back safely for unbuilt providers). Migration: `db/migrate_booking_provider.sql`. Tests: `npm test` (10 passing).
 - ✅ **Google Calendar adapter** — the universal default; per-clinic calendar via `clinics.google_calendar_id`. **Now also moves the event on reschedule and deletes it on cancel** (previously only the DB was updated — real bug, fixed).
 - ✅ **Real availability logic** — `computeFreeSlots` reads the provider's busy windows; no double-booking, timezone-correct.
-- ⬜ **Confirm the pilot clinic's booking tool** (Fresha dominates SA spas; allied-health uses Nookal/Acuity; medical uses GoodX/Healthbridge).
-- ⬜ **Build the pilot's adapter** when known: Acuity/Nookal/Cliniko have real APIs (easiest); **Fresha's 3rd-party API is very limited** → fall back to a dedicated Google Calendar that mirrors their diary, or run Remi's calendar as the source of truth for the slots it manages. Until then, any clinic can run on the Google adapter today.
+- 🟡 **Acuity / Cliniko / Nookal adapters built** — real API integrations (`src/lib/booking/*Provider.ts`), written against each vendor's published API. **Untested against live accounts** — do an end-to-end test (availability → book → reschedule → cancel) with real credentials before a clinic goes live on one. Config per clinic: `db/migrate_booking_provider.sql` + `docs/booking-providers.md`.
+- ⬜ **Confirm the pilot clinic's booking tool** (Fresha dominates SA spas; allied-health uses Nookal/Acuity/Cliniko; medical uses GoodX/Healthbridge).
+- ⬜ **Fresha** has no usable public API → run that clinic on the Google adapter mirroring their diary. **GoodX** needs a partner/contract integration (not built). Any clinic can run on Google today.
 
 ### C. Compliance & legal (non-negotiable for health data)
 - 🟡 **POPIA Operator Agreement** — at `docs/legal/POPIA_OPERATOR_AGREEMENT.md`. Operator name filled (The Visionaries (Pty) Ltd), sub-operators corrected (Railway, ElevenLabs). **Remaining:** CIPC reg no., Supabase region, attorney review, sign per clinic.

@@ -4,7 +4,21 @@ import assert from 'node:assert';
 import { getBookingProvider, registerBookingProvider } from '../src/lib/booking';
 import type { BookingProvider } from '../src/lib/booking';
 import { googleProvider } from '../src/lib/booking/googleProvider';
+import { acuityProvider } from '../src/lib/booking/acuityProvider';
+import { clinikoProvider } from '../src/lib/booking/clinikoProvider';
+import { nookalProvider } from '../src/lib/booking/nookalProvider';
+import { BookingConfigError } from '../src/lib/booking/providerUtils';
 import { computeFreeSlots } from '../src/lib/slots';
+
+async function rejectsWith(fn: () => Promise<unknown>, ctor: any): Promise<void> {
+  try {
+    await fn();
+  } catch (e) {
+    assert.ok(e instanceof ctor, `expected ${ctor.name}, got ${(e as Error).name}: ${(e as Error).message}`);
+    return;
+  }
+  throw new Error(`expected ${ctor.name} to be thrown, but nothing was`);
+}
 
 let passed = 0;
 async function test(name: string, fn: () => void | Promise<void>) {
@@ -26,9 +40,15 @@ async function test(name: string, fn: () => void | Promise<void>) {
     assert.equal(getBookingProvider({ booking_provider: 'google' }).name, 'google');
   });
 
-  await test('falls back to Google for a not-yet-built provider', () => {
+  await test('resolves the API-based providers to themselves', () => {
+    assert.equal(getBookingProvider({ booking_provider: 'acuity' }).name, 'acuity');
+    assert.equal(getBookingProvider({ booking_provider: 'cliniko' }).name, 'cliniko');
+    assert.equal(getBookingProvider({ booking_provider: 'nookal' }).name, 'nookal');
+  });
+
+  await test('falls back to Google for a not-yet-built provider (fresha/goodx)', () => {
     assert.equal(getBookingProvider({ booking_provider: 'fresha' }).name, 'google');
-    assert.equal(getBookingProvider({ booking_provider: 'acuity' }).name, 'google');
+    assert.equal(getBookingProvider({ booking_provider: 'goodx' }).name, 'google');
   });
 
   await test('falls back to Google for an unknown provider', () => {
@@ -102,6 +122,36 @@ async function test(name: string, fn: () => void | Promise<void>) {
     const slots = await computeFreeSlots(clinic, MON, 'Consultation');
     assert.ok(!slots.some((s) => s.startsWith(`${MON}T09:00:00`)), '09:00 should be busy');
     assert.ok(slots.some((s) => s.startsWith(`${MON}T09:30:00`)), '09:30 should be free');
+  });
+
+  console.log('API providers — clear config errors when credentials are missing');
+
+  await test('acuity throws BookingConfigError without credentials', async () => {
+    await rejectsWith(() => acuityProvider.getAvailableSlots!({}, '2099-01-05', 'X'), BookingConfigError);
+    await rejectsWith(
+      () => acuityProvider.createEvent({}, { summary: '', startISO: '', endISO: '', service: 'X' }),
+      BookingConfigError,
+    );
+  });
+
+  await test('cliniko throws BookingConfigError without credentials', async () => {
+    await rejectsWith(() => clinikoProvider.getAvailableSlots!({}, '2099-01-05', 'X'), BookingConfigError);
+  });
+
+  await test('nookal throws BookingConfigError without credentials', async () => {
+    await rejectsWith(() => nookalProvider.getAvailableSlots!({}, '2099-01-05', 'X'), BookingConfigError);
+  });
+
+  await test('cliniko reports the missing per-service mapping clearly', async () => {
+    // Has top-level creds but no service mapping → error should name the service field.
+    const clinic = { cliniko_api_key: 'k-au1', cliniko_business_id: '1', cliniko_practitioner_id: '2', services_json: [] };
+    try {
+      await clinikoProvider.getAvailableSlots!(clinic, '2099-01-05', 'Facial');
+      throw new Error('should have thrown');
+    } catch (e: any) {
+      assert.ok(e instanceof BookingConfigError, `got ${e.name}`);
+      assert.ok(/cliniko_appointment_type_id/.test(e.message), `message was: ${e.message}`);
+    }
   });
 
   console.log(`\n${passed} booking tests passed ✅`);

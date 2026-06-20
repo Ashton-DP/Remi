@@ -19,6 +19,13 @@ export interface BookingEventInput {
   startISO: string;
   endISO: string;
   description?: string;
+  // Richer context that API-based providers (Acuity/Cliniko/Nookal) need to map
+  // onto their own appointment-type / patient records. Google ignores these.
+  service?: string; // clinic service name → provider appointment type
+  clientId?: string; // Remi client id (for caching the provider's patient id)
+  clientName?: string;
+  clientEmail?: string;
+  clientPhone?: string;
 }
 
 /**
@@ -32,6 +39,14 @@ export interface BookingProvider {
 
   /** Busy windows on the clinic's diary between two ISO datetimes. */
   getBusy(clinic: any, startISO: string, endISO: string): Promise<BusyWindow[]>;
+
+  /**
+   * Optional: providers whose API returns AVAILABLE slots directly (Acuity,
+   * Cliniko, Nookal) implement this instead of relying on getBusy + local slot
+   * maths. Returns ISO start times (clinic-local offset) for the given date.
+   * When present, `computeFreeSlots` uses it and skips the busy-window path.
+   */
+  getAvailableSlots?(clinic: any, dateStr: string, service?: string): Promise<string[]>;
 
   /** Create an appointment. Returns the provider's event/booking id. */
   createEvent(clinic: any, input: BookingEventInput): Promise<{ id: string }>;

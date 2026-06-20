@@ -1,5 +1,8 @@
 import type { BookingProvider } from './types';
 import { googleProvider } from './googleProvider';
+import { acuityProvider } from './acuityProvider';
+import { clinikoProvider } from './clinikoProvider';
+import { nookalProvider } from './nookalProvider';
 
 export type { BookingProvider, BookingEventInput, BusyWindow } from './types';
 
@@ -14,6 +17,9 @@ export type { BookingProvider, BookingEventInput, BusyWindow } from './types';
  */
 const PROVIDERS: Record<string, BookingProvider> = {
   google: googleProvider,
+  acuity: acuityProvider,
+  cliniko: clinikoProvider,
+  nookal: nookalProvider,
 };
 
 /** Register a booking provider at runtime (e.g. a new integration at startup). */
@@ -21,8 +27,10 @@ export function registerBookingProvider(provider: BookingProvider): void {
   PROVIDERS[provider.name.toLowerCase()] = provider;
 }
 
-/** Providers we intend to support but haven't built yet (for clear logging). */
-const PLANNED = new Set(['fresha', 'acuity', 'nookal', 'cliniko', 'goodx']);
+/** Providers we intend to support but haven't built yet (for clear logging).
+ *  Fresha has no usable public booking API → use a Google-Calendar mirror.
+ *  GoodX requires a partner/contract integration. */
+const PLANNED = new Set(['fresha', 'goodx']);
 
 /**
  * Resolve the booking provider for a clinic. Defaults to Google Calendar (the

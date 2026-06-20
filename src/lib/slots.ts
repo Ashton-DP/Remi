@@ -29,6 +29,20 @@ export async function computeFreeSlots(
 ): Promise<string[]> {
   const timeZone = clinic.timezone ?? 'Africa/Johannesburg';
   const offset = tzOffset(timeZone);
+  const provider = getBookingProvider(clinic);
+
+  // Availability-native providers (Acuity/Cliniko/Nookal) hand back open slots
+  // directly — use that and skip the hours-minus-busy maths entirely.
+  if (provider.getAvailableSlots) {
+    try {
+      const open = await provider.getAvailableSlots(clinic, dateStr, service);
+      return open.filter((iso) => new Date(iso).getTime() >= Date.now()).slice(0, 5);
+    } catch (e) {
+      console.error(`[slots] ${provider.name} availability failed`, e);
+      return [];
+    }
+  }
+
   const hours = clinic.hours_json ?? {};
   const weekday = WEEKDAYS[new Date(`${dateStr}T00:00:00${offset}`).getUTCDay()];
   const ranges: [string, string][] = hours[weekday] ?? [['09:00', '17:00']];
@@ -38,7 +52,7 @@ export async function computeFreeSlots(
   );
   const durationMin = svc?.duration_min ?? 30;
 
-  const busy = await getBookingProvider(clinic).getBusy(
+  const busy = await provider.getBusy(
     clinic,
     new Date(`${dateStr}T00:00:00${offset}`).toISOString(),
     new Date(`${dateStr}T23:59:59${offset}`).toISOString(),
