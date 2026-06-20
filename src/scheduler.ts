@@ -56,12 +56,16 @@ async function tick() {
         break;
       case 'aftercare':
         msg = `Hi ${name} 💛 Hope your ${svc} went well today! If you have any questions or anything doesn't feel right, just reply here — we're happy to help.`;
+        contentSid = config.templates.aftercare || undefined;
+        variables = { '1': name, '2': svc };
         break;
       case 'review': {
         const url = booking.clinics?.google_review_url;
         if (!url) { await markReminderSent(r.id); continue; } // no review link configured → skip
         const clinicName = booking.clinics?.name ?? 'us';
         msg = `Hi ${name} 🌟 Thanks so much for visiting ${clinicName}! If you have a moment, a quick Google review really helps us: ${url}`;
+        contentSid = config.templates.review || undefined;
+        variables = { '1': name, '2': clinicName, '3': url };
         break;
       }
       default:
@@ -101,8 +105,11 @@ async function reactivation(clinicId: string) {
   const lapsed = await getLapsedClients(clinicId, days);
   for (const c of lapsed as any[]) {
     if (!c.phone) continue;
+    const cName = c.name ?? 'there';
     await sendProactiveWhatsApp(c.phone, {
-      fallbackBody: `Hi ${c.name ?? 'there'} 👋 It's been a while since your last visit to ${clinic.name}. We'd love to see you again — just reply here and I'll find a time that suits you.`,
+      contentSid: config.templates.reactivation || undefined,
+      variables: { '1': cName, '2': clinic.name },
+      fallbackBody: `Hi ${cName} 👋 It's been a while since your last visit to ${clinic.name}. We'd love to see you again — just reply here and I'll find a time that suits you.`,
     });
     await markReactivated(c.id);
   }

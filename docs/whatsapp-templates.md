@@ -80,6 +80,64 @@ Hi {{1}} 👋 You just called {{2}} but we missed you. I'm Remi, the virtual ass
 
 ---
 
+## 6. `aftercare_check_in`
+**Category:** UTILITY · **Language:** en
+**Body:**
+```
+Hi {{1}} 💛 Hope your {{2}} went well today! If you have any questions or anything doesn't feel right, just reply here — we're happy to help.
+```
+**Variables:** {{1}} client name · {{2}} service
+**Sample:** {{1}}=Sarah · {{2}}=chemical peel
+> Sent ~3h after the appointment (Premium). Wired to `WA_TEMPLATE_AFTERCARE`.
+
+---
+
+## 7. `review_request`
+**Category:** UTILITY (Meta may reclassify as MARKETING — submit as UTILITY first) · **Language:** en
+**Body:**
+```
+Hi {{1}} 🌟 Thanks so much for visiting {{2}}! If you have a moment, a quick Google review really helps us: {{3}}
+```
+**Variables:** {{1}} client name · {{2}} clinic name · {{3}} review URL
+**Sample:** {{1}}=Sarah · {{2}}=Demo Aesthetics · {{3}}=https://g.page/r/example/review
+> Sent ~24h after the appointment, only if `clinics.google_review_url` is set.
+> Wired to `WA_TEMPLATE_REVIEW`. The URL is a positional variable — if Meta
+> rejects a variable URL, switch the link to a static **button** in the builder.
+
+---
+
+## 8. `reactivation_winback`
+**Category:** MARKETING (consent-gated) · **Language:** en
+**Body:**
+```
+Hi {{1}} 👋 It's been a while since your last visit to {{2}}. We'd love to see you again — just reply here and I'll find a time that suits you.
+```
+**Variables:** {{1}} client name · {{2}} clinic name
+**Sample:** {{1}}=Sarah · {{2}}=Demo Aesthetics
+> ⚠️ This is **marketing**, not a service message. Needs (a) Meta MARKETING
+> category approval and (b) prior POPIA consent — the code already gates sends on
+> `clients.consent_at` / `last_reactivated_at`. Wired to `WA_TEMPLATE_REACTIVATION`.
+
+---
+
+## 9. `deposit_request`
+**Category:** UTILITY · **Language:** en
+**Body:**
+```
+To secure your {{1}} on {{2}}, please pay your R{{3}} deposit here: {{4}}
+```
+**Variables:** {{1}} service · {{2}} date/time · {{3}} deposit amount (ZAR) · {{4}} payment link
+**Sample:** {{1}}=a Botox consultation · {{2}}=Thu 20 Jun, 09:00 · {{3}}=200 · {{4}}=https://pay.yoco.com/example
+> Sent on booking when the clinic has `deposit_zar` + `deposit_link` configured.
+> Wired to `WA_TEMPLATE_DEPOSIT`. Same variable-URL caveat as #7.
+
+> **Not templated (by design):** the **daily owner summary** (sent to the owner's
+> own number) is a long, fully-dynamic report and isn't a patient message. In
+> production, either have the owner message Remi first each day (stays in the 24h
+> window) or build a short structured summary template later. Tracked, not blocking.
+
+---
+
 ## Approved Content SIDs (fill in after Twilio approval)
 
 The code is **already wired** (`lib/twilio.ts` → `sendProactiveWhatsApp`): when the
@@ -94,7 +152,11 @@ window). So going live is just **pasting the approved SIDs into env** — no cod
 | appointment_reminder_2h  | `WA_TEMPLATE_REMINDER_2H`   | `HX…` | ⬜ pending |
 | waitlist_slot_offer      | `WA_TEMPLATE_WAITLIST_OFFER`| `HX…` | ⬜ pending |
 | missed_call_text_back    | `WA_TEMPLATE_MISSED_CALL`   | `HX…` | ⬜ pending |
+| aftercare_check_in       | `WA_TEMPLATE_AFTERCARE`     | `HX…` | ⬜ pending |
+| review_request           | `WA_TEMPLATE_REVIEW`        | `HX…` | ⬜ pending |
+| reactivation_winback     | `WA_TEMPLATE_REACTIVATION`  | `HX…` | ⬜ pending |
+| deposit_request          | `WA_TEMPLATE_DEPOSIT`       | `HX…` | ⬜ pending |
 
 After Meta approves each template in Twilio, copy its Content SID into the env var
-(locally in `.env` and in Render's Environment), redeploy, and proactive sends
+(locally in `.env` and in Railway's Variables), redeploy, and proactive sends
 switch to templates automatically.
