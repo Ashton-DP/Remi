@@ -131,7 +131,7 @@ export async function scheduleReminders(bookingId: string, startAtISO: string) {
     ['24h', 24],
     ['2h', 2],
   ];
-  const rows = kinds
+  const rows: any[] = kinds
     .filter(([, h]) => start - h * 3600000 > Date.now())
     .map(([kind, h]) => ({
       booking_id: bookingId,
@@ -139,6 +139,15 @@ export async function scheduleReminders(bookingId: string, startAtISO: string) {
       scheduled_for: new Date(start - h * 3600000).toISOString(),
       status: 'pending',
     }));
+  // After-appointment outreach: aftercare check-in (+3h) and review request (+24h).
+  for (const [kind, h] of [['aftercare', 3], ['review', 24]] as [string, number][]) {
+    rows.push({
+      booking_id: bookingId,
+      kind,
+      scheduled_for: new Date(start + h * 3600000).toISOString(),
+      status: 'pending',
+    });
+  }
   if (rows.length) await supabase.from('reminders').insert(rows);
 }
 
@@ -146,7 +155,7 @@ export async function scheduleReminders(bookingId: string, startAtISO: string) {
 export async function getDueReminders() {
   const { data } = await supabase
     .from('reminders')
-    .select('id,kind,booking_id,bookings(service,start_at,status,clients(phone,name))')
+    .select('id,kind,booking_id,bookings(service,start_at,status,clients(phone,name),clinics(name,google_review_url))')
     .eq('status', 'pending')
     .lte('scheduled_for', new Date().toISOString());
   return data ?? [];
@@ -248,6 +257,48 @@ export async function getOpenEscalations(clinicId: string) {
     .eq('status', 'open')
     .order('created_at', { ascending: false });
   return data ?? [];
+}
+
+/**
+ * Consented clients whose most recent booking is older than `days` ago, who
+ * haven't booked since, and who haven't been nudged within `days`. POPIA-safe:
+ * only clients with consent_at set are returned.
+ */
+export async function getLapsedClients(clinicId: string, days: number, limit = 20) {
+  const cutoff = Date.now() - days * 86400000;
+  const { data: clients } = await supabase
+    .from('clients')
+    .select('id,name,phone,consent_at,last_reactivated_at')
+    .eq('clinic_id', clinicId)
+    .not('consent_at', 'is', null);
+  if (!clients?.length) return [];
+
+  const ids = clients.map((c) => c.id);
+  const { data: bks } = await supabase
+    .from('bookings')
+    .select('client_id,start_at')
+    .eq('clinic_id', clinicId)
+    .in('client_id', ids);
+
+  const latest: Record<string, number> = {};
+  for (const b of bks ?? []) {
+    const t = new Date(b.start_at).getTime();
+    if (!latest[b.client_id] || t > latest[b.client_id]) latest[b.client_id] = t;
+  }
+
+  const out: any[] = [];
+  for (const c of clients) {
+    const last = latest[c.id];
+    if (!last || last >= cutoff) continue; // never booked, or booked recently → not lapsed
+    if (c.last_reactivated_at && new Date(c.last_reactivated_at).getTime() >= cutoff) continue; // already nudged recently
+    out.push(c);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+export async function markReactivated(clientId: string) {
+  await supabase.from('clients').update({ last_reactivated_at: new Date().toISOString() }).eq('id', clientId);
 }
 
 export async function getReportData(clinicId: string, sinceISO: string) {

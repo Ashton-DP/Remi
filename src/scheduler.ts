@@ -3,8 +3,9 @@
  * Polls every 60 seconds for due reminders and sends WhatsApp messages.
  */
 import { config } from './config'; // also loads dotenv
-import { getDueReminders, markReminderSent } from './db';
+import { getDueReminders, markReminderSent, getClinic, getLapsedClients, markReactivated } from './db';
 import { sendProactiveWhatsApp } from './lib/twilio';
+import { generateReport } from './report';
 
 function formatWhen(startAt: string, timezone: string): string {
   return new Date(startAt).toLocaleString('en-ZA', {
@@ -53,6 +54,16 @@ async function tick() {
         contentSid = config.templates.reminder2h || undefined;
         variables = { '1': svc, '2': when };
         break;
+      case 'aftercare':
+        msg = `Hi ${name} 💛 Hope your ${svc} went well today! If you have any questions or anything doesn't feel right, just reply here — we're happy to help.`;
+        break;
+      case 'review': {
+        const url = booking.clinics?.google_review_url;
+        if (!url) { await markReminderSent(r.id); continue; } // no review link configured → skip
+        const clinicName = booking.clinics?.name ?? 'us';
+        msg = `Hi ${name} 🌟 Thanks so much for visiting ${clinicName}! If you have a moment, a quick Google review really helps us: ${url}`;
+        break;
+      }
       default:
         msg = `Reminder: ${svc} on ${when}.`;
     }
@@ -61,6 +72,51 @@ async function tick() {
     await markReminderSent(r.id);
     console.log(`[scheduler] sent ${r.kind} reminder → ${client.phone}`);
   }
+}
+
+// ---- Daily jobs: owner summary + reactivation (run once/day after DAILY_HOUR) ----
+const DAILY_HOUR = parseInt(process.env.DAILY_JOBS_HOUR ?? '18', 10);
+let _lastDailyDate = '';
+
+function clinicNow(tz = 'Africa/Johannesburg') {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
+  const hour = parseInt(now.toLocaleString('en-GB', { timeZone: tz, hour: '2-digit', hour12: false }), 10);
+  return { dateStr, hour };
+}
+
+async function ownerSummary(clinicId: string) {
+  const clinic = await getClinic(clinicId);
+  const to = clinic?.owner_summary_phone || clinic?.escalation_contact;
+  if (!to) return;
+  const report = await generateReport(clinicId, 1);
+  await sendProactiveWhatsApp(to, { fallbackBody: `📊 Your Remi daily summary:\n\n${report}` });
+  console.log('[scheduler] owner summary sent');
+}
+
+async function reactivation(clinicId: string) {
+  const clinic = await getClinic(clinicId);
+  if (!clinic) return;
+  const days = clinic.reactivation_days ?? 90;
+  const lapsed = await getLapsedClients(clinicId, days);
+  for (const c of lapsed as any[]) {
+    if (!c.phone) continue;
+    await sendProactiveWhatsApp(c.phone, {
+      fallbackBody: `Hi ${c.name ?? 'there'} 👋 It's been a while since your last visit to ${clinic.name}. We'd love to see you again — just reply here and I'll find a time that suits you.`,
+    });
+    await markReactivated(c.id);
+  }
+  if (lapsed.length) console.log(`[scheduler] reactivation: ${lapsed.length} recall(s) sent`);
+}
+
+async function maybeRunDailyJobs() {
+  if (!config.defaultClinicId) return;
+  const { dateStr, hour } = clinicNow();
+  if (dateStr === _lastDailyDate || hour < DAILY_HOUR) return;
+  _lastDailyDate = dateStr;
+  console.log('[scheduler] running daily jobs for', dateStr);
+  await ownerSummary(config.defaultClinicId).catch((e) => console.error('[ownerSummary]', e));
+  await reactivation(config.defaultClinicId).catch((e) => console.error('[reactivation]', e));
 }
 
 let _started = false;
@@ -80,6 +136,7 @@ export function startScheduler() {
   tick().catch((e) => console.error('[scheduler] tick error:', e));
   setInterval(() => {
     tick().catch((e) => console.error('[scheduler] tick error:', e));
+    maybeRunDailyJobs().catch((e) => console.error('[scheduler] daily jobs error:', e));
   }, 60_000);
 }
 
