@@ -9,6 +9,7 @@ import { renderDashboard } from './dashboard';
 import { supabase } from './lib/supabase';
 import { validateTwilioWebhook } from './lib/twilioWebhook';
 import { requireDashboardAuth, qp } from './lib/dashboardAuth';
+import { initMonitoring, attachErrorHandler } from './lib/monitoring';
 import { startScheduler } from './scheduler';
 import { attachVoiceRelay } from './routes/voiceRelay';
 import { attachMediaStream } from './routes/mediaStream';
@@ -83,6 +84,10 @@ app.get('/dashboard', (req, res) => {
   res.status(400).send('Set DEFAULT_CLINIC_ID in .env');
 });
 
+// Error-handling middleware must be mounted AFTER all routes. In Express 5,
+// rejected async route handlers are forwarded here automatically.
+attachErrorHandler(app);
+
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 // Use an explicit HTTP server so the ConversationRelay WebSocket can share the port.
 const server = http.createServer(app);
@@ -90,6 +95,7 @@ attachVoiceRelay(server); // mounts the /ws/voice WebSocket endpoint (Conversati
 attachMediaStream(server); // mounts the /ws/media WebSocket endpoint (custom pipeline)
 server.listen(PORT, () => {
   console.log(`Remi listening on :${config.port} (model: ${config.model}, voice: ${config.voice.mode})`);
+  void initMonitoring();
   // Run the reminder scheduler in-process unless explicitly disabled. For a
   // single web instance this avoids needing a separate worker. When scaling to
   // multiple instances, set RUN_SCHEDULER=false here and run one dedicated worker.

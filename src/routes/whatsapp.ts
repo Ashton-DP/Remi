@@ -11,6 +11,7 @@ import {
 } from '../db';
 import { runAgent } from '../brain/agent';
 import { twimlReply } from '../lib/twilio';
+import { captureError } from '../lib/monitoring';
 
 /** Twilio inbound WhatsApp webhook (application/x-www-form-urlencoded). */
 export async function handleInboundWhatsApp(req: Request, res: Response) {
@@ -51,7 +52,7 @@ export async function handleInboundWhatsApp(req: Request, res: Response) {
 
     res.type('text/xml').send(twimlReply(reply));
   } catch (e) {
-    console.error('[whatsapp] inbound error', e);
+    captureError(e, { route: 'whatsapp.inbound', from: String(req.body?.From ?? '') });
     res
       .type('text/xml')
       .send(twimlReply('Sorry, something went wrong — a team member will get back to you.'));

@@ -71,6 +71,12 @@ export const config = {
   dashboard: {
     token: opt('DASHBOARD_TOKEN'),
   },
+  // Error monitoring. All optional: SENTRY_DSN (needs @sentry/node installed),
+  // MONITORING_WEBHOOK_URL (e.g. a Slack incoming webhook). Unset = console only.
+  monitoring: {
+    sentryDsn: opt('SENTRY_DSN'),
+    webhookUrl: opt('MONITORING_WEBHOOK_URL'),
+  },
   // Shared secret for the /tools/* webhooks the ElevenLabs agent calls. If set,
   // requests must include header X-Tool-Secret. Blank = open (dev/testing only).
   toolsSecret: opt('TOOLS_SHARED_SECRET'),

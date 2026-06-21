@@ -59,23 +59,23 @@ file + one registry line, no flow changes.
 ## TIER 1 — Production hardening (before scaling past clinic #1)
 
 ### Reliability & safety
-- ⬜ **Error monitoring** — Sentry (or similar) on the server; alert on webhook 500s.
-- ⬜ **Uptime monitoring** — ping `/health` (e.g. UptimeRobot) + alert.
+- 🟡 **Error monitoring** — built (`src/lib/monitoring.ts`): Express error handler + process crash handlers + optional Slack/webhook alerts, all wired. **To turn on:** set `MONITORING_WEBHOOK_URL` (works now, no deps) and/or `SENTRY_DSN` + `npm i @sentry/node`.
+- ⬜ **Uptime monitoring** — point UptimeRobot (or similar) at `GET /health` + alert. *(Endpoint exists; just needs the external monitor — your account.)*
 - ⬜ **Structured logging** — keep request/AI logs for debugging + the "$ recovered" audit trail.
-- ⬜ **Idempotency** — guard against double bookings / duplicate reminder sends on retries.
+- ✅ **Idempotency** — inbound WhatsApp deduped on MessageSid via `processed_messages` (Twilio webhook retries no longer double-book/double-reply). Fails open.
 - ⬜ **Rate limiting / abuse protection** on public webhooks (AI calls cost money).
 - ⬜ **Supabase backups + data-retention policy** (POPIA: don't keep data longer than needed).
-- ⬜ **Graceful AI fallback** — if Gemini/Claude errors or rate-limits, escalate to human instead of dropping the lead.
+- ✅ **Graceful AI fallback** — `runAgent` escalates to a human + sends a warm hand-off when the AI provider errors/rate-limits, instead of dropping the lead.
 
 ### Quality
-- ⬜ **Automated tests** — Remi currently has none. At minimum: booking flow, slot logic, cancel/reschedule/waitlist, report math.
+- 🟡 **Automated tests** — 31 tests across 4 suites (`npm test`): booking provider/registry + slot logic, dashboard auth, AI fallback, report math + reminder scheduling. Still to add: end-to-end booking-provider tests vs live accounts, prompt/edge-case coverage.
 - ⬜ **Prompt hardening** — handle edge cases (ambiguous dates, multiple services, out-of-hours, "speak to a human", pricing haggling, non-English).
 - ⬜ **Afrikaans + multilingual QA** on both WhatsApp and voice.
 - ⬜ **Voice quality pass** — TTS naturalness, interruption handling, "didn't catch that" loops, accidental hang-ups.
 
 ### The retention metric
 - 🟡 **"R recovered" monthly report** — exists; make it the polished artifact you email each clinic (this is what prevents churn). Auto-send monthly.
-- ⬜ **Per-clinic dashboard access** — secure login (currently the dashboard route is unauthenticated).
+- ✅ **Per-clinic dashboard access** — token-gated, fail-closed (`DASHBOARD_TOKEN` master + optional per-clinic `dashboard_token`). HttpOnly cookie, constant-time compare.
 
 ---
 
