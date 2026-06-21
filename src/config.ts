@@ -65,6 +65,12 @@ export const config = {
     deposit: opt('WA_TEMPLATE_DEPOSIT'),
   },
   defaultClinicId: opt('DEFAULT_CLINIC_ID'),
+  // Dashboard / report access. FAIL-CLOSED: if no token is set, /dashboard and
+  // /report are disabled (they expose patient data). Set a long random value.
+  // A clinic can also have its own clinics.dashboard_token for a scoped link.
+  dashboard: {
+    token: opt('DASHBOARD_TOKEN'),
+  },
   // Shared secret for the /tools/* webhooks the ElevenLabs agent calls. If set,
   // requests must include header X-Tool-Secret. Blank = open (dev/testing only).
   toolsSecret: opt('TOOLS_SHARED_SECRET'),

@@ -8,6 +8,7 @@ import { generateReport } from './report';
 import { renderDashboard } from './dashboard';
 import { supabase } from './lib/supabase';
 import { validateTwilioWebhook } from './lib/twilioWebhook';
+import { requireDashboardAuth, qp } from './lib/dashboardAuth';
 import { startScheduler } from './scheduler';
 import { attachVoiceRelay } from './routes/voiceRelay';
 import { attachMediaStream } from './routes/mediaStream';
@@ -58,23 +59,27 @@ app.post('/webhooks/voice/status', validateTwilioWebhook, handleCallStatus);
 // ElevenLabs agent server tools (booking actions during a voice call)
 app.post('/tools/:tool', handleAgentTool);
 
-// Report (text)
-app.get('/report/:clinicId', async (req, res) => {
-  const days = parseInt((req.query.days as string) ?? '30', 10);
-  const report = await generateReport(req.params.clinicId, days);
+// Report (text) — gated: exposes patient data
+app.get('/report/:clinicId', requireDashboardAuth, async (req, res) => {
+  const days = parseInt(qp(req.query.days) ?? '30', 10);
+  const report = await generateReport(qp(req.params.clinicId) ?? '', days);
   res.type('text/plain').send(report);
 });
 
-// Dashboard (HTML)
-app.get('/dashboard/:clinicId', async (req, res) => {
-  const days = parseInt((req.query.days as string) ?? '30', 10);
-  const html = await renderDashboard(req.params.clinicId, days);
+// Dashboard (HTML) — gated: exposes patient data
+app.get('/dashboard/:clinicId', requireDashboardAuth, async (req, res) => {
+  const days = parseInt(qp(req.query.days) ?? '30', 10);
+  const html = await renderDashboard(qp(req.params.clinicId) ?? '', days);
   res.type('text/html').send(html);
 });
 
-// Convenience redirect for default clinic
-app.get('/dashboard', (_req, res) => {
-  if (config.defaultClinicId) return res.redirect(`/dashboard/${config.defaultClinicId}`);
+// Convenience redirect for default clinic (preserves ?token= so auth carries through)
+app.get('/dashboard', (req, res) => {
+  if (config.defaultClinicId) {
+    const t = qp(req.query.token);
+    const token = t ? `?token=${encodeURIComponent(t)}` : '';
+    return res.redirect(`/dashboard/${config.defaultClinicId}${token}`);
+  }
   res.status(400).send('Set DEFAULT_CLINIC_ID in .env');
 });
 
