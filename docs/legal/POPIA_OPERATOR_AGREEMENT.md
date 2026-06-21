@@ -9,7 +9,7 @@
 of `[CLINIC ADDRESS]` ("the Clinic"); and
 
 **(2) The Operator** — **The Visionaries (Pty) Ltd** (trading as "Remi"),
-registration no. `[CIPC NUMBER]`, of 34 Prestwich Street, Cape Town, Western Cape 8001
+registration no. 2026/005294/07, of 34 Prestwich Street, Cape Town, Western Cape 8001
 ("Remi").
 
 Effective date: `[DATE]`.

@@ -8,7 +8,7 @@
 
 ### Who we are
 This service ("Remi") is an AI front-desk assistant operated by
-**The Visionaries (Pty) Ltd** (registration no. `[CIPC NUMBER]`), of
+**The Visionaries (Pty) Ltd** (registration no. 2026/005294/07), of
 34 Prestwich Street, Cape Town, Western Cape 8001 ("we", "us") on behalf of the
 clinic you contacted ("the Clinic"). When you message or call the Clinic's number,
 you may be assisted by Remi.

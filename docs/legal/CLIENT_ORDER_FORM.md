@@ -5,7 +5,7 @@
 > the [POPIA Operator Agreement](POPIA_OPERATOR_AGREEMENT.md). Attorney review
 > recommended. Fill every `[BRACKET]`.
 
-**Provider:** The Visionaries (Pty) Ltd (trading as "Remi"), reg. no. `[CIPC NUMBER]`,
+**Provider:** The Visionaries (Pty) Ltd (trading as "Remi"), reg. no. 2026/005294/07,
 34 Prestwich Street, Cape Town, Western Cape 8001. Contact: hello@remireception.com
 
 **Client (the Clinic):**

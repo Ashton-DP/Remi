@@ -9,7 +9,7 @@
 
 ### 1. Who these terms are between
 "Remi" is operated by **The Visionaries (Pty) Ltd** (registration no.
-`[CIPC NUMBER]`), 34 Prestwich Street, Cape Town, Western Cape 8001 ("we", "us").
+2026/005294/07), 34 Prestwich Street, Cape Town, Western Cape 8001 ("we", "us").
 By subscribing to Remi (a "Clinic") or by messaging/calling a clinic served by
 Remi (an "End User"), you agree to these terms.
 

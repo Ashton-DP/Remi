@@ -13,7 +13,7 @@
 | Field | Value |
 |---|---|
 | Name of private body / organisation | **The Visionaries (Pty) Ltd** |
-| Company registration number (CIPC) | `[FILL — e.g. 2023/123456/07]` |
+| Company registration number (CIPC) | **2026/005294/07** |
 | Trading name | Remi |
 | Nature of business | AI front-desk / virtual receptionist software for health & wellness clinics (answers calls and WhatsApp, books and manages appointments) |
 | Physical address | 34 Prestwich Street, Cape Town, Western Cape, 8001 |
@@ -58,10 +58,11 @@ correct, and that I am the Information Officer of **The Visionaries (Pty) Ltd**.
 ---
 
 ### What you still need to enter (`[FILL]` above)
-1. **CIPC company registration number** — from your CoR documents (also clears the `[CIPC NUMBER]` blanks in the Privacy Policy + Operator Agreement).
-2. **Business telephone number** (Part A).
-3. **Your SA ID number** (Part B).
-4. **Your cell number** (Part B).
+1. **Business telephone number** (Part A).
+2. **Your SA ID number** (Part B).
+3. **Your cell number** (Part B).
+
+*(CIPC number `2026/005294/07` confirmed from CoR15.1A and filled in. Company registered 9 Jan 2026.)*
 
 ### After you register
 - Save the **confirmation / reference number** the Regulator gives you.
