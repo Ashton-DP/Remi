@@ -3,3 +3,6 @@ dist/
 .env
 *.log
 .DS_Store
+
+# Filled legal sheets with personal data — never commit
+docs/legal/*.local.md
