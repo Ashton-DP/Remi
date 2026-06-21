@@ -1,4 +1,5 @@
 import { supabase } from './lib/supabase';
+import { buildReminderRows } from './lib/reminders';
 
 export async function getClinic(id: string) {
   const { data } = await supabase.from('clinics').select('*').eq('id', id).single();
@@ -151,29 +152,7 @@ export async function markProcessedOnce(sid: string): Promise<boolean> {
 
 /** Schedule 48h/24h/2h reminders for a booking (only future ones). */
 export async function scheduleReminders(bookingId: string, startAtISO: string) {
-  const start = new Date(startAtISO).getTime();
-  const kinds: [string, number][] = [
-    ['48h', 48],
-    ['24h', 24],
-    ['2h', 2],
-  ];
-  const rows: any[] = kinds
-    .filter(([, h]) => start - h * 3600000 > Date.now())
-    .map(([kind, h]) => ({
-      booking_id: bookingId,
-      kind,
-      scheduled_for: new Date(start - h * 3600000).toISOString(),
-      status: 'pending',
-    }));
-  // After-appointment outreach: aftercare check-in (+3h) and review request (+24h).
-  for (const [kind, h] of [['aftercare', 3], ['review', 24]] as [string, number][]) {
-    rows.push({
-      booking_id: bookingId,
-      kind,
-      scheduled_for: new Date(start + h * 3600000).toISOString(),
-      status: 'pending',
-    });
-  }
+  const rows = buildReminderRows(bookingId, startAtISO);
   if (rows.length) await supabase.from('reminders').insert(rows);
 }
 

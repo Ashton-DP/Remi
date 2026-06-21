@@ -5,6 +5,40 @@
 import { config } from './config';
 import { getClinic, getReportData } from './db';
 
+export interface ReportStats {
+  bookedN: number;
+  bookedR: number;
+  recoveredR: number;
+  backfillN: number;
+  escalations: number;
+  confirmed: number;
+  cancelled: number;
+  noShowRate: number;
+}
+
+/** Pure aggregation of report numbers from raw events + bookings (testable). */
+export function computeReportStats(events: any[], bookings: any[]): ReportStats {
+  const evs = events ?? [];
+  const bks = bookings ?? [];
+  const sumR = (type: string) =>
+    evs.filter((e) => e.type === type).reduce((a, e) => a + (e.value_zar || 0), 0);
+  const countE = (type: string) => evs.filter((e) => e.type === type).length;
+
+  const confirmed = bks.filter((b) => b.status === 'confirmed').length;
+  const cancelled = bks.filter((b) => b.status === 'cancelled').length;
+  return {
+    bookedN: countE('booking_created') + countE('slot_backfilled'),
+    bookedR: sumR('booking_created') + sumR('slot_backfilled'),
+    recoveredR: sumR('missed_call_recovered') + sumR('slot_backfilled'),
+    backfillN: countE('slot_backfilled'),
+    escalations: countE('escalation_created'),
+    confirmed,
+    cancelled,
+    noShowRate:
+      confirmed + cancelled > 0 ? Math.round((cancelled / (confirmed + cancelled)) * 100) : 0,
+  };
+}
+
 export async function generateReport(clinicId: string, sinceDays = 30): Promise<string> {
   const clinic = await getClinic(clinicId);
   if (!clinic) return `Clinic not found: ${clinicId}`;
@@ -12,22 +46,8 @@ export async function generateReport(clinicId: string, sinceDays = 30): Promise<
   const sinceISO = new Date(Date.now() - sinceDays * 86_400_000).toISOString();
   const { events, bookings } = await getReportData(clinicId, sinceISO);
 
-  const sumR = (type: string) =>
-    (events as any[])
-      .filter((e) => e.type === type)
-      .reduce((a, e) => a + (e.value_zar || 0), 0);
-  const countE = (type: string) => (events as any[]).filter((e) => e.type === type).length;
-
-  const bookedN = countE('booking_created') + countE('slot_backfilled');
-  const bookedR = sumR('booking_created') + sumR('slot_backfilled');
-  const recoveredR = sumR('missed_call_recovered') + sumR('slot_backfilled');
-  const backfillN = countE('slot_backfilled');
-  const escalations = countE('escalation_created');
-
-  const confirmed = (bookings as any[]).filter((b) => b.status === 'confirmed').length;
-  const cancelled = (bookings as any[]).filter((b) => b.status === 'cancelled').length;
-  const noShowRate =
-    confirmed + cancelled > 0 ? Math.round((cancelled / (confirmed + cancelled)) * 100) : 0;
+  const { bookedN, bookedR, recoveredR, backfillN, escalations, confirmed, cancelled, noShowRate } =
+    computeReportStats(events as any[], bookings as any[]);
 
   return [
     `=== Remi Report — ${clinic.name} ===`,
