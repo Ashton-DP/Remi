@@ -37,7 +37,7 @@ Remi shall:
 1. Process personal information **only** with the Clinic's knowledge or authorisation and only for the purposes in clause 2 (s20(a)).
 2. Treat all personal information as **confidential** and not disclose it except as required by law or authorised by the Clinic (s20(b)).
 3. Implement and maintain appropriate, reasonable **technical and organisational security measures** to secure the integrity and confidentiality of personal information (s19, s21(1)), including encryption in transit, access controls, secret management, and least-privilege access.
-4. **Notify the Clinic immediately** (and in any event within `[24/48]` hours) on becoming aware of any unauthorised access to or acquisition of personal information, to enable the Clinic to comply with s22 breach-notification duties.
+4. **Notify the Clinic immediately** (and in any event within 48 hours) on becoming aware of any unauthorised access to or acquisition of personal information, to enable the Clinic to comply with s22 breach-notification duties.
 5. **Assist** the Clinic in responding to data-subject requests (access, correction, deletion, objection) and to the Information Regulator.
 6. On termination or on the Clinic's written request, **delete or return** all personal information and delete existing copies, unless retention is required by law.
 7. Permit and contribute to **reasonable audits** of its processing on reasonable notice.
@@ -67,10 +67,10 @@ the contract, or data-subject consent) applies.
 |---|---|---|---|
 | Twilio Inc. | Telephony + WhatsApp delivery | USA (+ regional) | Telecoms carrier; processes phone numbers + message/call content |
 | ElevenLabs Inc. | AI voice (call answering) | USA | Speech synthesis + conversational voice agent |
-| Supabase | Database (bookings, conversations) | `[REGION — confirm]` | Primary data store |
-| `[AI PROVIDER — Google Gemini PAID / Anthropic Claude]` | Generating replies | USA | **Must be a PAID tier** — free tiers may train on data |
+| Supabase | Database (bookings, conversations) | EU (Frankfurt/Ireland) | Primary data store; EU/GDPR adequate protection |
+| Google LLC (Gemini API) | Generating replies | USA | **Must be a PAID tier** — free tiers may train on data |
 | Google LLC | Calendar (if used) | USA | Appointment events |
-| Railway | Application hosting | `[REGION]` | Runs the application |
+| Railway | Application hosting | EU West (Amsterdam) | Runs the application |
 
 > **Action:** confirm each region and ensure the **paid** AI tier is used before
 > any real patient data flows (a free AI tier that trains on prompts would breach
