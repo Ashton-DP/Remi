@@ -121,6 +121,32 @@ export async function createEscalation(conversationId: string, reason: string, s
   await supabase.from('conversations').update({ status: 'escalated' }).eq('id', conversationId);
 }
 
+/**
+ * Idempotency guard for webhook retries. Returns true if `sid` is being seen for
+ * the FIRST time (caller should process it), false if it was already recorded
+ * (a Twilio retry — caller should skip to avoid double bookings / replies).
+ * Fails OPEN (returns true) if the dedup store is unavailable, so a transient DB
+ * issue never silently drops a real message.
+ */
+export async function markProcessedOnce(sid: string): Promise<boolean> {
+  if (!sid) return true;
+  try {
+    const { data, error } = await supabase
+      .from('processed_messages')
+      .upsert({ sid }, { onConflict: 'sid', ignoreDuplicates: true })
+      .select('sid');
+    if (error) {
+      console.error('[idempotency] store error, failing open', error.message);
+      return true;
+    }
+    // ignoreDuplicates → inserted rows come back; empty means it already existed.
+    return Array.isArray(data) && data.length > 0;
+  } catch (e) {
+    console.error('[idempotency] store threw, failing open', e);
+    return true;
+  }
+}
+
 // ---- Slice 2: reminders, cancellation/reschedule, waitlist, report ----
 
 /** Schedule 48h/24h/2h reminders for a booking (only future ones). */
