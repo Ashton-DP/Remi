@@ -59,7 +59,7 @@ file + one registry line, no flow changes.
 ## TIER 1 — Production hardening (before scaling past clinic #1)
 
 ### Reliability & safety
-- 🟡 **Error monitoring** — built (`src/lib/monitoring.ts`): Express error handler + process crash handlers + optional Slack/webhook alerts, all wired. **To turn on:** set `MONITORING_WEBHOOK_URL` (works now, no deps) and/or `SENTRY_DSN` + `npm i @sentry/node`.
+- ✅ **Error monitoring** — built (`src/lib/monitoring.ts`): Express error handler + process crash handlers + Slack/webhook alerts. **Slack alerts verified live** (test message delivered). Set `MONITORING_WEBHOOK_URL` on Railway to activate in prod. (Optional Sentry: `SENTRY_DSN` + `npm i @sentry/node`.)
 - ⬜ **Uptime monitoring** — point UptimeRobot (or similar) at `GET /health` + alert. *(Endpoint exists; just needs the external monitor — your account.)*
 - ⬜ **Structured logging** — keep request/AI logs for debugging + the "$ recovered" audit trail.
 - ✅ **Idempotency** — inbound WhatsApp deduped on MessageSid via `processed_messages` (Twilio webhook retries no longer double-book/double-reply). Fails open.
