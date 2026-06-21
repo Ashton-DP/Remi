@@ -48,7 +48,7 @@ file + one registry line, no flow changes.
 - ⬜ **Invoicing + VAT** — confirm with your accountant whether the SA company must register for VAT yet.
 
 ### E. Make the deployment production-safe
-- ✅ **Hosting on Railway** (always-on, no cold-start sleep). **Remaining:** decommission the old Render `remi` service + downgrade the Render workspace to Hobby to stop the $25 (check no other Render service needs Pro first).
+- ✅ **Hosting on Railway** (always-on, no cold-start sleep). Render was never upgraded to Pro, so there's **no $25 charge to stop**. Optional hygiene: delete the idle Render `remi` service to wipe its stale (pre-rotation) secrets — not a money item.
 - ✅ **Reminders now run** — the scheduler runs **in-process** on the web service (env `RUN_SCHEDULER`, default on). *At multi-instance scale*, set `RUN_SCHEDULER=false` on web and run one dedicated Background Worker (`node dist/scheduler.js`) to avoid duplicate sends.
 - ✅ **Twilio webhook signatures validated** — `validateTwilioWebhook` middleware on all `/webhooks/*` (unsigned POSTs now return 403; `TWILIO_SKIP_VALIDATION=true` bypasses for testing).
 - ⬜ **Rotate the leaked secrets** — Supabase service_role key + Twilio auth token were shown in chat. Rotate both; update Railway + `.env`.
