@@ -148,6 +148,20 @@ export async function markProcessedOnce(sid: string): Promise<boolean> {
   }
 }
 
+/**
+ * Release a previously-recorded SID so a Twilio retry can re-run it. Call this
+ * if processing FAILED after markProcessedOnce returned true — otherwise the
+ * retry would be deduped away and the customer's message lost.
+ */
+export async function unmarkProcessed(sid: string): Promise<void> {
+  if (!sid) return;
+  try {
+    await supabase.from('processed_messages').delete().eq('sid', sid);
+  } catch (e) {
+    console.error('[idempotency] unmark failed', e);
+  }
+}
+
 // ---- Slice 2: reminders, cancellation/reschedule, waitlist, report ----
 
 /** Schedule 48h/24h/2h reminders for a booking (only future ones). */
@@ -162,8 +176,26 @@ export async function getDueReminders() {
     .from('reminders')
     .select('id,kind,booking_id,bookings(service,start_at,status,clients(phone,name),clinics(name,google_review_url))')
     .eq('status', 'pending')
-    .lte('scheduled_for', new Date().toISOString());
+    .lte('scheduled_for', new Date().toISOString())
+    .order('scheduled_for', { ascending: true })
+    .limit(200); // bound a backlog so one tick can't run unbounded
   return data ?? [];
+}
+
+/**
+ * Atomically claim a reminder for sending: flip pending→sending and report
+ * whether THIS caller won the claim. Prevents the send-before-mark double-send
+ * (on crash-recovery or a second scheduler instance). Returns false if another
+ * worker already claimed it.
+ */
+export async function claimReminder(id: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('reminders')
+    .update({ status: 'sending' })
+    .eq('id', id)
+    .eq('status', 'pending')
+    .select('id');
+  return Array.isArray(data) && data.length > 0;
 }
 
 export async function markReminderSent(id: string) {

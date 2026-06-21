@@ -51,9 +51,18 @@ async function call(clinic: any, method: string, params: Record<string, string>)
   return data?.data?.results ?? data?.data ?? data;
 }
 
-/** Split a clinic-local ISO (e.g. 2026-06-22T09:00:00+02:00) into date + time. */
-function dateTime(iso: string): { date: string; time: string } {
-  return { date: iso.slice(0, 10), time: iso.slice(11, 19) };
+/**
+ * Convert any ISO instant into the clinic's LOCAL wall-clock date + time, which
+ * is what Nookal's appointment_date / start_time expect. executeTool passes a
+ * UTC ISO, so naive string slicing booked appointments at the wrong hour (and
+ * sometimes the wrong day) — this fixes that.
+ */
+function dateTime(iso: string, timeZone: string): { date: string; time: string } {
+  const d = new Date(iso);
+  return {
+    date: d.toLocaleDateString('en-CA', { timeZone }), // YYYY-MM-DD
+    time: d.toLocaleTimeString('en-GB', { timeZone, hour12: false }), // HH:mm:ss
+  };
 }
 
 /** Create a Nookal patient and return its id. TODO: add search-based dedup once
@@ -95,7 +104,7 @@ export const nookalProvider: BookingProvider = {
   async createEvent(clinic: any, input: BookingEventInput): Promise<{ id: string }> {
     const { locationId, practitionerId, appointmentTypeId } = ids(clinic, input.service);
     const patientId = await createPatient(clinic, input);
-    const { date, time } = dateTime(input.startISO);
+    const { date, time } = dateTime(input.startISO, clinic.timezone ?? 'Africa/Johannesburg');
     const res = await call(clinic, 'addAppointmentBooking', {
       location_id: locationId,
       practitioner_id: practitionerId,
@@ -109,7 +118,7 @@ export const nookalProvider: BookingProvider = {
   },
 
   async updateEvent(clinic: any, eventId: string, input: BookingEventInput): Promise<void> {
-    const { date, time } = dateTime(input.startISO);
+    const { date, time } = dateTime(input.startISO, clinic.timezone ?? 'Africa/Johannesburg');
     await call(clinic, 'updateAppointmentBooking', {
       appointment_id: eventId,
       appointment_date: date,

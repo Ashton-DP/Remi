@@ -3,7 +3,7 @@
  * Polls every 60 seconds for due reminders and sends WhatsApp messages.
  */
 import { config } from './config'; // also loads dotenv
-import { getDueReminders, markReminderSent, getClinic, getLapsedClients, markReactivated } from './db';
+import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedClients, markReactivated } from './db';
 import { sendProactiveWhatsApp } from './lib/twilio';
 import { generateReport } from './report';
 
@@ -15,7 +15,24 @@ function formatWhen(startAt: string, timezone: string): string {
   });
 }
 
+let _ticking = false;
+
 async function tick() {
+  // setInterval doesn't wait for the async callback — guard against a slow tick
+  // overlapping the next one (which would re-process the same not-yet-marked rows).
+  if (_ticking) {
+    console.warn('[scheduler] previous tick still running — skipping this cycle');
+    return;
+  }
+  _ticking = true;
+  try {
+    await _tick();
+  } finally {
+    _ticking = false;
+  }
+}
+
+async function _tick() {
   const reminders = await getDueReminders();
   if (reminders.length) console.log(`[scheduler] ${reminders.length} due reminder(s)`);
 
@@ -72,6 +89,9 @@ async function tick() {
         msg = `Reminder: ${svc} on ${when}.`;
     }
 
+    // Atomically claim (pending→sending) so a crash/retry or a second instance
+    // can't send the same reminder twice. If we don't win the claim, skip.
+    if (!(await claimReminder(r.id))) continue;
     await sendProactiveWhatsApp(client.phone, { contentSid, variables, fallbackBody: msg });
     await markReminderSent(r.id);
     console.log(`[scheduler] sent ${r.kind} reminder → ${client.phone}`);

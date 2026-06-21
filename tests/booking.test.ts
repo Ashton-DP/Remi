@@ -124,6 +124,22 @@ async function test(name: string, fn: () => void | Promise<void>) {
     assert.ok(slots.some((s) => s.startsWith(`${MON}T09:30:00`)), '09:30 should be free');
   });
 
+  await test('uses the clinic-local weekday hours (SA +02:00 Monday, not prior day)', async () => {
+    // Short Monday window: 09:00–10:00 = exactly two 30-min slots. The old bug
+    // read local-midnight as Sunday → no mon hours → fell back to the default
+    // 09:00–17:00 and returned 5 slots. The fix must return exactly 2.
+    busyWindows.length = 0;
+    const shortClinic = {
+      booking_provider: 'fake',
+      timezone: 'Africa/Johannesburg',
+      hours_json: { mon: [['09:00', '10:00']] },
+      services_json: [{ service: 'Consultation', duration_min: 30 }],
+    };
+    const slots = await computeFreeSlots(shortClinic, MON, 'Consultation');
+    assert.equal(slots.length, 2, `expected 2 Monday slots, got ${slots.length}: ${slots}`);
+    assert.ok(slots[0].startsWith(`${MON}T09:00:00`), slots[0]);
+  });
+
   console.log('API providers — clear config errors when credentials are missing');
 
   await test('acuity throws BookingConfigError without credentials', async () => {

@@ -8,6 +8,7 @@ import {
   saveMessage,
   getHistory,
   markProcessedOnce,
+  unmarkProcessed,
 } from '../db';
 import { runAgent } from '../brain/agent';
 import { twimlReply } from '../lib/twilio';
@@ -15,13 +16,15 @@ import { captureError } from '../lib/monitoring';
 
 /** Twilio inbound WhatsApp webhook (application/x-www-form-urlencoded). */
 export async function handleInboundWhatsApp(req: Request, res: Response) {
+  // Hoisted so the catch can release the idempotency record on failure.
+  let sid = '';
   try {
     const from = String(req.body.From ?? '');
     const body = String(req.body.Body ?? '').trim();
 
     // Idempotency: Twilio retries inbound webhooks (e.g. on slow/5xx responses).
     // Skip a message we've already handled so we don't double-book or double-reply.
-    const sid = String(req.body.MessageSid ?? req.body.SmsMessageSid ?? '');
+    sid = String(req.body.MessageSid ?? req.body.SmsMessageSid ?? '');
     if (sid && !(await markProcessedOnce(sid))) {
       console.log(`[whatsapp] duplicate webhook ${sid} ignored`);
       // Empty TwiML response = "no reply", and tells Twilio to stop retrying.
@@ -52,6 +55,9 @@ export async function handleInboundWhatsApp(req: Request, res: Response) {
 
     res.type('text/xml').send(twimlReply(reply));
   } catch (e) {
+    // Processing failed AFTER we recorded the SID — release it so Twilio's retry
+    // can re-run instead of being deduped into oblivion (no lost messages).
+    if (sid) await unmarkProcessed(sid);
     captureError(e, { route: 'whatsapp.inbound', from: String(req.body?.From ?? '') });
     res
       .type('text/xml')

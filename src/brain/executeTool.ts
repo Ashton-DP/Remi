@@ -111,19 +111,22 @@ export async function executeTool(
       const newStart = new Date(input.new_start_at);
       const newEnd = new Date(newStart.getTime() + durationMin * 60000);
 
-      await rescheduleBooking(existing.id, newStart.toISOString(), newEnd.toISOString());
-      // Move the appointment on the clinic's actual diary, not just our DB.
+      // Move the real diary FIRST; only update our DB if that succeeds, so the
+      // two can't diverge (DB says moved while the clinic's calendar didn't).
       if (existing.calendar_event_id) {
         try {
           await getBookingProvider(clinic).updateEvent(clinic, existing.calendar_event_id, {
             summary: `${existing.service}`,
+            service: existing.service,
             startISO: newStart.toISOString(),
             endISO: newEnd.toISOString(),
           });
         } catch (e) {
           console.error('[reschedule] calendar update failed', e);
+          return { error: 'Could not move the appointment in the calendar. Please try again, or I can pass you to a team member.' };
         }
       }
+      await rescheduleBooking(existing.id, newStart.toISOString(), newEnd.toISOString());
       await scheduleReminders(existing.id, newStart.toISOString());
 
       return { ok: true, when: newStart.toISOString() };
@@ -133,15 +136,18 @@ export async function executeTool(
       const existing = await getNextBooking(clinic.id, customer.id);
       if (!existing) return { error: 'No upcoming confirmed booking found to cancel.' };
 
-      await setBookingStatus(existing.id, 'cancelled');
-      // Free the slot on the clinic's actual diary, not just our DB.
+      // Free the slot on the clinic's actual diary FIRST. If that fails, don't
+      // mark cancelled in our DB and don't offer the slot to the waitlist — else
+      // we'd promise a slot that's still booked on the real calendar.
       if (existing.calendar_event_id) {
         try {
           await getBookingProvider(clinic).cancelEvent(clinic, existing.calendar_event_id);
         } catch (e) {
           console.error('[cancel] calendar delete failed', e);
+          return { error: 'Could not cancel the appointment in the calendar. Please try again, or I can pass you to a team member.' };
         }
       }
+      await setBookingStatus(existing.id, 'cancelled');
 
       // Offer freed slot to the next person on the waitlist for this service
       const waiter = await getNextWaitlist(clinic.id, existing.service);

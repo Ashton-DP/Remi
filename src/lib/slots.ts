@@ -36,7 +36,10 @@ export async function computeFreeSlots(
   if (provider.getAvailableSlots) {
     try {
       const open = await provider.getAvailableSlots(clinic, dateStr, service);
-      return open.filter((iso) => new Date(iso).getTime() >= Date.now()).slice(0, 5);
+      return open
+        .filter((iso) => new Date(iso).getTime() >= Date.now())
+        .sort((a, b) => Date.parse(a) - Date.parse(b)) // earliest 5, regardless of provider order
+        .slice(0, 5);
     } catch (e) {
       console.error(`[slots] ${provider.name} availability failed`, e);
       return [];
@@ -44,7 +47,10 @@ export async function computeFreeSlots(
   }
 
   const hours = clinic.hours_json ?? {};
-  const weekday = WEEKDAYS[new Date(`${dateStr}T00:00:00${offset}`).getUTCDay()];
+  // Weekday of the clinic-local CALENDAR date. Using noon-UTC of the plain date
+  // avoids the offset rollover bug where local-midnight lands on the prior day
+  // for east-of-UTC zones (e.g. +02:00 made Monday read as Sunday).
+  const weekday = WEEKDAYS[new Date(`${dateStr}T12:00:00Z`).getUTCDay()];
   const ranges: [string, string][] = hours[weekday] ?? [['09:00', '17:00']];
 
   const svc = (clinic.services_json ?? []).find(
