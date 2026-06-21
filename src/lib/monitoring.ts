@@ -18,7 +18,11 @@ export async function initMonitoring(): Promise<void> {
     captureError(reason instanceof Error ? reason : new Error(String(reason)), { kind: 'unhandledRejection' });
   });
   process.on('uncaughtException', (err) => {
+    // After an uncaught exception the process state is undefined — capture, then
+    // exit so the platform (Railway) restarts a clean instance. Give the
+    // fire-and-forget alert ~1s to flush first.
     captureError(err, { kind: 'uncaughtException' });
+    setTimeout(() => process.exit(1), 1000).unref();
   });
 
   if (config.monitoring.sentryDsn) {
@@ -44,7 +48,8 @@ export function captureError(err: unknown, context: Record<string, unknown> = {}
 
   const url = config.monitoring.webhookUrl;
   if (url) {
-    const text = `🚨 Remi error: ${e.message}\ncontext: ${JSON.stringify(context)}`;
+    // Redact PII (phone numbers) before sending to a third-party sink (POPIA).
+    const text = redactPII(`🚨 Remi error: ${e.message}\ncontext: ${JSON.stringify(context)}`);
     // Fire-and-forget; don't let alerting failures cascade.
     fetch(url, {
       method: 'POST',
@@ -52,6 +57,14 @@ export function captureError(err: unknown, context: Record<string, unknown> = {}
       body: JSON.stringify({ text }),
     }).catch(() => {});
   }
+}
+
+/** Mask phone numbers (and whatsapp: prefixes) to the last 4 digits. */
+export function redactPII(s: string): string {
+  return s.replace(/(?:whatsapp:)?\+?\d[\d\s().-]{6,}\d/g, (m) => {
+    const digits = m.replace(/\D/g, '');
+    return `***${digits.slice(-4)}`;
+  });
 }
 
 /** Express error-handling middleware. Mount LAST, after all routes. */

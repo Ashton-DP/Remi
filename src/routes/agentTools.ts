@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { config } from '../config';
 import { getClinic, getOrCreateClient, getOrCreateConversation } from '../db';
 import { executeTool } from '../brain/executeTool';
+import { safeEqual } from '../lib/dashboardAuth';
 
 /**
  * Webhook tools the ElevenLabs voice agent calls during a call. Each maps to the
@@ -34,7 +35,15 @@ const TOOL_INPUT: Record<string, (b: any) => any> = {
 /** POST /tools/:tool — invoked by the ElevenLabs agent's server tools. */
 export async function handleAgentTool(req: Request, res: Response) {
   const tool = String(req.params.tool);
-  if (config.toolsSecret && req.header('X-Tool-Secret') !== config.toolsSecret) {
+  // These endpoints create/cancel/reschedule real bookings, so they MUST be
+  // protected by TOOLS_SHARED_SECRET in production. Fail closed if it's unset in
+  // prod rather than leaving booking actions open to the internet.
+  if (!config.toolsSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[agentTools] BLOCKED: TOOLS_SHARED_SECRET is not set in production');
+      return res.status(503).json({ error: 'tools endpoint not configured' });
+    }
+  } else if (!safeEqual(req.header('X-Tool-Secret') ?? '', config.toolsSecret)) {
     return res.status(403).json({ error: 'forbidden' });
   }
   const mapInput = TOOL_INPUT[tool];

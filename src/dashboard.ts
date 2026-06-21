@@ -1,5 +1,13 @@
 import { getClinic, getRecentConversations, getOpenEscalations, getReportData } from './db';
 
+/** HTML-escape untrusted values (patient names, phones, AI-generated text) before
+ *  interpolating into the dashboard markup — prevents stored XSS. */
+function esc(s: unknown): string {
+  return String(s ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string),
+  );
+}
+
 export async function renderDashboard(clinicId: string, sinceDays = 30): Promise<string> {
   const clinic = await getClinic(clinicId);
   if (!clinic) return '<h1>Clinic not found</h1>';
@@ -37,7 +45,7 @@ export async function renderDashboard(clinicId: string, sinceDays = 30): Promise
           : c.status === 'open'
             ? '<span class="badge green">open</span>'
             : '<span class="badge grey">closed</span>';
-      return `<tr><td>${name}</td><td>${phone}</td><td>${badge}</td><td>${c.channel}</td><td>${when}</td></tr>`;
+      return `<tr><td>${esc(name)}</td><td>${esc(phone)}</td><td>${badge}</td><td>${esc(c.channel)}</td><td>${when}</td></tr>`;
     })
     .join('');
 
@@ -50,7 +58,7 @@ export async function renderDashboard(clinicId: string, sinceDays = 30): Promise
         dateStyle: 'short',
         timeStyle: 'short',
       });
-      return `<tr><td>${phone}</td><td>${e.reason}</td><td>${e.summary ?? '—'}</td><td>${when}</td></tr>`;
+      return `<tr><td>${esc(phone)}</td><td>${esc(e.reason)}</td><td>${esc(e.summary ?? '—')}</td><td>${when}</td></tr>`;
     })
     .join('');
 
@@ -59,7 +67,7 @@ export async function renderDashboard(clinicId: string, sinceDays = 30): Promise
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Remi — ${clinic.name}</title>
+<title>Remi — ${esc(clinic.name)}</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh}
@@ -93,7 +101,7 @@ export async function renderDashboard(clinicId: string, sinceDays = 30): Promise
 <body>
 <div class="top">
   <div class="logo">R</div>
-  <h1>${clinic.name}</h1>
+  <h1>${esc(clinic.name)}</h1>
   <span>Last ${sinceDays} days · ${new Date().toLocaleString('en-ZA', { timeZone: clinic.timezone ?? 'Africa/Johannesburg', dateStyle: 'medium' })}</span>
 </div>
 <div class="body">

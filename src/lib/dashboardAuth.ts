@@ -21,7 +21,7 @@ export function qp(v: unknown): string | undefined {
 }
 
 /** Constant-time string compare that won't throw on length mismatch. */
-function safeEqual(a: string, b: string): boolean {
+export function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);
   const bb = Buffer.from(b);
   if (ab.length !== bb.length) return false;

@@ -17,7 +17,13 @@ import { config } from '../config';
  */
 export function validateTwilioWebhook(req: Request, res: Response, next: NextFunction) {
   if (!config.twilio.authToken) {
-    console.warn('[twilio] signature validation skipped — no auth token configured');
+    // Fail CLOSED in production: an unsigned-but-accepted webhook lets anyone
+    // forge inbound messages/calls (AI spend, fake bookings, outbound WhatsApp).
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[twilio] BLOCKED: signature validation impossible — no auth token in production');
+      return res.status(503).type('text/plain').send('Webhook validation not configured');
+    }
+    console.warn('[twilio] signature validation skipped — no auth token (non-production)');
     return next();
   }
   if (process.env.TWILIO_SKIP_VALIDATION === 'true') return next();
