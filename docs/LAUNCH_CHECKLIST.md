@@ -61,10 +61,11 @@ file + one registry line, no flow changes.
 ### Reliability & safety
 - ✅ **Error monitoring** — built (`src/lib/monitoring.ts`): Express error handler + process crash handlers + Slack/webhook alerts. **Slack alerts verified live** (test message delivered). Set `MONITORING_WEBHOOK_URL` on Railway to activate in prod. (Optional Sentry: `SENTRY_DSN` + `npm i @sentry/node`.)
 - ⬜ **Uptime monitoring** — point UptimeRobot (or similar) at `GET /health` + alert. *(Endpoint exists; just needs the external monitor — your account.)*
-- ⬜ **Structured logging** — keep request/AI logs for debugging + the "$ recovered" audit trail.
+- ✅ **Structured logging** — JSON-line logger (`src/lib/logger.ts`) + per-request middleware (method/path/status/ms; skips health pings, no PII).
 - ✅ **Idempotency** — inbound WhatsApp deduped on MessageSid via `processed_messages` (Twilio webhook retries no longer double-book/double-reply). Fails open.
-- ⬜ **Rate limiting / abuse protection** on public webhooks (AI calls cost money).
-- ⬜ **Supabase backups + data-retention policy** (POPIA: don't keep data longer than needed).
+- ✅ **Booking idempotency** — create_booking checks for an existing confirmed booking before acting (no double calendar event/row); partial unique index backstop (`db/migrate_booking_idempotency.sql`).
+- ✅ **Rate limiting** — in-memory per-IP limiter on /webhooks/* (300/min) and /tools/* (60/min); configurable via RL_*_MAX. Defence-in-depth atop signature/secret gating.
+- 🟡 **Data-retention** ✅ daily purge of conversations/messages older than RETENTION_DAYS (default 730) + 30-day dedup-store cleanup (`purgeExpiredData`). **Remaining:** enable Supabase automated backups (dashboard setting).
 - ✅ **Graceful AI fallback** — `runAgent` escalates to a human + sends a warm hand-off when the AI provider errors/rate-limits, instead of dropping the lead.
 
 ### Quality
@@ -97,7 +98,7 @@ file + one registry line, no flow changes.
 ### Go-to-market
 - 🟡 **Landing page** — live; add Privacy/Terms, a real demo video/GIF, social proof once you have it.
 - ⬜ **Sales collateral** — one-pager, pricing sheet, the discovery-call script (saved in memory), case study after clinic #1.
-- ⬜ **Demo environment** — a safe sandbox clinic you can show prospects from your phone anytime.
+- 🟡 **Demo environment** — `scripts/seedDemoClinic.mjs` builds an idempotent sandbox clinic (services/hours/FAQ) + prints the dashboard link. **Remaining:** run it (needs Supabase creds).
 - ⬜ **First 10 clinics pipeline** — Cape Town aesthetics (50+ on Fresha), George (Eden MediSpa, etc.).
 
 ---

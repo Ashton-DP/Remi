@@ -104,6 +104,26 @@ export async function createBookingRow(o: {
   return data;
 }
 
+/** Find a still-confirmed booking matching the exact clinic+client+service+time
+ *  (used for create-booking idempotency). */
+export async function findConfirmedBooking(
+  clinicId: string,
+  clientId: string,
+  service: string,
+  startAtISO: string,
+) {
+  const { data } = await supabase
+    .from('bookings')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .eq('client_id', clientId)
+    .eq('service', service)
+    .eq('start_at', startAtISO)
+    .eq('status', 'confirmed')
+    .maybeSingle();
+  return data;
+}
+
 export async function logEvent(
   clinicId: string,
   type: string,
@@ -160,6 +180,31 @@ export async function unmarkProcessed(sid: string): Promise<void> {
   } catch (e) {
     console.error('[idempotency] unmark failed', e);
   }
+}
+
+/**
+ * POPIA data-retention purge: delete conversational personal information older
+ * than the retention window (default 24 months, per the Privacy Policy). Keeps
+ * booking/event rows (minimal business + "R recovered" audit records). Each
+ * delete is independent so one failing doesn't block the others.
+ */
+export async function purgeExpiredData(retentionDays = 730): Promise<void> {
+  const cutoff = new Date(Date.now() - retentionDays * 86_400_000).toISOString();
+  const dedupCutoff = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const tasks: [string, PromiseLike<any>][] = [
+    ['messages', supabase.from('messages').delete().lt('created_at', cutoff)],
+    ['conversations', supabase.from('conversations').delete().lt('last_message_at', cutoff)],
+    ['processed_messages', supabase.from('processed_messages').delete().lt('created_at', dedupCutoff)],
+  ];
+  for (const [name, p] of tasks) {
+    try {
+      const { error } = await p;
+      if (error) console.error(`[retention] purge ${name} failed:`, error.message);
+    } catch (e) {
+      console.error(`[retention] purge ${name} threw:`, e);
+    }
+  }
+  console.log(`[retention] purge complete (cutoff ${cutoff.slice(0, 10)})`);
 }
 
 // ---- Slice 2: reminders, cancellation/reschedule, waitlist, report ----

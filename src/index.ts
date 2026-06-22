@@ -10,6 +10,8 @@ import { supabase } from './lib/supabase';
 import { validateTwilioWebhook } from './lib/twilioWebhook';
 import { requireDashboardAuth, qp } from './lib/dashboardAuth';
 import { initMonitoring, attachErrorHandler } from './lib/monitoring';
+import { rateLimit } from './lib/rateLimit';
+import { requestLogger } from './lib/logger';
 import { startScheduler } from './scheduler';
 import { attachVoiceRelay } from './routes/voiceRelay';
 import { attachMediaStream } from './routes/mediaStream';
@@ -26,6 +28,7 @@ app.post('/webhooks/stripe', express.raw({ type: 'application/json' }), handleSt
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(express.static(path.join(process.cwd(), 'public'), { extensions: ['html'] }));
+app.use(requestLogger);
 
 // Health
 app.get('/health', (_req, res) => res.json({ ok: true }));
@@ -54,16 +57,21 @@ app.get('/health/db', async (_req, res) => {
   }
 });
 
+// Rate limiters (defence-in-depth; webhooks are also signature-gated). Generous
+// for Twilio webhooks (shared source IPs), tighter for the agent tools endpoint.
+const webhookLimiter = rateLimit({ name: 'webhook', windowMs: 60_000, max: Number(process.env.RL_WEBHOOK_MAX ?? 300) });
+const toolsLimiter = rateLimit({ name: 'tools', windowMs: 60_000, max: Number(process.env.RL_TOOLS_MAX ?? 60) });
+
 // WhatsApp (signature-validated)
-app.post('/webhooks/whatsapp', validateTwilioWebhook, handleInboundWhatsApp);
+app.post('/webhooks/whatsapp', webhookLimiter, validateTwilioWebhook, handleInboundWhatsApp);
 
 // Voice (signature-validated)
-app.post('/webhooks/voice/inbound', validateTwilioWebhook, handleInboundCall);
-app.post('/webhooks/voice/gather', validateTwilioWebhook, handleVoiceGather);
-app.post('/webhooks/voice/status', validateTwilioWebhook, handleCallStatus);
+app.post('/webhooks/voice/inbound', webhookLimiter, validateTwilioWebhook, handleInboundCall);
+app.post('/webhooks/voice/gather', webhookLimiter, validateTwilioWebhook, handleVoiceGather);
+app.post('/webhooks/voice/status', webhookLimiter, validateTwilioWebhook, handleCallStatus);
 
 // ElevenLabs agent server tools (booking actions during a voice call)
-app.post('/tools/:tool', handleAgentTool);
+app.post('/tools/:tool', toolsLimiter, handleAgentTool);
 
 // Report (text) — gated: exposes patient data
 app.get('/report/:clinicId', requireDashboardAuth, async (req, res) => {

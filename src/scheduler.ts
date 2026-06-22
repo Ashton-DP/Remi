@@ -3,7 +3,7 @@
  * Polls every 60 seconds for due reminders and sends WhatsApp messages.
  */
 import { config } from './config'; // also loads dotenv
-import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedClients, markReactivated } from './db';
+import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData } from './db';
 import { sendProactiveWhatsApp } from './lib/twilio';
 import { generateReport } from './report';
 
@@ -137,13 +137,17 @@ async function reactivation(clinicId: string) {
 }
 
 async function maybeRunDailyJobs() {
-  if (!config.defaultClinicId) return;
   const { dateStr, hour } = clinicNow();
   if (dateStr === _lastDailyDate || hour < DAILY_HOUR) return;
   _lastDailyDate = dateStr;
   console.log('[scheduler] running daily jobs for', dateStr);
-  await ownerSummary(config.defaultClinicId).catch((e) => console.error('[ownerSummary]', e));
-  await reactivation(config.defaultClinicId).catch((e) => console.error('[reactivation]', e));
+  // POPIA data-retention purge — runs regardless of a default clinic.
+  const retentionDays = parseInt(process.env.RETENTION_DAYS ?? '730', 10);
+  await purgeExpiredData(retentionDays).catch((e) => console.error('[retention]', e));
+  if (config.defaultClinicId) {
+    await ownerSummary(config.defaultClinicId).catch((e) => console.error('[ownerSummary]', e));
+    await reactivation(config.defaultClinicId).catch((e) => console.error('[reactivation]', e));
+  }
 }
 
 let _started = false;

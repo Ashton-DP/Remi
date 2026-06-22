@@ -7,6 +7,7 @@ import {
   scheduleReminders, getClientWaitlist, setWaitlistStatus,
   getNextBooking, setBookingStatus, rescheduleBooking,
   addWaitlist, getNextWaitlist, setBookingDepositStatus, setClientName,
+  findConfirmedBooking,
 } from '../db';
 
 /** Executes a tool call and performs all side effects. Returns a JSON-able result. */
@@ -37,6 +38,16 @@ export async function executeTool(
       const durationMin = svc?.duration_min ?? 30;
       const start = new Date(input.start_at);
       const end = new Date(start.getTime() + durationMin * 60000);
+
+      // Idempotency: if this exact appointment is already booked (e.g. a retried
+      // request, or the model calling the tool twice), return it instead of
+      // creating a second calendar event + DB row.
+      const existingDup = await findConfirmedBooking(
+        clinic.id, customer.id, input.service, start.toISOString(),
+      );
+      if (existingDup) {
+        return { ok: true, booking_id: existingDup.id, when: existingDup.start_at, duplicate: true };
+      }
 
       const ev = await getBookingProvider(clinic).createEvent(clinic, {
         summary: `${input.service} — ${input.client_name}`,
