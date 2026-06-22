@@ -3,9 +3,9 @@
  * Polls every 60 seconds for due reminders and sends WhatsApp messages.
  */
 import { config } from './config'; // also loads dotenv
-import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData } from './db';
+import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData } from './db';
 import { sendProactiveWhatsApp } from './lib/twilio';
-import { generateReport } from './report';
+import { generateReport, computeReportStats } from './report';
 
 function formatWhen(startAt: string, timezone: string): string {
   return new Date(startAt).toLocaleString('en-ZA', {
@@ -118,6 +118,31 @@ async function ownerSummary(clinicId: string) {
   console.log('[scheduler] owner summary sent');
 }
 
+const PUBLIC_BASE = process.env.PUBLIC_BASE_URL || 'https://www.remireception.com';
+let _lastMonthlyKey = '';
+
+/** Once a month, send the owner the headline "revenue recovered" + a link to the
+ *  branded report. This is the anti-churn artifact. */
+async function monthlyReport(clinicId: string) {
+  const clinic = await getClinic(clinicId);
+  const to = clinic?.owner_summary_phone || clinic?.escalation_contact;
+  if (!to) return;
+  const sinceISO = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const { events, bookings } = await getReportData(clinicId, sinceISO);
+  const s = computeReportStats(events as any[], bookings as any[]);
+  const R = (n: number) => 'R' + n.toLocaleString('en-ZA');
+  const link = clinic.dashboard_token
+    ? `${PUBLIC_BASE}/report/${clinicId}?token=${encodeURIComponent(clinic.dashboard_token)}`
+    : '';
+  const body =
+    `📊 Your Remi report — last 30 days\n\n` +
+    `Remi captured ${R(s.bookedR)} across ${s.bookedN} booking(s)` +
+    (s.recoveredR > 0 ? `, incl. ${R(s.recoveredR)} recovered from missed calls & cancellations` : '') +
+    `.` + (link ? `\n\nFull report: ${link}` : '');
+  await sendProactiveWhatsApp(to, { fallbackBody: body });
+  console.log('[scheduler] monthly report sent');
+}
+
 async function reactivation(clinicId: string) {
   const clinic = await getClinic(clinicId);
   if (!clinic) return;
@@ -147,6 +172,14 @@ async function maybeRunDailyJobs() {
   if (config.defaultClinicId) {
     await ownerSummary(config.defaultClinicId).catch((e) => console.error('[ownerSummary]', e));
     await reactivation(config.defaultClinicId).catch((e) => console.error('[reactivation]', e));
+    // Monthly report — once per calendar month, on/after MONTHLY_REPORT_DAY.
+    const monthKey = dateStr.slice(0, 7);
+    const day = parseInt(dateStr.slice(8, 10), 10);
+    const reportDay = parseInt(process.env.MONTHLY_REPORT_DAY ?? '1', 10);
+    if (monthKey !== _lastMonthlyKey && day >= reportDay) {
+      _lastMonthlyKey = monthKey;
+      await monthlyReport(config.defaultClinicId).catch((e) => console.error('[monthlyReport]', e));
+    }
   }
 }
 

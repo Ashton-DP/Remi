@@ -4,7 +4,7 @@ import path from 'node:path';
 import { config } from './config';
 import { handleInboundWhatsApp } from './routes/whatsapp';
 import { handleInboundCall, handleVoiceGather, handleCallStatus } from './routes/voice';
-import { generateReport } from './report';
+import { generateReport, renderReportPage } from './report';
 import { renderDashboard } from './dashboard';
 import { supabase } from './lib/supabase';
 import { validateTwilioWebhook } from './lib/twilioWebhook';
@@ -78,11 +78,16 @@ app.post('/webhooks/voice/status', webhookLimiter, validateTwilioWebhook, handle
 // ElevenLabs agent server tools (booking actions during a voice call)
 app.post('/tools/:tool', toolsLimiter, handleAgentTool);
 
-// Report (text) — gated: exposes patient data
+// Report — gated. Branded HTML "Revenue Recovered" page by default; ?format=text
+// returns the plain-text version (used by the CLI/owner summary).
 app.get('/report/:clinicId', requireDashboardAuth, async (req, res) => {
   const days = parseInt(qp(req.query.days) ?? '30', 10);
-  const report = await generateReport(qp(req.params.clinicId) ?? '', days);
-  res.type('text/plain').send(report);
+  const clinicId = qp(req.params.clinicId) ?? '';
+  if (qp(req.query.format) === 'text') {
+    res.type('text/plain').send(await generateReport(clinicId, days));
+  } else {
+    res.type('text/html').send(await renderReportPage(clinicId, days));
+  }
 });
 
 // Dashboard (HTML) — gated: exposes patient data
