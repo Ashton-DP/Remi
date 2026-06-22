@@ -3,7 +3,7 @@
  * Polls every 60 seconds for due reminders and sends WhatsApp messages.
  */
 import { config } from './config'; // also loads dotenv
-import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData } from './db';
+import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent } from './db';
 import { sendProactiveWhatsApp } from './lib/twilio';
 import { generateReport, computeReportStats } from './report';
 
@@ -32,7 +32,28 @@ async function tick() {
   }
 }
 
+/** One-time "still keen?" nudge to enquiries that didn't book. OFF by default —
+ *  enable with FOLLOWUP_ENABLED=true (auto-outreach should be a deliberate choice). */
+async function processFollowups() {
+  if (process.env.FOLLOWUP_ENABLED !== 'true') return;
+  const min = parseInt(process.env.FOLLOWUP_MIN_HOURS ?? '3', 10);
+  const max = parseInt(process.env.FOLLOWUP_MAX_HOURS ?? '72', 10);
+  const convos = await getStaleOpenConversations(min, max);
+  for (const c of convos as any[]) {
+    const client = c.clients;
+    await markFollowupSent(c.id); // claim before send so we never double-chase
+    if (!client?.phone) continue;
+    const name = client.name ?? 'there';
+    const clinicName = c.clinics?.name ?? 'us';
+    await sendProactiveWhatsApp(client.phone, {
+      fallbackBody: `Hi ${name} 👋 Just checking in from ${clinicName} — still keen to get booked in? Reply here and I'll find a time that suits you.`,
+    });
+  }
+  if (convos.length) console.log(`[scheduler] ${convos.length} enquiry follow-up(s) sent`);
+}
+
 async function _tick() {
+  await processFollowups().catch((e) => console.error('[followups]', e));
   const reminders = await getDueReminders();
   if (reminders.length) console.log(`[scheduler] ${reminders.length} due reminder(s)`);
 

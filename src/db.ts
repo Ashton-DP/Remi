@@ -377,6 +377,33 @@ export async function createClinic(obj: {
   return data;
 }
 
+/** Set a conversation's status (e.g. 'booked' once an appointment is made). */
+export async function setConversationStatus(id: string, status: string) {
+  await supabase.from('conversations').update({ status }).eq('id', id);
+}
+
+/** Open conversations that enquired between min/max hours ago and haven't yet had
+ *  a follow-up — candidates for a one-time "still keen?" nudge. Global across clinics. */
+export async function getStaleOpenConversations(minHours: number, maxHours: number, limit = 100) {
+  const now = Date.now();
+  const newerThan = new Date(now - maxHours * 3_600_000).toISOString();
+  const olderThan = new Date(now - minHours * 3_600_000).toISOString();
+  const { data } = await supabase
+    .from('conversations')
+    .select('id,clinic_id,last_message_at,clients(phone,name),clinics(name)')
+    .eq('status', 'open')
+    .is('followup_sent_at', null)
+    .gte('last_message_at', newerThan)
+    .lte('last_message_at', olderThan)
+    .limit(limit);
+  return data ?? [];
+}
+
+/** Mark a conversation as having had its one-time follow-up sent. */
+export async function markFollowupSent(id: string) {
+  await supabase.from('conversations').update({ followup_sent_at: new Date().toISOString() }).eq('id', id);
+}
+
 /** Count conversations for a clinic since a date (for the dashboard conversion rate). */
 export async function countConversations(clinicId: string, sinceISO: string): Promise<number> {
   const { count } = await supabase

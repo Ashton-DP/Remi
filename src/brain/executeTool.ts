@@ -7,7 +7,7 @@ import {
   scheduleReminders, getClientWaitlist, setWaitlistStatus,
   getNextBooking, setBookingStatus, rescheduleBooking,
   addWaitlist, getNextWaitlist, setBookingDepositStatus, setClientName,
-  findConfirmedBooking,
+  findConfirmedBooking, setConversationStatus,
 } from '../db';
 
 /** Executes a tool call and performs all side effects. Returns a JSON-able result. */
@@ -107,6 +107,9 @@ export async function executeTool(
           console.error('[deposit] error', e);
         }
       }
+
+      // Mark the conversation booked so the follow-up job won't chase them.
+      if (convo?.id) await setConversationStatus(convo.id, 'booked').catch(() => {});
 
       return { ok: true, booking_id: booking?.id, when: start.toISOString(), deposit_link };
     }
