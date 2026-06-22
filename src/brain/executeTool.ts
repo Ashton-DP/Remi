@@ -192,6 +192,17 @@ export async function executeTool(
 
     case 'escalate_to_human': {
       await createEscalation(convo.id, input.reason, input.summary);
+      // Real-time alert to the clinic owner so a human can pick it up promptly.
+      const ownerTo = clinic.owner_summary_phone || clinic.escalation_contact;
+      if (ownerTo) {
+        try {
+          await sendProactiveWhatsApp(ownerTo, {
+            fallbackBody: `🔔 Remi needs a human at ${clinic.name}.\nFrom: ${customer.name ?? customer.phone}\nReason: ${input.reason ?? 'n/a'}\n${input.summary ?? ''}`.trim(),
+          });
+        } catch (e) {
+          console.error('[escalation alert] failed', e);
+        }
+      }
       return { ok: true, message: 'A team member has been flagged and will follow up.' };
     }
 

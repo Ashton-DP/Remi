@@ -1,4 +1,4 @@
-import { getClinic, getRecentConversations, getOpenEscalations, getReportData } from './db';
+import { getClinic, getRecentConversations, getOpenEscalations, getReportData, countConversations } from './db';
 
 /** HTML-escape untrusted values (patient names, phones, AI-generated text) before
  *  interpolating into the dashboard markup — prevents stored XSS. */
@@ -8,15 +8,49 @@ function esc(s: unknown): string {
   );
 }
 
+const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+export interface DashboardInsights {
+  conversionRate: number; // % of conversations that became a booking
+  afterHoursPct: number; // % of bookings made outside hours
+  topService: string;
+  busiestDay: string;
+}
+
+/** Pure insight aggregation for the dashboard (testable). */
+export function computeInsights(
+  bookings: any[],
+  conversationsCount: number,
+  bookedN: number,
+): DashboardInsights {
+  const bks = bookings ?? [];
+  const afterHours = bks.filter((b) => b.after_hours).length;
+  // top service by frequency
+  const svcCounts: Record<string, number> = {};
+  for (const b of bks) if (b.service) svcCounts[b.service] = (svcCounts[b.service] ?? 0) + 1;
+  const topService = Object.entries(svcCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
+  // busiest weekday by appointment start
+  const dayCounts: Record<number, number> = {};
+  for (const b of bks) if (b.start_at) { const d = new Date(b.start_at).getDay(); dayCounts[d] = (dayCounts[d] ?? 0) + 1; }
+  const busiestDayNum = Object.entries(dayCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+  return {
+    conversionRate: conversationsCount > 0 ? Math.min(100, Math.round((bookedN / conversationsCount) * 100)) : 0,
+    afterHoursPct: bks.length > 0 ? Math.round((afterHours / bks.length) * 100) : 0,
+    topService,
+    busiestDay: busiestDayNum != null ? WEEKDAY[Number(busiestDayNum)] : '—',
+  };
+}
+
 export async function renderDashboard(clinicId: string, sinceDays = 30): Promise<string> {
   const clinic = await getClinic(clinicId);
   if (!clinic) return '<h1>Clinic not found</h1>';
 
   const sinceISO = new Date(Date.now() - sinceDays * 86_400_000).toISOString();
-  const [{ events, bookings }, conversations, escalations] = await Promise.all([
+  const [{ events, bookings }, conversations, escalations, convCount] = await Promise.all([
     getReportData(clinicId, sinceISO),
     getRecentConversations(clinicId, 15),
     getOpenEscalations(clinicId),
+    countConversations(clinicId, sinceISO),
   ]);
 
   const sumR = (type: string) =>
@@ -28,6 +62,7 @@ export async function renderDashboard(clinicId: string, sinceDays = 30): Promise
   const missedCalls = countE('missed_call');
   const confirmed = (bookings as any[]).filter((b) => b.status === 'confirmed').length;
   const cancelled = (bookings as any[]).filter((b) => b.status === 'cancelled').length;
+  const insights = computeInsights(bookings as any[], convCount, bookedN);
 
   const convRows = (conversations as any[])
     .map((c) => {
@@ -131,6 +166,16 @@ export async function renderDashboard(clinicId: string, sinceDays = 30): Promise
     <div class="label">Open escalations</div>
     <div class="val">${escalations.length}</div>
     <div class="sub">need human attention</div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Insights</h2>
+  <div class="cards">
+    <div class="card"><div class="label">Enquiry → booking</div><div class="val">${insights.conversionRate}%</div><div class="sub">conversion rate</div></div>
+    <div class="card"><div class="label">After-hours bookings</div><div class="val">${insights.afterHoursPct}%</div><div class="sub">caught outside opening hours</div></div>
+    <div class="card"><div class="label">Top service</div><div class="val" style="font-size:18px">${esc(insights.topService)}</div><div class="sub">most booked</div></div>
+    <div class="card"><div class="label">Busiest day</div><div class="val">${esc(insights.busiestDay)}</div><div class="sub">most appointments</div></div>
   </div>
 </div>
 

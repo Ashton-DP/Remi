@@ -346,6 +346,16 @@ export async function getRecentConversations(clinicId: string, limit = 15) {
 }
 
 /** Open escalations waiting for a human. */
+/** Count conversations for a clinic since a date (for the dashboard conversion rate). */
+export async function countConversations(clinicId: string, sinceISO: string): Promise<number> {
+  const { count } = await supabase
+    .from('conversations')
+    .select('id', { count: 'exact', head: true })
+    .eq('clinic_id', clinicId)
+    .gte('last_message_at', sinceISO);
+  return count ?? 0;
+}
+
 export async function getOpenEscalations(clinicId: string) {
   // Escalations have no clinic_id of their own — scope via the linked conversation
   // (!inner makes it a filterable inner join). Without this, one clinic's
