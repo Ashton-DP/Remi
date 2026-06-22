@@ -25,6 +25,11 @@ export const config = {
     accountSid: req('TWILIO_ACCOUNT_SID'),
     authToken: req('TWILIO_AUTH_TOKEN'),
     whatsappFrom: opt('TWILIO_WHATSAPP_FROM', 'whatsapp:+14155238886'),
+    // SMS fallback (no Meta needed). Set TWILIO_SMS_FROM to your SA number and
+    // MESSAGING_CHANNEL=sms to route proactive messages over SMS instead of
+    // WhatsApp (useful while the WhatsApp/Meta restriction is unresolved).
+    smsFrom: opt('TWILIO_SMS_FROM'),
+    channel: (opt('MESSAGING_CHANNEL', 'whatsapp') as 'whatsapp' | 'sms'),
   },
   google: {
     calendarId: opt('GOOGLE_CALENDAR_ID', 'primary'),

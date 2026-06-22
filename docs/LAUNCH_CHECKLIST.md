@@ -18,6 +18,7 @@ The minimum to legally and technically run one real clinic and get paid.
 - ⬜ **Submit the 9 WhatsApp templates** (Content Template Builder) → wait for approval → paste Content SIDs into `WA_TEMPLATE_*` env vars. *(All 9 finalised + code-wired — see docs/whatsapp-templates.md. Note: `reactivation_winback` is MARKETING + consent-gated; the rest are UTILITY.)*
 - ⬜ **Test voice end-to-end** — point the number's voice webhook to `/webhooks/voice/inbound`; call it, confirm Remi answers, books, and the missed-call → WhatsApp fires. *(Built, never tested — no number yet.)*
 - ⬜ **Set the WhatsApp number's inbound webhook** to `https://<prod-url>/webhooks/whatsapp` (the real sender page, not the sandbox).
+- ✅ **SMS fallback wired** — set MESSAGING_CHANNEL=sms + TWILIO_SMS_FROM=+27600151104 to route reminders + missed-call text-backs over SMS (no Meta) while the WhatsApp/WABA restriction is unresolved. Voice answering is already Meta-independent. ⚠️ WABA appeal DENIED 2026-06-20 — pursue clean Meta portfolio or Meta Verified; launch voice+SMS first.
 
 ### B. Booking system integration (the single biggest product gap)
 Remi connects to whatever booking system a clinic uses, via a **provider-agnostic
