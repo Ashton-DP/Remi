@@ -65,6 +65,11 @@ const toolsLimiter = rateLimit({ name: 'tools', windowMs: 60_000, max: Number(pr
 // WhatsApp (signature-validated)
 app.post('/webhooks/whatsapp', webhookLimiter, validateTwilioWebhook, handleInboundWhatsApp);
 
+// Inbound SMS — same brain as WhatsApp (handler reads From/Body/MessageSid and
+// replies via TwiML, which works for SMS too). Point your Twilio number's
+// Messaging webhook here when running MESSAGING_CHANNEL=sms.
+app.post('/webhooks/sms', webhookLimiter, validateTwilioWebhook, handleInboundWhatsApp);
+
 // Voice (signature-validated)
 app.post('/webhooks/voice/inbound', webhookLimiter, validateTwilioWebhook, handleInboundCall);
 app.post('/webhooks/voice/gather', webhookLimiter, validateTwilioWebhook, handleVoiceGather);
