@@ -76,6 +76,11 @@ export const config = {
   dashboard: {
     token: opt('DASHBOARD_TOKEN'),
   },
+  // Self-serve onboarding form. Submissions require this token (fail-closed when
+  // unset) so the public /onboard page can't be used to spam-create clinics.
+  onboard: {
+    token: opt('ONBOARD_TOKEN'),
+  },
   // Error monitoring. All optional: SENTRY_DSN (needs @sentry/node installed),
   // MONITORING_WEBHOOK_URL (e.g. a Slack incoming webhook). Unset = console only.
   monitoring: {

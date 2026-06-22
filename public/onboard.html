@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Onboard a clinic — Remi</title>
+<style>
+  :root{--purple:#6c63ff;--teal:#4ecdc4;--bg:#f6f7fb;--bd:#e6e8f0}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:#1e2233;padding:32px 16px}
+  .wrap{max-width:620px;margin:0 auto}
+  .head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .dot{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--purple),var(--teal));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800}
+  h1{font-size:22px}.sub{color:#64748b;font-size:14px;margin:4px 0 24px}
+  form{background:#fff;border:1px solid var(--bd);border-radius:16px;padding:24px}
+  label{display:block;font-weight:600;font-size:14px;margin:16px 0 6px}
+  .hint{font-weight:400;color:#94a3b8;font-size:12px}
+  input,textarea{width:100%;border:1px solid var(--bd);border-radius:10px;padding:11px 13px;font-size:14px;font-family:inherit}
+  textarea{min-height:90px;resize:vertical}
+  button{margin-top:22px;background:var(--purple);color:#fff;border:0;border-radius:10px;padding:13px 26px;font-size:15px;font-weight:600;cursor:pointer}
+  button:hover{background:#5b4fcc}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head"><div class="dot">R</div><h1>Onboard a clinic</h1></div>
+  <p class="sub">Set up a new clinic on Remi in under a minute.</p>
+  <form method="POST" action="/onboard">
+    <label>Clinic name</label>
+    <input name="name" required placeholder="Eden MediSpa" />
+
+    <label>Owner WhatsApp / phone <span class="hint">(for alerts + reports, e.g. +27821234567)</span></label>
+    <input name="owner_phone" placeholder="+27821234567" />
+
+    <label>Timezone</label>
+    <input name="timezone" value="Africa/Johannesburg" />
+
+    <label>Services <span class="hint">one per line — Name | minutes | price in Rand</span></label>
+    <textarea name="services" placeholder="Botox consultation | 30 | 0
+Botox treatment | 45 | 2500
+Dermal filler | 60 | 3500"></textarea>
+
+    <label>Opening hours <span class="hint">one per line — day HH:MM-HH:MM (omit a day = closed)</span></label>
+    <textarea name="hours" placeholder="mon 09:00-17:00
+tue 09:00-17:00
+wed 09:00-17:00
+thu 09:00-17:00
+fri 09:00-16:00"></textarea>
+
+    <label>FAQs <span class="hint">one per line — Question | Answer</span></label>
+    <textarea name="faqs" placeholder="Where are you located? | 8 St Johns Street, George
+Do you offer free consultations? | Yes, Botox consultations are free."></textarea>
+
+    <label>Access token <span class="hint">required</span></label>
+    <input name="access_token" type="password" required />
+
+    <button type="submit">Create clinic</button>
+  </form>
+</div>
+</body>
+</html>

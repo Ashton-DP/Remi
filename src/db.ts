@@ -346,6 +346,37 @@ export async function getRecentConversations(clinicId: string, limit = 15) {
 }
 
 /** Open escalations waiting for a human. */
+/** Create a clinic (self-serve onboarding). Returns the new row incl. its
+ *  generated per-clinic dashboard_token. */
+export async function createClinic(obj: {
+  name: string;
+  timezone?: string;
+  hours_json?: any;
+  services_json?: any;
+  faq_json?: any;
+  owner_summary_phone?: string;
+  escalation_contact?: string;
+  dashboard_token: string;
+}) {
+  const { data, error } = await supabase
+    .from('clinics')
+    .insert({
+      name: obj.name,
+      timezone: obj.timezone ?? 'Africa/Johannesburg',
+      hours_json: obj.hours_json ?? null,
+      services_json: obj.services_json ?? null,
+      faq_json: obj.faq_json ?? null,
+      owner_summary_phone: obj.owner_summary_phone ?? null,
+      escalation_contact: obj.escalation_contact ?? null,
+      dashboard_token: obj.dashboard_token,
+      booking_provider: 'google',
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 /** Count conversations for a clinic since a date (for the dashboard conversion rate). */
 export async function countConversations(clinicId: string, sinceISO: string): Promise<number> {
   const { count } = await supabase

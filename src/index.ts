@@ -16,6 +16,7 @@ import { startScheduler } from './scheduler';
 import { attachVoiceRelay } from './routes/voiceRelay';
 import { attachMediaStream } from './routes/mediaStream';
 import { handleAgentTool } from './routes/agentTools';
+import { handleOnboard } from './routes/onboard';
 import { handleStripeWebhook } from './routes/stripeWebhook';
 
 const app = express();
@@ -77,6 +78,9 @@ app.post('/webhooks/voice/status', webhookLimiter, validateTwilioWebhook, handle
 
 // ElevenLabs agent server tools (booking actions during a voice call)
 app.post('/tools/:tool', toolsLimiter, handleAgentTool);
+
+// Self-serve clinic onboarding (form at /onboard.html; submission token-gated)
+app.post('/onboard', webhookLimiter, handleOnboard);
 
 // Report — gated. Branded HTML "Revenue Recovered" page by default; ?format=text
 // returns the plain-text version (used by the CLI/owner summary).
