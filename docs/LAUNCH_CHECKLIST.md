@@ -42,8 +42,8 @@ file + one registry line, no flow changes.
 - ⬜ **Switch off Gemini free tier** → paid Gemini or Claude. The free tier may train on prompts = a POPIA breach for patient data. *(Flip `AI_PROVIDER`/keys before ANY real patient traffic.)*
 
 ### D. Get paid
-- ⬜ **Choose a payment processor** — Stitch or Peach for recurring debit orders (Paystack if you prefer card + best APIs).
-- ⬜ **Set up recurring billing** for the R2,500 / R4,500 / R6,500 tiers.
+- ✅ **Payment processor = Stripe** — recurring ZAR subscription Payment Links bill into your Stripe.
+- ✅ **Recurring billing live** — 3 tier links; /webhooks/stripe ACTIVE (signature-verified, auto-updates clinics.subscription_status); per-clinic link via scripts/createClinicSubscriptionLink.mjs (clinic_id metadata + 14d trial).
 - 🟡 **Client agreement / order form** — *draft ready* at `docs/legal/CLIENT_ORDER_FORM.md` (scope, price, 2-week trial, cancellation). Fill per-clinic + attorney review.
 - ⬜ **Invoicing + VAT** — confirm with your accountant whether the SA company must register for VAT yet.
 
