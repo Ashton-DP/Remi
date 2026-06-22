@@ -1,5 +1,10 @@
 # Operator Agreement (POPIA s20–21)
 
+> 🛑 **The AUTHORITATIVE copy of this document is `word/POPIA_OPERATOR_AGREEMENT.docx`**
+> (hand-edited by the owner). Do NOT regenerate the .docx from this markdown — it
+> would overwrite those edits. This markdown is a reference draft only and may lag
+> the Word version.
+
 > ⚠️ **Not legal advice.** This is a working template to be reviewed and finalised
 > by a South African attorney before signing. Fill every `[BRACKETED]` placeholder.
 
