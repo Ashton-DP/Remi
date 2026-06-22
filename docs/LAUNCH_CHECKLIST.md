@@ -32,10 +32,10 @@ file + one registry line, no flow changes.
 - ⬜ **Fresha** has no usable public API → run that clinic on the Google adapter mirroring their diary. **GoodX** needs a partner/contract integration (not built). Any clinic can run on Google today.
 
 ### C. Compliance & legal (non-negotiable for health data)
-- 🟡 **POPIA Operator Agreement** — at `docs/legal/POPIA_OPERATOR_AGREEMENT.md`. Operator name filled (The Visionaries (Pty) Ltd), sub-operators corrected (Railway, ElevenLabs). **Remaining:** CIPC reg no., Supabase region, attorney review, sign per clinic.
+- 🟡 **POPIA Operator Agreement** — at `docs/legal/POPIA_OPERATOR_AGREEMENT.md`. Operator name filled (The Visionaries (Pty) Ltd), sub-operators corrected (Railway, ElevenLabs). **Remaining:** attorney review, sign per clinic. (CIPC + EU regions + 48h breach window filled; .docx is the authoritative copy.)
 - ⬜ **Register an Information Officer** for your SA company with the Information Regulator (free, online). *(Ashton de Pontes named as IO in the policy; still needs Regulator registration.)*
-- 🟡 **Privacy Policy** — ✅ **published & live at `/privacy`** (linked in footer); filled with known details. **Remaining:** CIPC reg no., Information Regulator reference, attorney review.
-- 🟡 **Terms of Service** — ✅ **published & live at `/terms`** (`docs/legal/TERMS_OF_SERVICE.md`); linked in footer. **Remaining:** CIPC reg no., attorney review.
+- 🟡 **Privacy Policy** — ✅ **published & live at `/privacy`** (linked in footer); filled with known details. **Remaining:** Information Regulator reference (after IO registration), attorney review. (CIPC filled.)
+- 🟡 **Terms of Service** — ✅ **published & live at `/terms`** (`docs/legal/TERMS_OF_SERVICE.md`); linked in footer. **Remaining:** attorney review. (CIPC filled.)
 - 🟡 **Client Order Form / Service Agreement** — *draft ready* at `docs/legal/CLIENT_ORDER_FORM.md` (the B2B contract clinics sign — scope, price, trial, cancellation; incorporates ToS + Operator Agreement). Fill per-clinic placeholders + attorney review. *(Also satisfies Tier 0-D "client agreement / order form".)*
 - ⬜ **Consent line on first contact** — already in code ("By replying you're happy for us to message you about your booking"). Confirm it's POPIA-sufficient for service messages; add explicit opt-in if you ever do reactivation/marketing.
 - ⬜ **STOP/opt-out handling** — already in code; confirm it logs and suppresses future sends.
@@ -51,7 +51,7 @@ file + one registry line, no flow changes.
 - ✅ **Hosting on Railway** (always-on, no cold-start sleep). Render was never upgraded to Pro, so there's **no $25 charge to stop**. Optional hygiene: delete the idle Render `remi` service to wipe its stale (pre-rotation) secrets — not a money item.
 - ✅ **Reminders now run** — the scheduler runs **in-process** on the web service (env `RUN_SCHEDULER`, default on). *At multi-instance scale*, set `RUN_SCHEDULER=false` on web and run one dedicated Background Worker (`node dist/scheduler.js`) to avoid duplicate sends.
 - ✅ **Twilio webhook signatures validated** — `validateTwilioWebhook` middleware on all `/webhooks/*` (unsigned POSTs now return 403; `TWILIO_SKIP_VALIDATION=true` bypasses for testing).
-- ⬜ **Rotate the leaked secrets** — Supabase service_role key + Twilio auth token were shown in chat. Rotate both; update Railway + `.env`.
+- ✅ **Rotated the leaked secrets** — Supabase service_role + Twilio auth token rotated and updated on Railway + .env (Supabase verified live via /health/db).
 - ✅ **Custom domain** — `www.remireception.com` live (Cloudflare → Railway; apex 301→www).
 
 ---
