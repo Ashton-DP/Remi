@@ -76,7 +76,7 @@ file + one registry line, no flow changes.
 - ⬜ **Voice quality pass** — TTS naturalness, interruption handling, "didn't catch that" loops, accidental hang-ups.
 
 ### The retention metric
-- 🟡 **"R recovered" monthly report** — exists; make it the polished artifact you email each clinic (this is what prevents churn). Auto-send monthly.
+- ✅ **"R recovered" report** — branded shareable page (renderReportPage, /report/:id) + auto-sent to the owner monthly with the headline figure + link (MONTHLY_REPORT_DAY). The anti-churn artifact.
 - ✅ **Per-clinic dashboard access** — token-gated, fail-closed (`DASHBOARD_TOKEN` master + optional per-clinic `dashboard_token`). HttpOnly cookie, constant-time compare.
 
 ---
@@ -84,7 +84,7 @@ file + one registry line, no flow changes.
 ## TIER 2 — Scale, polish & growth
 
 ### Onboarding & ops
-- 🟡 **Onboarding flow** — `npm run onboard` CLI exists; turn into a repeatable runbook (or self-serve form): clinic info, hours, services, FAQs, booking-system connection, number assignment, templates.
+- ✅ **Self-serve onboarding form** — /onboard.html → POST /onboard (token-gated) creates a clinic with services/hours/FAQs + per-clinic dashboard token. (CLI npm run onboard still available.)
 - ⬜ **Multi-number / multi-clinic at scale** — each clinic ideally gets its own WhatsApp sender + display name; routing already keys off `twilio_number`.
 - ⬜ **Support process** — how clinics reach you; SLA; who fixes a broken booking at 9pm.
 - ⬜ **Internal admin** — view/override conversations, re-send a confirmation, refund a billing error.
