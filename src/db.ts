@@ -347,10 +347,14 @@ export async function getRecentConversations(clinicId: string, limit = 15) {
 
 /** Open escalations waiting for a human. */
 export async function getOpenEscalations(clinicId: string) {
+  // Escalations have no clinic_id of their own — scope via the linked conversation
+  // (!inner makes it a filterable inner join). Without this, one clinic's
+  // dashboard would show EVERY clinic's escalations (cross-tenant data leak).
   const { data } = await supabase
     .from('escalations')
-    .select('id,reason,summary,created_at,conversations(client_id,clients(phone,name))')
+    .select('id,reason,summary,created_at,conversations!inner(clinic_id,client_id,clients(phone,name))')
     .eq('status', 'open')
+    .eq('conversations.clinic_id', clinicId)
     .order('created_at', { ascending: false });
   return data ?? [];
 }

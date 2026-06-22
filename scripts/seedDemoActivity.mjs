@@ -37,6 +37,10 @@ async function main() {
     await s.from('escalations').delete().in('conversation_id', oldConvoIds);
   }
   await s.from('events').delete().eq('clinic_id', clinicId);
+  // reminders FK → bookings, so clear them before bookings or the delete fails
+  const { data: oldBookings } = await s.from('bookings').select('id').eq('clinic_id', clinicId);
+  const oldBookingIds = (oldBookings ?? []).map((b) => b.id);
+  if (oldBookingIds.length) await s.from('reminders').delete().in('booking_id', oldBookingIds);
   await s.from('bookings').delete().eq('clinic_id', clinicId);
   await s.from('conversations').delete().eq('clinic_id', clinicId);
   if (oldClientIds.length) await s.from('clients').delete().in('id', oldClientIds);
