@@ -68,7 +68,7 @@ the contract, or data-subject consent) applies.
 | Twilio Inc. | Telephony + WhatsApp delivery | USA (+ regional) | Telecoms carrier; processes phone numbers + message/call content |
 | ElevenLabs Inc. | AI voice (call answering) | USA | Speech synthesis + conversational voice agent |
 | Supabase | Database (bookings, conversations) | EU (Frankfurt/Ireland) | Primary data store; EU/GDPR adequate protection |
-| Google LLC (Gemini API) | Generating replies | USA | **Must be a PAID tier** — free tiers may train on data |
+| Google LLC (Gemini API) | Generating replies | USA | Using paid tier |
 | Google LLC | Calendar (if used) | USA | Appointment events |
 | Railway | Application hosting | EU West (Amsterdam) | Runs the application |
 
