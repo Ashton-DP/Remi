@@ -105,6 +105,27 @@ export const config = {
     hour: parseInt(opt('CHASE_HOUR', '9'), 10),
     importToken: opt('CHASE_IMPORT_TOKEN') || opt('ONBOARD_TOKEN'),
   },
+  // Invoice sources — auto-import overdue invoices from accounting tools.
+  // OAuth providers need a developer app (client id/secret + redirect URI) per
+  // provider; Google Sheet needs nothing but a published-CSV URL on the clinic.
+  // Redirect URIs default to <PUBLIC_BASE_URL>/connect/<provider>/callback.
+  invoiceSources: {
+    xero: {
+      clientId: opt('XERO_CLIENT_ID'),
+      clientSecret: opt('XERO_CLIENT_SECRET'),
+      redirectUri: opt('XERO_REDIRECT_URI', (opt('PUBLIC_BASE_URL', 'https://www.remireception.com')) + '/connect/xero/callback'),
+    },
+    quickbooks: {
+      clientId: opt('QBO_CLIENT_ID'),
+      clientSecret: opt('QBO_CLIENT_SECRET'),
+      redirectUri: opt('QBO_REDIRECT_URI', (opt('PUBLIC_BASE_URL', 'https://www.remireception.com')) + '/connect/quickbooks/callback'),
+    },
+    sage: {
+      clientId: opt('SAGE_CLIENT_ID'),
+      clientSecret: opt('SAGE_CLIENT_SECRET'),
+      redirectUri: opt('SAGE_REDIRECT_URI', (opt('PUBLIC_BASE_URL', 'https://www.remireception.com')) + '/connect/sage/callback'),
+    },
+  },
   // Stripe deposits. Off unless secretKey + a clinic deposit_zar are set.
   stripe: {
     secretKey: opt('STRIPE_SECRET_KEY'),

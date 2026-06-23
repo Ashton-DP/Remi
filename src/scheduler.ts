@@ -6,6 +6,8 @@ import { config } from './config'; // also loads dotenv
 import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getClinicIdsWithOverdueInvoices } from './db';
 import { sendProactiveWhatsApp } from './lib/twilio';
 import { runChaseForClinic } from './lib/chaseRunner';
+import { syncInvoicesForClinic } from './lib/invoiceSources';
+import { getClinicsWithInvoiceSource } from './db';
 import { generateReport, computeReportStats, buildHuddle } from './report';
 
 function formatWhen(startAt: string, timezone: string): string {
@@ -193,9 +195,18 @@ async function maybeRunInvoiceChase() {
   const dow = new Date(`${dateStr}T12:00:00Z`).getUTCDay(); // 0=Sun 6=Sat
   if (dateStr === _lastChaseDate || hour < config.chase.hour || dow === 0 || dow === 6) return;
   _lastChaseDate = dateStr;
+
+  // 1. Auto-sync invoices from connected accounting sources (Xero/QBO/Sage/Sheet).
+  const sourceClinics = await getClinicsWithInvoiceSource().catch(() => []);
+  for (const c of sourceClinics as any[]) {
+    await syncInvoicesForClinic(c.id).catch((e) => console.error('[invoice-sync]', c.id, e?.message ?? e));
+  }
+
+  // 2. Chase overdue invoices. Default clinic if set, else any clinic that has
+  //    overdue invoices or a connected source.
   const ids = config.defaultClinicId
     ? [config.defaultClinicId]
-    : await getClinicIdsWithOverdueInvoices();
+    : [...new Set([...(await getClinicIdsWithOverdueInvoices()), ...sourceClinics.map((c: any) => c.id)])];
   let total = 0;
   for (const id of ids) total += await runChaseForClinic(id).catch((e) => (console.error('[chase]', e), 0));
   if (total) console.log(`[scheduler] invoice chase: ${total} message(s) sent across ${ids.length} clinic(s)`);

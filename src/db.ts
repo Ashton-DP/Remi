@@ -528,13 +528,14 @@ export async function getReportData(clinicId: string, sinceISO: string) {
  *  Only overwrites contact/amount/date on conflict — never resets chase progress. */
 export async function upsertInvoice(clinicId: string, inv: {
   invoice_number: string; contact_name?: string; contact_phone?: string; contact_email?: string;
-  amount_due: number; currency?: string; due_date: string; source?: string;
+  amount_due: number; currency?: string; due_date: string; source?: string; external_id?: string;
 }) {
   const { data, error } = await supabase
     .from('invoices')
     .upsert({
       clinic_id: clinicId,
       invoice_number: inv.invoice_number,
+      external_id: inv.external_id ?? null,
       contact_name: inv.contact_name ?? null,
       contact_phone: inv.contact_phone ?? null,
       contact_email: inv.contact_email ?? null,
@@ -632,4 +633,53 @@ export async function getClinicIdsWithOverdueInvoices(): Promise<string[]> {
     .eq('disputed', false)
     .lte('due_date', today);
   return [...new Set((data ?? []).map((r: any) => r.clinic_id))];
+}
+
+// ── Invoice sources (auto-import from Xero/QuickBooks/Sage/Google Sheet) ──────
+
+/** Clinics that have an invoice source connected (for the daily sync). */
+export async function getClinicsWithInvoiceSource() {
+  const { data } = await supabase
+    .from('clinics')
+    .select('id,name,invoice_source,invoice_source_tokens,invoice_source_config')
+    .not('invoice_source', 'is', null);
+  return data ?? [];
+}
+
+/** Persist refreshed OAuth tokens / config for a clinic's invoice source. */
+export async function setInvoiceSourceData(clinicId: string, patch: { tokens?: any; config?: any }) {
+  const update: any = { updated_at: new Date().toISOString() };
+  if (patch.tokens !== undefined) update.invoice_source_tokens = patch.tokens;
+  if (patch.config !== undefined) update.invoice_source_config = patch.config;
+  await supabase.from('clinics').update(update).eq('id', clinicId);
+}
+
+/** Connect a clinic to a source (called from the OAuth callback / sheet setup). */
+export async function setInvoiceSource(clinicId: string, source: string, tokens: any, config: any) {
+  await supabase.from('clinics').update({
+    invoice_source: source,
+    invoice_source_tokens: tokens,
+    invoice_source_config: config,
+    updated_at: new Date().toISOString(),
+  }).eq('id', clinicId);
+}
+
+/** After a sync, mark as paid any still-overdue invoice from this source that the
+ *  provider no longer returns as overdue (i.e. it cleared upstream) — so we stop
+ *  chasing invoices that have been paid. */
+export async function reconcileSourceInvoices(clinicId: string, source: string, liveExternalIds: string[]) {
+  const { data } = await supabase
+    .from('invoices')
+    .select('id,external_id')
+    .eq('clinic_id', clinicId)
+    .eq('source', source)
+    .eq('status', 'overdue');
+  const live = new Set(liveExternalIds);
+  const cleared = (data ?? []).filter((r: any) => r.external_id && !live.has(r.external_id));
+  for (const r of cleared as any[]) {
+    await supabase.from('invoices')
+      .update({ status: 'paid', paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', r.id);
+  }
+  return cleared.length;
 }

@@ -20,6 +20,7 @@ import { handleOnboard } from './routes/onboard';
 import { renderIntakeForm, handleIntakeSubmit } from './routes/intake';
 import { handleStripeWebhook } from './routes/stripeWebhook';
 import { handleInvoiceImport, handleInvoiceList } from './routes/invoices';
+import { handleConnectStart, handleConnectCallback, handleConnectSheet } from './routes/connect';
 
 const app = express();
 // Render/Railway terminate TLS and forward — trust the proxy so forwarded
@@ -91,6 +92,11 @@ app.post('/intake', webhookLimiter, handleIntakeSubmit);
 // Invoice chasing (PaidUp): bulk CSV import + operator list. Token-gated.
 app.post('/invoices/import', webhookLimiter, handleInvoiceImport);
 app.get('/invoices', webhookLimiter, handleInvoiceList);
+
+// Invoice sources — connect an accounting tool so invoices auto-load.
+app.post('/connect/gsheet', webhookLimiter, handleConnectSheet);   // Google Sheet (no OAuth)
+app.get('/connect/:provider', webhookLimiter, handleConnectStart);          // OAuth start
+app.get('/connect/:provider/callback', webhookLimiter, handleConnectCallback); // OAuth callback
 
 // Report — gated. Branded HTML "Revenue Recovered" page by default; ?format=text
 // returns the plain-text version (used by the CLI/owner summary).
