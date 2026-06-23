@@ -13,12 +13,14 @@ export function parseServices(text: string): any[] {
     .map((l) => l.trim())
     .filter(Boolean)
     .map((line) => {
-      const [service, dur, price] = line.split('|').map((p) => p.trim());
-      return {
+      const [service, dur, price, prep] = line.split('|').map((p) => p.trim());
+      const row: any = {
         service: service || 'Service',
         duration_min: parseInt(dur, 10) || 30,
         price_zar: parseInt(price, 10) || 0,
       };
+      if (prep) row.prep = prep; // optional treatment prep instructions
+      return row;
     });
 }
 

@@ -1,6 +1,7 @@
 import { getBookingProvider } from '../lib/booking';
 import { computeFreeSlots } from '../lib/slots';
 import { sendProactiveWhatsApp } from '../lib/twilio';
+import { intakeLink } from '../lib/intake';
 import { config } from '../config';
 import {
   createBookingRow, logEvent, createEscalation,
@@ -105,6 +106,34 @@ export async function executeTool(
           });
         } catch (e) {
           console.error('[deposit] error', e);
+        }
+      }
+
+      // Treatment prep instructions — if this service (or the clinic) has prep
+      // notes, send them so the patient arrives ready (no wasted appointments).
+      const prep = svc?.prep || clinic.default_prep;
+      if (prep && customer.phone) {
+        try {
+          const when = start.toLocaleString('en-ZA', {
+            timeZone: clinic.timezone ?? 'Africa/Johannesburg', dateStyle: 'medium', timeStyle: 'short',
+          });
+          await sendProactiveWhatsApp(customer.phone, {
+            fallbackBody: `✅ Booked: ${input.service} on ${when}.\n\nBefore your visit: ${prep}`,
+          });
+        } catch (e) {
+          console.error('[prep] error', e);
+        }
+      }
+
+      // First-time patient → send the digital intake form link to fill in before the visit.
+      if (customer.id && !customer.intake_submitted_at && config.intake?.enabled && customer.phone) {
+        try {
+          const link = intakeLink(clinic.id, customer.id);
+          await sendProactiveWhatsApp(customer.phone, {
+            fallbackBody: `One quick thing — please fill in your details before your visit (2 min): ${link}`,
+          });
+        } catch (e) {
+          console.error('[intake] error', e);
         }
       }
 

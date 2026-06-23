@@ -76,6 +76,12 @@ export const config = {
   dashboard: {
     token: opt('DASHBOARD_TOKEN'),
   },
+  // Digital patient intake form. Sent to first-time patients on booking when
+  // enabled. Links are signed with INTAKE_SECRET (falls back to TOOLS_SHARED_SECRET).
+  intake: {
+    enabled: opt('INTAKE_ENABLED') === 'true',
+    secret: opt('INTAKE_SECRET') || opt('TOOLS_SHARED_SECRET') || 'remi-intake-dev',
+  },
   // Self-serve onboarding form. Submissions require this token (fail-closed when
   // unset) so the public /onboard page can't be used to spam-create clinics.
   onboard: {

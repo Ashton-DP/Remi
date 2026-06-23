@@ -346,6 +346,20 @@ export async function getRecentConversations(clinicId: string, limit = 15) {
 }
 
 /** Open escalations waiting for a human. */
+/** Fetch a single client by id (for the intake form). */
+export async function getClientById(clientId: string) {
+  const { data } = await supabase.from('clients').select('*').eq('id', clientId).maybeSingle();
+  return data;
+}
+
+/** Save a patient's submitted intake form against their client record. */
+export async function saveIntake(clientId: string, intake: any) {
+  await supabase
+    .from('clients')
+    .update({ intake_json: intake, intake_submitted_at: new Date().toISOString() })
+    .eq('id', clientId);
+}
+
 /** Create a clinic (self-serve onboarding). Returns the new row incl. its
  *  generated per-clinic dashboard_token. */
 export async function createClinic(obj: {

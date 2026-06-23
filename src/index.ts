@@ -17,6 +17,7 @@ import { attachVoiceRelay } from './routes/voiceRelay';
 import { attachMediaStream } from './routes/mediaStream';
 import { handleAgentTool } from './routes/agentTools';
 import { handleOnboard } from './routes/onboard';
+import { renderIntakeForm, handleIntakeSubmit } from './routes/intake';
 import { handleStripeWebhook } from './routes/stripeWebhook';
 
 const app = express();
@@ -81,6 +82,10 @@ app.post('/tools/:tool', toolsLimiter, handleAgentTool);
 
 // Self-serve clinic onboarding (form at /onboard.html; submission token-gated)
 app.post('/onboard', webhookLimiter, handleOnboard);
+
+// Digital patient intake form (signed per-patient link)
+app.get('/intake', webhookLimiter, renderIntakeForm);
+app.post('/intake', webhookLimiter, handleIntakeSubmit);
 
 // Report — gated. Branded HTML "Revenue Recovered" page by default; ?format=text
 // returns the plain-text version (used by the CLI/owner summary).
