@@ -648,20 +648,22 @@ export async function getClinicsWithInvoiceSource() {
 
 /** Persist refreshed OAuth tokens / config for a clinic's invoice source. */
 export async function setInvoiceSourceData(clinicId: string, patch: { tokens?: any; config?: any }) {
-  const update: any = { updated_at: new Date().toISOString() };
+  const update: any = {};
   if (patch.tokens !== undefined) update.invoice_source_tokens = patch.tokens;
   if (patch.config !== undefined) update.invoice_source_config = patch.config;
-  await supabase.from('clinics').update(update).eq('id', clinicId);
+  if (!Object.keys(update).length) return;
+  const { error } = await supabase.from('clinics').update(update).eq('id', clinicId);
+  if (error) throw new Error(`setInvoiceSourceData: ${error.message}`);
 }
 
 /** Connect a clinic to a source (called from the OAuth callback / sheet setup). */
 export async function setInvoiceSource(clinicId: string, source: string, tokens: any, config: any) {
-  await supabase.from('clinics').update({
+  const { error } = await supabase.from('clinics').update({
     invoice_source: source,
     invoice_source_tokens: tokens,
     invoice_source_config: config,
-    updated_at: new Date().toISOString(),
   }).eq('id', clinicId);
+  if (error) throw new Error(`setInvoiceSource: ${error.message}`);
 }
 
 /** After a sync, mark as paid any still-overdue invoice from this source that the
