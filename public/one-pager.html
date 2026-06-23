@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Remi — One-pager</title>
+<style>
+  :root{
+    --ink:#13151f; --muted:#5b6478; --line:#e4e7ef;
+    --purple:#6c5ce7; --purple-d:#5b4fcc; --teal:#0fb9a8; --green:#16a34a;
+    --wash:#f3f1fe;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  html,body{background:#fff;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:var(--ink);line-height:1.5;}
+  .page{width:210mm;min-height:297mm;margin:0 auto;padding:14mm 14mm 10mm;display:flex;flex-direction:column;}
+  @page{size:A4;margin:0;}
+  @media print{ .page{margin:0;} .noprint{display:none;} }
+  .noprint{position:fixed;top:10px;right:10px;background:var(--purple);color:#fff;border:0;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+
+  /* header */
+  .top{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--line);padding-bottom:14px;}
+  .brand{display:flex;align-items:center;gap:11px;}
+  .dot{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,var(--purple),var(--teal));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:20px;}
+  .brand .name{font-size:26px;font-weight:800;letter-spacing:-.5px;}
+  .brand .tag{font-size:12px;color:var(--muted);font-weight:600;}
+  .top .of{text-align:right;font-size:11px;color:var(--muted);}
+
+  /* hero */
+  .hero{margin-top:22px;}
+  .hero h1{font-size:30px;line-height:1.12;font-weight:800;letter-spacing:-.8px;max-width:165mm;}
+  .hero h1 span{background:linear-gradient(135deg,var(--purple),var(--teal));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  .hero p{margin-top:10px;font-size:14px;color:var(--muted);max-width:165mm;}
+
+  /* stats */
+  .stats{display:flex;gap:10px;margin-top:18px;}
+  .stat{flex:1;background:var(--wash);border:1px solid var(--line);border-radius:11px;padding:12px 14px;text-align:center;}
+  .stat b{display:block;font-size:22px;font-weight:800;color:var(--purple);}
+  .stat span{font-size:10.5px;color:var(--muted);}
+
+  /* what it does */
+  .label{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--purple);margin:22px 0 10px;}
+  .does{display:grid;grid-template-columns:1fr 1fr;gap:9px 22px;}
+  .does .row{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;}
+  .does .ic{font-size:15px;line-height:1.2;}
+  .does .row b{font-weight:700;}
+
+  /* offers */
+  .offers{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px;}
+  .offer{border:1px solid var(--line);border-radius:12px;padding:14px;}
+  .offer.hot{border:1.5px solid var(--purple);background:var(--wash);position:relative;}
+  .offer .pill{position:absolute;top:-9px;left:14px;background:var(--purple);color:#fff;font-size:8.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;padding:3px 8px;border-radius:20px;}
+  .offer .eyebrow{font-size:9.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--teal);}
+  .offer h3{font-size:15px;font-weight:800;margin:3px 0 2px;}
+  .offer .who{font-size:10.5px;color:var(--muted);min-height:26px;}
+  .offer .price{font-size:18px;font-weight:800;margin-top:6px;}
+  .offer .price small{font-size:11px;color:var(--muted);font-weight:600;}
+
+  /* trial strip */
+  .trial{margin-top:16px;background:linear-gradient(135deg,var(--purple),var(--purple-d));color:#fff;border-radius:11px;padding:12px 16px;font-size:13px;font-weight:700;text-align:center;}
+  .trial span{opacity:.9;font-weight:600;}
+
+  /* cta */
+  .cta{display:flex;gap:18px;align-items:center;margin-top:18px;border:1px solid var(--line);border-radius:12px;padding:16px;}
+  .cta .qr{width:108px;height:108px;flex-shrink:0;border:1px solid var(--line);border-radius:10px;padding:6px;background:#fff;}
+  .cta .qr img{width:100%;height:100%;display:block;}
+  .cta .info b{font-size:14px;}
+  .cta .info .lines{margin-top:8px;font-size:13px;}
+  .cta .info .lines div{margin:3px 0;display:flex;gap:8px;align-items:center;}
+  .cta .info .lines .k{font-size:11px;color:var(--muted);width:74px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+  .cta .info .lines .v{font-weight:700;}
+
+  /* footer */
+  .foot{margin-top:auto;padding-top:14px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;}
+</style>
+</head>
+<body>
+<button class="noprint" onclick="window.print()">Print / Save as PDF</button>
+<div class="page">
+
+  <div class="top">
+    <div class="brand">
+      <div class="dot">R</div>
+      <div>
+        <div class="name">Remi</div>
+        <div class="tag">AI front desk for South African businesses</div>
+      </div>
+    </div>
+    <div class="of">A product of<br><b style="color:var(--ink)">The Visionaries (Pty) Ltd</b></div>
+  </div>
+
+  <div class="hero">
+    <h1>Never miss a booking — or a <span>payment</span> — again.</h1>
+    <p>Remi is an AI employee that answers every call and WhatsApp 24/7, books appointments, prevents no-shows, and chases your unpaid invoices until you're paid. Set it up once — it runs day and night, so you never lose a customer to a missed call again.</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b>42%</b><span>of calls to small businesses go unanswered</span></div>
+    <div class="stat"><b>R3,800</b><span>average value of a single lost booking</span></div>
+    <div class="stat"><b>24/7</b><span>Remi answers — nights, weekends, holidays</span></div>
+    <div class="stat"><b>2&times;</b><span>faster payment on chased invoices</span></div>
+  </div>
+
+  <div class="label">What Remi does for you</div>
+  <div class="does">
+    <div class="row"><span class="ic">📞</span><div><b>Answers every call</b> with a natural SA voice and books on the spot.</div></div>
+    <div class="row"><span class="ic">💬</span><div><b>Books by WhatsApp &amp; SMS</b> — reschedules and cancels, no apps.</div></div>
+    <div class="row"><span class="ic">📲</span><div><b>Missed-call text-back</b> within seconds, before they call the next place.</div></div>
+    <div class="row"><span class="ic">⏰</span><div><b>No-show reminders</b> (48h / 24h / 2h) and waitlist backfill.</div></div>
+    <div class="row"><span class="ic">💸</span><div><b>Chases unpaid invoices</b> over WhatsApp &amp; email — stops when they pay.</div></div>
+    <div class="row"><span class="ic">📊</span><div><b>Monthly revenue report</b> showing the rand value it recovered.</div></div>
+  </div>
+
+  <div class="label">Pick how you start</div>
+  <div class="offers">
+    <div class="offer">
+      <div class="eyebrow">Front Desk</div>
+      <h3>The receptionist</h3>
+      <div class="who">Answers, books &amp; reminds 24/7 on WhatsApp &amp; SMS.</div>
+      <div class="price">R2,500<small>/mo</small></div>
+    </div>
+    <div class="offer hot">
+      <div class="pill">All-in-one</div>
+      <div class="eyebrow">Complete</div>
+      <h3>The whole front office</h3>
+      <div class="who">Everything + AI voice, deposits, reviews &amp; invoice chasing.</div>
+      <div class="price">R6,500<small>/mo</small></div>
+    </div>
+    <div class="offer">
+      <div class="eyebrow">PaidUp</div>
+      <h3>Just get paid</h3>
+      <div class="who">AI chases your overdue invoices, automatically.</div>
+      <div class="price">R299<small>/mo</small></div>
+    </div>
+  </div>
+
+  <div class="trial">Free 2-week trial &nbsp;·&nbsp; <span>No setup cost &nbsp;·&nbsp; Cancel anytime &nbsp;·&nbsp; Pay annually, get 2 months free</span></div>
+
+  <div class="cta">
+    <div class="qr"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAEsAQMAAABDsxw2AAAABlBMVEX///8AAABVwtN+AAAACXBIWXMAAA7EAAAOxAGVKw4bAAABHUlEQVRoge3X0Q3FIAgFUDZw/y3dgPcUBKQdoDe5pGlaOf1CtIpGTFkx/OF/rykyJGZZGz+v/4yN1BQZEMvilrqLXCkyULYqPq4WJkNnK4a+tjAZFrvGd1NbX7cUGQyLmNKvmiLDYT12O6vqI0EGw17mgNV6N7VfZFDM/p3iObfdOkiGxU5Yzeuzj4xriSYDYKWynjitndOADIrp+Q2OT0xam/snZGhsRdmC5ZxxpO7OZGgsShxzIELKkZYMhenzV2okkFiiyXCY1NW4xb2Ak0GwGtHUdpe9aHdE9nnWqvxytVlB9n02s+4r6mmolp4Mil11bzFdkuGyOOZcX00yWKa+20ZTpyeDYrkIz6t5/eAjZGgs4rRznQCZIoNhP18r1xEq9cjSAAAAAElFTkSuQmCC" alt="Scan for remireception.com"></div>
+    <div class="info">
+      <b>Start your free trial today.</b>
+      <div class="lines">
+        <div><span class="k">WhatsApp</span><span class="v">+27 60 015 1104</span></div>
+        <div><span class="k">Email</span><span class="v">hello@remireception.com</span></div>
+        <div><span class="k">Web</span><span class="v">www.remireception.com</span></div>
+        <div><span class="k">Scan &rarr;</span><span class="v" style="color:var(--muted);font-weight:600">point your camera at the code to visit our site</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>🔒 POPIA-conscious · data secured &amp; EU-hosted · operator agreement provided</span>
+    <span>© 2026 Remi · The Visionaries (Pty) Ltd (2026/005294/07) · Built in George, South Africa 🇿🇦</span>
+  </div>
+
+</div>
+</body>
+</html>
