@@ -3,9 +3,9 @@
  * Polls every 60 seconds for due reminders and sends WhatsApp messages.
  */
 import { config } from './config'; // also loads dotenv
-import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent } from './db';
+import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings } from './db';
 import { sendProactiveWhatsApp } from './lib/twilio';
-import { generateReport, computeReportStats } from './report';
+import { generateReport, computeReportStats, buildHuddle } from './report';
 
 function formatWhen(startAt: string, timezone: string): string {
   return new Date(startAt).toLocaleString('en-ZA', {
@@ -182,6 +182,25 @@ async function reactivation(clinicId: string) {
   if (lapsed.length) console.log(`[scheduler] reactivation: ${lapsed.length} recall(s) sent`);
 }
 
+const HUDDLE_HOUR = parseInt(process.env.HUDDLE_HOUR ?? '7', 10);
+let _lastHuddleDate = '';
+
+/** Morning "here's your day" brief to the clinic team — today's appointments,
+ *  with an intake-pending flag. Runs once each morning on/after HUDDLE_HOUR. */
+async function maybeRunHuddle() {
+  if (!config.defaultClinicId) return;
+  const { dateStr, hour } = clinicNow();
+  if (dateStr === _lastHuddleDate || hour < HUDDLE_HOUR) return;
+  _lastHuddleDate = dateStr;
+  const clinic = await getClinic(config.defaultClinicId);
+  const to = clinic?.owner_summary_phone || clinic?.escalation_contact;
+  if (!to) return;
+  const tz = clinic.timezone ?? 'Africa/Johannesburg';
+  const bookings = await getTodaysBookings(config.defaultClinicId, tz);
+  await sendProactiveWhatsApp(to, { fallbackBody: buildHuddle(bookings, clinic.name, tz, config.intake.enabled) });
+  console.log('[scheduler] morning huddle sent');
+}
+
 async function maybeRunDailyJobs() {
   const { dateStr, hour } = clinicNow();
   if (dateStr === _lastDailyDate || hour < DAILY_HOUR) return;
@@ -221,6 +240,7 @@ export function startScheduler() {
   tick().catch((e) => console.error('[scheduler] tick error:', e));
   setInterval(() => {
     tick().catch((e) => console.error('[scheduler] tick error:', e));
+    maybeRunHuddle().catch((e) => console.error('[scheduler] huddle error:', e));
     maybeRunDailyJobs().catch((e) => console.error('[scheduler] daily jobs error:', e));
   }, 60_000);
 }

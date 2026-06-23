@@ -346,6 +346,26 @@ export async function getRecentConversations(clinicId: string, limit = 15) {
 }
 
 /** Open escalations waiting for a human. */
+/** Today's confirmed bookings (clinic-local day) for the morning team huddle. */
+export async function getTodaysBookings(clinicId: string, timeZone = 'Africa/Johannesburg') {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-CA', { timeZone }); // YYYY-MM-DD clinic-local
+  const part = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' })
+    .formatToParts(now).find((p) => p.type === 'timeZoneName')?.value;
+  const off = part?.match(/GMT([+-]\d{2}:\d{2})/)?.[1] ?? '+00:00';
+  const start = new Date(`${dateStr}T00:00:00${off}`).toISOString();
+  const end = new Date(`${dateStr}T23:59:59${off}`).toISOString();
+  const { data } = await supabase
+    .from('bookings')
+    .select('start_at,service,status,clients(name,intake_submitted_at)')
+    .eq('clinic_id', clinicId)
+    .eq('status', 'confirmed')
+    .gte('start_at', start)
+    .lte('start_at', end)
+    .order('start_at', { ascending: true });
+  return data ?? [];
+}
+
 /** Fetch a single client by id (for the intake form). */
 export async function getClientById(clientId: string) {
   const { data } = await supabase.from('clients').select('*').eq('id', clientId).maybeSingle();

@@ -1,6 +1,6 @@
 // Report math + reminder scheduling tests. Run: tsx tests/reportAndReminders.test.ts
 import assert from 'node:assert';
-import { computeReportStats } from '../src/report';
+import { computeReportStats, buildHuddle } from '../src/report';
 import { buildReminderRows } from '../src/lib/reminders';
 
 let passed = 0;
@@ -98,6 +98,29 @@ async function test(name: string, fn: () => void | Promise<void>) {
     const rows = buildReminderRows('bk1', start, NOW);
     assert.equal(Date.parse(rows.find((r) => r.kind === 'aftercare')!.scheduled_for), startMs + 3 * 3_600_000);
     assert.equal(Date.parse(rows.find((r) => r.kind === 'review')!.scheduled_for), startMs + 24 * 3_600_000);
+  });
+
+  console.log('morning huddle');
+
+  const huddleBookings = [
+    { start_at: '2026-06-25T07:00:00Z', service: 'Botox', clients: { name: 'Sarah', intake_submitted_at: null } },
+    { start_at: '2026-06-25T08:30:00Z', service: 'Filler', clients: { name: 'Thabo', intake_submitted_at: '2026-06-20' } },
+  ];
+
+  await test('huddle lists count + clinic-local times in order', () => {
+    const h = buildHuddle(huddleBookings, 'Demo', 'Africa/Johannesburg', false);
+    assert.ok(h.includes('2 appointments at Demo'));
+    assert.ok(h.includes('09:00 · Botox · Sarah'), h);   // 07:00Z → 09:00 SAST
+    assert.ok(h.includes('10:30 · Filler · Thabo'), h);
+  });
+
+  await test('huddle flags intake-pending only when intake enabled', () => {
+    assert.ok(buildHuddle(huddleBookings, 'Demo', 'Africa/Johannesburg', true).includes('Sarah ⚠️ intake pending'));
+    assert.ok(!buildHuddle(huddleBookings, 'Demo', 'Africa/Johannesburg', false).includes('intake pending'));
+  });
+
+  await test('huddle handles an empty day', () => {
+    assert.ok(buildHuddle([], 'Demo').includes('No appointments'));
   });
 
   console.log(`\n${passed} report+reminder tests passed ✅`);

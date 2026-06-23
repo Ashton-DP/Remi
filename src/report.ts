@@ -68,6 +68,24 @@ export async function generateReport(clinicId: string, sinceDays = 30): Promise<
   ].join('\n');
 }
 
+/** Pure builder for the morning team huddle message (testable). */
+export function buildHuddle(
+  bookings: any[],
+  clinicName: string,
+  timeZone = 'Africa/Johannesburg',
+  intakeEnabled = false,
+): string {
+  const bks = bookings ?? [];
+  if (bks.length === 0) return `☀️ Good morning! No appointments booked at ${clinicName} today. A good day to catch up. 🙂`;
+  const lines = bks.map((b) => {
+    const t = new Date(b.start_at).toLocaleTimeString('en-ZA', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
+    const who = b.clients?.name ?? 'Unknown';
+    const flag = intakeEnabled && b.clients && !b.clients.intake_submitted_at ? ' ⚠️ intake pending' : '';
+    return `${t} · ${b.service} · ${who}${flag}`;
+  });
+  return `☀️ Good morning! ${bks.length} appointment${bks.length === 1 ? '' : 's'} at ${clinicName} today:\n\n${lines.join('\n')}`;
+}
+
 const escHtml = (s: unknown) =>
   String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
