@@ -390,6 +390,7 @@ export async function createClinic(obj: {
   faq_json?: any;
   owner_summary_phone?: string;
   escalation_contact?: string;
+  knowledge?: string;
   dashboard_token: string;
 }) {
   const { data, error } = await supabase
@@ -402,6 +403,7 @@ export async function createClinic(obj: {
       faq_json: obj.faq_json ?? null,
       owner_summary_phone: obj.owner_summary_phone ?? null,
       escalation_contact: obj.escalation_contact ?? null,
+      knowledge: obj.knowledge ?? null,
       dashboard_token: obj.dashboard_token,
       booking_provider: 'google',
     })

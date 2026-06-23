@@ -1,3 +1,17 @@
+const DAY_LABELS: [string, string][] = [
+  ['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'], ['fri', 'Fri'], ['sat', 'Sat'], ['sun', 'Sun'],
+];
+
+/** Format hours_json into a readable "Mon: 09:00-17:00; ..." line (testable). */
+export function formatHours(hoursJson: any): string {
+  if (!hoursJson || typeof hoursJson !== 'object') return '';
+  const open = DAY_LABELS.filter(([k]) => Array.isArray(hoursJson[k]) && hoursJson[k].length)
+    .map(([k, lbl]) => `${lbl}: ${hoursJson[k].map((r: string[]) => r.join('-')).join(', ')}`);
+  if (!open.length) return '';
+  const closedDays = DAY_LABELS.filter(([k]) => !(Array.isArray(hoursJson[k]) && hoursJson[k].length)).map(([, lbl]) => lbl);
+  return open.join('; ') + (closedDays.length ? ` (closed ${closedDays.join(', ')})` : '');
+}
+
 export function buildSystemPrompt(clinic: any, isFirstContact: boolean, isVoice = false): string {
   const services = (clinic.services_json ?? [])
     .map((s: any) => `- ${s.service}: R${s.price_zar} (${s.duration_min} min)`)
@@ -5,6 +19,7 @@ export function buildSystemPrompt(clinic: any, isFirstContact: boolean, isVoice 
   const faq = (clinic.faq_json ?? [])
     .map((f: any) => `Q: ${f.q}\nA: ${f.a}`)
     .join('\n');
+  const hours = formatHours(clinic.hours_json);
 
   const consentLine = isFirstContact
     ? `- This is the client's first message. Introduce yourself as Remi and include this once: "By replying you're happy for us to message you about your booking."`
@@ -39,8 +54,18 @@ Hard rules:
 - Keep replies short — this is WhatsApp, not email.
 ${consentLine}
 
+ANSWERING COMMON QUESTIONS:
+- Use the hours, services/prices, FAQs and clinic knowledge below to answer questions about opening times, location, parking, payment/medical aid, what to expect, and policies — directly and confidently.
+- If a question isn't covered by anything below, don't guess: say you'll check with the team and call escalate_to_human (or offer to have someone follow up).
+
+Opening hours:
+${hours || '(not specified — if asked, offer to check with the team)'}
+
 Services & prices:
 ${services || '(none configured)'}
+
+Clinic knowledge (location, parking, payment/medical aid, what to expect, policies):
+${clinic.knowledge || '(none provided)'}
 
 FAQs:
 ${faq || '(none)'}

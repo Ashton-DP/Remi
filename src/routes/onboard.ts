@@ -75,6 +75,7 @@ export async function handleOnboard(req: Request, res: Response) {
       faq_json: parseFaqs(req.body.faqs),
       owner_summary_phone: String(req.body.owner_phone || '').trim() || undefined,
       escalation_contact: String(req.body.owner_phone || '').trim() || undefined,
+      knowledge: String(req.body.knowledge || '').trim() || undefined,
       dashboard_token: dashboardToken,
     });
     const link = `/dashboard/${clinic.id}?token=${dashboardToken}`;
