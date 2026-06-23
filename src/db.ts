@@ -518,3 +518,118 @@ export async function getReportData(clinicId: string, sinceISO: string) {
     .gte('created_at', sinceISO);
   return { events: events ?? [], bookings: bookings ?? [] };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INVOICE CHASING (PaidUp engine, ported). Tables: invoices, invoice_chases,
+// suppressions. Kill switch + cadence live on the clinics row.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Upsert an invoice by (clinic_id, invoice_number) so CSV re-imports are idempotent.
+ *  Only overwrites contact/amount/date on conflict — never resets chase progress. */
+export async function upsertInvoice(clinicId: string, inv: {
+  invoice_number: string; contact_name?: string; contact_phone?: string; contact_email?: string;
+  amount_due: number; currency?: string; due_date: string; source?: string;
+}) {
+  const { data, error } = await supabase
+    .from('invoices')
+    .upsert({
+      clinic_id: clinicId,
+      invoice_number: inv.invoice_number,
+      contact_name: inv.contact_name ?? null,
+      contact_phone: inv.contact_phone ?? null,
+      contact_email: inv.contact_email ?? null,
+      amount_due: inv.amount_due,
+      currency: inv.currency ?? 'ZAR',
+      due_date: inv.due_date,
+      source: inv.source ?? 'csv',
+      status: 'overdue',
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'clinic_id,invoice_number', ignoreDuplicates: false })
+    .select()
+    .single();
+  if (error) throw new Error(`upsertInvoice: ${error.message}`);
+  return data;
+}
+
+/** Overdue, undisputed, unpaid invoices for a clinic (due today or earlier). */
+export async function getChaseableInvoices(clinicId: string) {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from('invoices')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .eq('status', 'overdue')
+    .eq('disputed', false)
+    .lte('due_date', today)
+    .order('due_date', { ascending: true });
+  return data ?? [];
+}
+
+export async function listInvoices(clinicId: string, limit = 200) {
+  const { data } = await supabase
+    .from('invoices')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .order('due_date', { ascending: true })
+    .limit(limit);
+  return data ?? [];
+}
+
+export async function advanceInvoiceChase(invoiceId: string, stage: number) {
+  await supabase
+    .from('invoices')
+    .update({ chase_stage: stage, last_chased_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', invoiceId);
+}
+
+export async function logInvoiceChase(o: {
+  invoiceId: string; clinicId: string; stage: number; channel: string; recipient: string; body: string;
+}) {
+  await supabase.from('invoice_chases').insert({
+    invoice_id: o.invoiceId, clinic_id: o.clinicId, stage: o.stage,
+    channel: o.channel, recipient: o.recipient, body: o.body,
+  });
+}
+
+/** Mark an invoice paid / snoozed / disputed (operator or reply-driven). */
+export async function markInvoicePaid(invoiceId: string) {
+  await supabase.from('invoices').update({ status: 'paid', paid_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', invoiceId);
+}
+export async function snoozeInvoice(invoiceId: string, untilISODate: string) {
+  await supabase.from('invoices').update({ snoozed_until: untilISODate, updated_at: new Date().toISOString() }).eq('id', invoiceId);
+}
+export async function disputeInvoice(invoiceId: string) {
+  await supabase.from('invoices').update({ disputed: true, updated_at: new Date().toISOString() }).eq('id', invoiceId);
+}
+
+// ── Suppression list (opt-outs) ──────────────────────────────────────────────
+export async function isSuppressed(clinicId: string, channel: string, identifier: string | null) {
+  if (!identifier) return false;
+  const { data } = await supabase
+    .from('suppressions')
+    .select('id')
+    .eq('clinic_id', clinicId)
+    .eq('channel', channel)
+    .eq('identifier', identifier)
+    .maybeSingle();
+  return !!data;
+}
+export async function addSuppression(clinicId: string, channel: string, identifier: string | null, reason = 'stop') {
+  if (!identifier) return;
+  await supabase.from('suppressions').upsert(
+    { clinic_id: clinicId, channel, identifier, reason },
+    { onConflict: 'clinic_id,channel,identifier', ignoreDuplicates: true },
+  );
+}
+
+/** Clinic ids that currently have at least one chaseable invoice (for the scheduler). */
+export async function getClinicIdsWithOverdueInvoices(): Promise<string[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from('invoices')
+    .select('clinic_id')
+    .eq('status', 'overdue')
+    .eq('disputed', false)
+    .lte('due_date', today);
+  return [...new Set((data ?? []).map((r: any) => r.clinic_id))];
+}

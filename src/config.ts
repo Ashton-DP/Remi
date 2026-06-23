@@ -96,6 +96,15 @@ export const config = {
   // Shared secret for the /tools/* webhooks the ElevenLabs agent calls. If set,
   // requests must include header X-Tool-Secret. Blank = open (dev/testing only).
   toolsSecret: opt('TOOLS_SHARED_SECRET'),
+  // Invoice chasing (PaidUp engine). OFF by default — outbound auto-chasing must
+  // be a deliberate choice. CHASE_ENABLED=true turns on the daily scheduler run;
+  // CHASE_HOUR is the clinic-local hour (Mon–Fri) it runs. The /invoices/import
+  // route is gated by CHASE_IMPORT_TOKEN (falls back to ONBOARD_TOKEN).
+  chase: {
+    enabled: opt('CHASE_ENABLED') === 'true',
+    hour: parseInt(opt('CHASE_HOUR', '9'), 10),
+    importToken: opt('CHASE_IMPORT_TOKEN') || opt('ONBOARD_TOKEN'),
+  },
   // Stripe deposits. Off unless secretKey + a clinic deposit_zar are set.
   stripe: {
     secretKey: opt('STRIPE_SECRET_KEY'),

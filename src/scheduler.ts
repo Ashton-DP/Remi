@@ -3,8 +3,9 @@
  * Polls every 60 seconds for due reminders and sends WhatsApp messages.
  */
 import { config } from './config'; // also loads dotenv
-import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings } from './db';
+import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getClinicIdsWithOverdueInvoices } from './db';
 import { sendProactiveWhatsApp } from './lib/twilio';
+import { runChaseForClinic } from './lib/chaseRunner';
 import { generateReport, computeReportStats, buildHuddle } from './report';
 
 function formatWhen(startAt: string, timezone: string): string {
@@ -182,6 +183,24 @@ async function reactivation(clinicId: string) {
   if (lapsed.length) console.log(`[scheduler] reactivation: ${lapsed.length} recall(s) sent`);
 }
 
+// ---- Invoice chasing (PaidUp engine) — once per weekday on/after CHASE_HOUR ----
+let _lastChaseDate = '';
+
+/** Run the invoice chase loop once per weekday. OFF unless CHASE_ENABLED=true. */
+async function maybeRunInvoiceChase() {
+  if (!config.chase.enabled) return;
+  const { dateStr, hour } = clinicNow();
+  const dow = new Date(`${dateStr}T12:00:00Z`).getUTCDay(); // 0=Sun 6=Sat
+  if (dateStr === _lastChaseDate || hour < config.chase.hour || dow === 0 || dow === 6) return;
+  _lastChaseDate = dateStr;
+  const ids = config.defaultClinicId
+    ? [config.defaultClinicId]
+    : await getClinicIdsWithOverdueInvoices();
+  let total = 0;
+  for (const id of ids) total += await runChaseForClinic(id).catch((e) => (console.error('[chase]', e), 0));
+  if (total) console.log(`[scheduler] invoice chase: ${total} message(s) sent across ${ids.length} clinic(s)`);
+}
+
 const HUDDLE_HOUR = parseInt(process.env.HUDDLE_HOUR ?? '7', 10);
 let _lastHuddleDate = '';
 
@@ -242,6 +261,7 @@ export function startScheduler() {
     tick().catch((e) => console.error('[scheduler] tick error:', e));
     maybeRunHuddle().catch((e) => console.error('[scheduler] huddle error:', e));
     maybeRunDailyJobs().catch((e) => console.error('[scheduler] daily jobs error:', e));
+    maybeRunInvoiceChase().catch((e) => console.error('[scheduler] invoice chase error:', e));
   }, 60_000);
 }
 

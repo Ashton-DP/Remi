@@ -19,6 +19,7 @@ import { handleAgentTool } from './routes/agentTools';
 import { handleOnboard } from './routes/onboard';
 import { renderIntakeForm, handleIntakeSubmit } from './routes/intake';
 import { handleStripeWebhook } from './routes/stripeWebhook';
+import { handleInvoiceImport, handleInvoiceList } from './routes/invoices';
 
 const app = express();
 // Render/Railway terminate TLS and forward — trust the proxy so forwarded
@@ -86,6 +87,10 @@ app.post('/onboard', webhookLimiter, handleOnboard);
 // Digital patient intake form (signed per-patient link)
 app.get('/intake', webhookLimiter, renderIntakeForm);
 app.post('/intake', webhookLimiter, handleIntakeSubmit);
+
+// Invoice chasing (PaidUp): bulk CSV import + operator list. Token-gated.
+app.post('/invoices/import', webhookLimiter, handleInvoiceImport);
+app.get('/invoices', webhookLimiter, handleInvoiceList);
 
 // Report — gated. Branded HTML "Revenue Recovered" page by default; ?format=text
 // returns the plain-text version (used by the CLI/owner summary).
