@@ -8,6 +8,7 @@ import { Bookings } from '../screens/Bookings';
 import { GetPaid } from '../screens/GetPaid';
 import { Insights } from '../screens/Insights';
 import { Customers } from '../screens/Customers';
+import { Team } from '../screens/Team';
 import { Settings } from '../screens/Settings';
 
 type Me = { user: { email: string; role: string }; clinic: { name: string } | null; plan?: string };
@@ -20,13 +21,14 @@ const NAV = [
   { key: 'getpaid', label: 'Get Paid', icon: 'getpaid', title: 'Get Paid', sub: 'Invoices Remi is chasing', ready: true },
   { key: 'insights', label: 'Insights', icon: 'insights', title: 'Insights', sub: 'Last 30 days', ready: true },
   { key: 'customers', label: 'Customers', icon: 'customers', title: 'Customers', sub: 'Everyone Remi has spoken to', ready: true },
+  { key: 'team', label: 'Team', icon: 'team', title: 'Team', sub: 'Who can access this dashboard', ready: true },
   { key: 'settings', label: 'Settings', icon: 'settings', title: 'Settings', sub: 'Your business & how Remi runs', ready: true },
 ];
 
 // Which screens each plan/tier opens. The tier the clinic bought decides the dashboard.
 const PLAN_NAV: Record<string, string[]> = {
-  basic: ['bookings', 'settings'],
-  standard: ['assistant', 'today', 'inbox', 'bookings', 'customers', 'settings'],
+  basic: ['bookings', 'team', 'settings'],
+  standard: ['assistant', 'today', 'inbox', 'bookings', 'customers', 'team', 'settings'],
   complete: NAV.map((n) => n.key),
 };
 
@@ -93,6 +95,7 @@ export function Shell({ onSignOut }: { onSignOut: () => void }) {
           {view === 'getpaid' && <GetPaid />}
           {view === 'insights' && <Insights />}
           {view === 'customers' && <Customers />}
+          {view === 'team' && <Team />}
           {view === 'settings' && <Settings />}
         </div>
       </div>
