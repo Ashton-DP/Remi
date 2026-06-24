@@ -44,33 +44,53 @@ export function buildChaseEmailHtml(o: { senderName: string; invoiceNumber?: str
 </body></html>`;
 }
 
-/** Low-level send. Resend if configured, else console log. */
-export async function sendEmail(o: { to: string; toName?: string | null; subject: string; text: string; html: string; fromName?: string }) {
+/**
+ * Low-level send. Resend if configured, else console log.
+ *
+ * The email goes out AS THE CLINIC, never as Remi:
+ *  - `fromName`  = the clinic's name (the display name the recipient sees)
+ *  - `fromEmail` = the clinic's own verified-domain address when set (true
+ *                  white-label); otherwise Remi's verified sending domain
+ *  - `replyTo`   = the clinic's email, so replies go to the clinic, not us
+ */
+export async function sendEmail(o: {
+  to: string; toName?: string | null; subject: string; text: string; html: string;
+  fromName?: string; fromEmail?: string | null; replyTo?: string | null;
+}) {
   const key = config.email.resendApiKey;
   const fromName = o.fromName || 'Remi';
+  const fromEmail = o.fromEmail || config.email.fromEmail;
   if (!key) {
-    console.log(`[email→${o.to}] (not configured — logging) ${o.subject}`);
+    console.log(`[email] (not configured — logging) from "${fromName}" <${fromEmail}> → ${o.to} · ${o.subject}`);
     return;
   }
+  const payload: any = {
+    from: `${fromName} <${fromEmail}>`,
+    to: [o.toName ? `${o.toName} <${o.to}>` : o.to],
+    subject: o.subject,
+    text: o.text,
+    html: o.html,
+  };
+  if (o.replyTo) payload.reply_to = [o.replyTo];
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from: `${fromName} <${config.email.fromEmail}>`,
-      to: [o.toName ? `${o.toName} <${o.to}>` : o.to],
-      subject: o.subject,
-      text: o.text,
-      html: o.html,
-    }),
+    body: JSON.stringify(payload),
   });
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Resend ${res.status}: ${data?.message || ''}`);
   return data;
 }
 
-/** Send a chase email: parse subject/body, wrap in HTML, send. */
-export async function sendChaseEmail(o: { to: string; toName?: string | null; rawMessage: string; invoiceNumber?: string | null; senderName: string; paymentUrl?: string | null }) {
+/** Send a chase email AS THE CLINIC: parse subject/body, wrap in HTML, send. */
+export async function sendChaseEmail(o: {
+  to: string; toName?: string | null; rawMessage: string; invoiceNumber?: string | null;
+  senderName: string; paymentUrl?: string | null; fromEmail?: string | null; replyTo?: string | null;
+}) {
   const { subject, body } = parseEmailMessage(o.rawMessage);
   const html = buildChaseEmailHtml({ senderName: o.senderName, invoiceNumber: o.invoiceNumber, body, paymentUrl: o.paymentUrl });
-  await sendEmail({ to: o.to, toName: o.toName, subject, text: body, html, fromName: o.senderName });
+  await sendEmail({
+    to: o.to, toName: o.toName, subject, text: body, html,
+    fromName: o.senderName, fromEmail: o.fromEmail, replyTo: o.replyTo,
+  });
 }

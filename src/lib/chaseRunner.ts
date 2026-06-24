@@ -60,7 +60,14 @@ export async function runChaseForClinic(clinicId: string): Promise<number> {
     if (config.email.enabled && inv.contact_email && !(await isSuppressed(clinicId, 'email', emailKey(inv.contact_email)))) {
       try {
         const raw = await generateChaseMessage({ ...base, channel: 'email' });
-        await sendChaseEmail({ to: inv.contact_email, toName: inv.contact_name, rawMessage: raw, invoiceNumber: inv.invoice_number, senderName });
+        await sendChaseEmail({
+          to: inv.contact_email, toName: inv.contact_name, rawMessage: raw,
+          invoiceNumber: inv.invoice_number, senderName,
+          // Send AS THE CLINIC: their own verified-domain address if set, and
+          // always their email as Reply-To so replies reach them, not Remi.
+          fromEmail: clinic.chase_from_email ?? undefined,
+          replyTo: clinic.chase_reply_to ?? undefined,
+        });
         await logInvoiceChase({ invoiceId: inv.id, clinicId, stage, channel: 'email', recipient: inv.contact_email, body: raw });
         sentAny = true;
       } catch (err: any) {
