@@ -20,11 +20,25 @@ const PAY_FIELDS: Record<string, [string, string][]> = {
   paypal: [['client_id', 'Client ID'], ['secret', 'Secret']],
   link: [['url', 'Payment page URL']],
 };
+const DAYS: [string, string][] = [['mon', 'Monday'], ['tue', 'Tuesday'], ['wed', 'Wednesday'], ['thu', 'Thursday'], ['fri', 'Friday'], ['sat', 'Saturday'], ['sun', 'Sunday']];
+type HourRow = { open: string; close: string; enabled: boolean };
+function hydrateHours(h: Record<string, any>): Record<string, HourRow> {
+  const out: Record<string, HourRow> = {};
+  for (const [d] of DAYS) { const v = h?.[d]; out[d] = v && v[0] ? { open: v[0][0], close: v[0][1], enabled: true } : { open: '09:00', close: '17:00', enabled: false }; }
+  return out;
+}
+function buildHours(state: Record<string, HourRow>): Record<string, [string, string][]> {
+  const out: Record<string, [string, string][]> = {};
+  for (const [d] of DAYS) { const v = state[d]; if (v?.enabled) out[d] = [[v.open, v.close]]; }
+  return out;
+}
 
 export function Settings() {
   const [s, setS] = useState<SettingsData | null>(null);
   const [form, setForm] = useState<any>(null);
   const [cadence, setCadence] = useState(DEFAULT_CADENCE);
+  const [services, setServices] = useState<any[]>([]);
+  const [hours, setHours] = useState<Record<string, HourRow>>({});
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -40,6 +54,8 @@ export function Settings() {
       setS(d);
       setForm({ name: d.clinic.name, timezone: d.clinic.timezone, owner_summary_phone: d.clinic.owner_summary_phone, escalation_contact: d.clinic.escalation_contact, knowledge: d.clinic.knowledge, chase_reply_to: d.clinic.chase_reply_to });
       setCadence({ ...DEFAULT_CADENCE, ...(d.clinic.chase_cadence || {}) });
+      setServices(Array.isArray(d.clinic.services) ? d.clinic.services.map((x: any) => ({ ...x })) : []);
+      setHours(hydrateHours(d.clinic.hours || {}));
     }).catch((e) => setErr(e.message));
   }
   useEffect(load, []);
@@ -53,7 +69,12 @@ export function Settings() {
 
   async function save() {
     setSaving(true); setSaved(false);
-    try { await api('/api/settings', { method: 'POST', body: JSON.stringify({ ...form, chase_cadence: cadence }) }); setSaved(true); setTimeout(() => setSaved(false), 2500); }
+    try {
+      const cleanServices = services.filter((sv) => (sv.service || sv.name || '').trim())
+        .map((sv) => ({ service: (sv.service || sv.name || '').trim(), duration_min: Number(sv.duration_min) || 0, price_zar: Number(sv.price_zar) || 0, ...(sv.prep ? { prep: sv.prep } : {}) }));
+      await api('/api/settings', { method: 'POST', body: JSON.stringify({ ...form, chase_cadence: cadence, services_json: cleanServices, hours_json: buildHours(hours) }) });
+      setSaved(true); setTimeout(() => setSaved(false), 2500);
+    }
     catch (e: any) { setErr(e.message); } finally { setSaving(false); }
   }
   async function connectAccounting(provider: string) {
@@ -164,25 +185,43 @@ export function Settings() {
         </div>
       </div>
 
-      <div className="panel">
-        <div className="panel-head"><h2>Services &amp; hours</h2><span className="count">read-only</span></div>
-        {(s.clinic.services?.length ?? 0) === 0 ? (
-          <div className="empty">No services configured.</div>
-        ) : (
-          <table>
-            <thead><tr><th>Service</th><th>Duration</th><th className="right">Price</th></tr></thead>
-            <tbody>
-              {s.clinic.services.map((sv: any, i: number) => (
-                <tr key={i}>
-                  <td className="primary">{sv.service || sv.name || '—'}</td>
-                  <td>{sv.duration_min ? `${sv.duration_min} min` : '—'}</td>
-                  <td className="right amount">{sv.price_zar ? `R${sv.price_zar}` : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      <div className="panel" style={{ marginBottom: 18 }}>
+        <div className="panel-head"><h2>Services</h2>{canEdit && <button className="btn sm" onClick={() => setServices([...services, { service: '', duration_min: 30, price_zar: 0 }])}>+ Add service</button>}</div>
+        <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {services.length === 0 && <div className="faint">No services yet.</div>}
+          {services.map((sv, i) => (
+            <div key={i} className="svc-row">
+              <input className="conn-input" placeholder="Service name" value={sv.service ?? sv.name ?? ''} onChange={(e) => setServices(services.map((x, j) => j === i ? { ...x, service: e.target.value } : x))} disabled={!canEdit} />
+              <input className="conn-input" type="number" placeholder="min" style={{ maxWidth: 90 }} value={sv.duration_min ?? ''} onChange={(e) => setServices(services.map((x, j) => j === i ? { ...x, duration_min: e.target.value } : x))} disabled={!canEdit} />
+              <input className="conn-input" type="number" placeholder="R price" style={{ maxWidth: 110 }} value={sv.price_zar ?? ''} onChange={(e) => setServices(services.map((x, j) => j === i ? { ...x, price_zar: e.target.value } : x))} disabled={!canEdit} />
+              {canEdit && <button className="btn sm danger" onClick={() => setServices(services.filter((_, j) => j !== i))}>Remove</button>}
+            </div>
+          ))}
+        </div>
       </div>
+
+      <div className="panel" style={{ marginBottom: 18 }}>
+        <div className="panel-head"><h2>Opening hours</h2></div>
+        <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {DAYS.map(([d, label]) => {
+            const h = hours[d] ?? { open: '09:00', close: '17:00', enabled: false };
+            return (
+              <div key={d} className="hours-row">
+                <label className="hours-day"><input type="checkbox" checked={h.enabled} disabled={!canEdit} onChange={(e) => setHours({ ...hours, [d]: { ...h, enabled: e.target.checked } })} /> {label}</label>
+                {h.enabled ? (
+                  <div className="hours-times">
+                    <input className="conn-input" type="time" value={h.open} disabled={!canEdit} onChange={(e) => setHours({ ...hours, [d]: { ...h, open: e.target.value } })} />
+                    <span className="faint">to</span>
+                    <input className="conn-input" type="time" value={h.close} disabled={!canEdit} onChange={(e) => setHours({ ...hours, [d]: { ...h, close: e.target.value } })} />
+                  </div>
+                ) : <span className="faint">Closed</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {canEdit && <div className="save-row"><button className="btn primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>{saved && <span className="saved">Saved ✓</span>}</div>}
     </>
   );
 }

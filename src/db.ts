@@ -831,7 +831,7 @@ export async function listClients(clinicId: string, limit = 200) {
 
 /** Update whitelisted clinic settings (Settings screen). Never touches secrets/tokens. */
 export async function updateClinicSettings(clinicId: string, patch: Record<string, any>) {
-  const ALLOWED = ['name', 'timezone', 'knowledge', 'owner_summary_phone', 'escalation_contact', 'default_prep', 'chase_cadence', 'chase_reply_to'];
+  const ALLOWED = ['name', 'timezone', 'knowledge', 'owner_summary_phone', 'escalation_contact', 'default_prep', 'chase_cadence', 'chase_reply_to', 'services_json', 'hours_json'];
   const update: Record<string, any> = {};
   for (const k of ALLOWED) if (k in patch) update[k] = patch[k];
   if (!Object.keys(update).length) return;
