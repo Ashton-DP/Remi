@@ -12,7 +12,16 @@ const rand = (n: number) => 'R' + (n || 0).toLocaleString('en-ZA');
 export function Today() {
   const [d, setD] = useState<TodayData | null>(null);
   const [err, setErr] = useState('');
+  const [resolving, setResolving] = useState<string | null>(null);
   useEffect(() => { api<TodayData>('/api/today').then(setD).catch((e) => setErr(e.message)); }, []);
+
+  async function resolve(id: string) {
+    setResolving(id);
+    try {
+      await api(`/api/escalations/${id}/resolve`, { method: 'POST' });
+      setD((cur) => cur ? { ...cur, needs_you: cur.needs_you.filter((e) => e.id !== id), today: { ...cur.today, open_escalations: Math.max(0, cur.today.open_escalations - 1) } } : cur);
+    } catch (e: any) { setErr(e.message); } finally { setResolving(null); }
+  }
 
   if (err) return <div className="banner error">{err}</div>;
   if (!d) return <div className="empty">Loading…</div>;
@@ -52,7 +61,10 @@ export function Today() {
                   <div className="needs-reason">{e.reason}</div>
                   {e.summary && <div className="needs-summary">{e.summary}</div>}
                 </div>
-                <span className="needs-time">{new Date(e.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span className="needs-time">{new Date(e.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}</span>
+                  <button className="btn sm" disabled={resolving === e.id} onClick={() => resolve(e.id)}>{resolving === e.id ? '…' : 'Resolve'}</button>
+                </div>
               </div>
             ))}
           </div>

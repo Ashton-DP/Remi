@@ -27,6 +27,7 @@ import { requireApiAuth } from './lib/apiAuth';
 import {
   handleMe, handleToday, handleInvoices, handleInvoiceDetail, handleBookings,
   handleConversations, handleConversationDetail, handleInsights, handleAssistant,
+  handleCustomers, handleSetChasing, handleInvoiceActionWrite, handleResolveEscalation,
 } from './routes/api';
 
 const app = express();
@@ -127,7 +128,12 @@ app.get('/api/bookings', requireApiAuth, handleBookings);
 app.get('/api/conversations', requireApiAuth, handleConversations);
 app.get('/api/conversations/:id', requireApiAuth, handleConversationDetail);
 app.get('/api/insights', requireApiAuth, handleInsights);
+app.get('/api/customers', requireApiAuth, handleCustomers);
 app.post('/api/assistant', requireApiAuth, handleAssistant);
+// Phase 3 controls (write actions)
+app.post('/api/chasing', requireApiAuth, handleSetChasing);
+app.post('/api/invoices/:id/action', requireApiAuth, handleInvoiceActionWrite);
+app.post('/api/escalations/:id/resolve', requireApiAuth, handleResolveEscalation);
 
 // Payment links — customers pay an overdue invoice from the chase message.
 app.get('/pay/success', handlePaySuccess);

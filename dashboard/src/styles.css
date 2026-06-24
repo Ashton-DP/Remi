@@ -164,3 +164,17 @@ td .primary { font-weight: 550; } td .secondary { color: var(--faint); font-size
 .copilot-input input:focus { outline: none; border-color: var(--purple); }
 .copilot-input button { width: 46px; border: 0; border-radius: 11px; background: var(--purple); color: #fff; display: grid; place-items: center; }
 .copilot-input button:disabled { opacity: .5; }
+
+/* buttons + toggles (Phase 3 controls) */
+.btn { background: var(--elev); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 9px 14px; font-size: 13px; font-weight: 600; }
+.btn:hover:not(:disabled) { border-color: var(--purple); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.primary { background: var(--purple); border-color: var(--purple); color: #fff; }
+.btn.primary:hover:not(:disabled) { background: #6a5de0; }
+.btn.danger { color: var(--red); border-color: rgba(248,113,113,.4); background: var(--red-bg); }
+.btn.sm { padding: 5px 11px; font-size: 12px; }
+.btn-row { display: flex; gap: 10px; margin: 18px 0 4px; flex-wrap: wrap; }
+.toggle { background: var(--elev); border: 1px solid var(--border); color: var(--muted); border-radius: 20px; padding: 6px 14px; font-size: 12.5px; font-weight: 600; }
+.toggle:hover:not(:disabled) { color: var(--text); border-color: var(--border); }
+.toggle.on { color: var(--amber); border-color: rgba(251,191,36,.4); background: var(--amber-bg); }
+.toggle:disabled { opacity: .5; }

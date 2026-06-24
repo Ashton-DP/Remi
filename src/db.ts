@@ -821,3 +821,10 @@ export async function resolveEscalation(clinicId: string, escalationId: string):
   await supabase.from('escalations').update({ status: 'resolved' }).eq('id', escalationId);
   return true;
 }
+
+/** All clients for a clinic (the Customers view). */
+export async function listClients(clinicId: string, limit = 200) {
+  const { data } = await supabase.from('clients')
+    .select('*').eq('clinic_id', clinicId).order('created_at', { ascending: false }).limit(limit);
+  return data ?? [];
+}

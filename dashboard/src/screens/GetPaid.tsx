@@ -21,15 +21,36 @@ function statusOf(inv: Invoice): { label: string; cls: string } {
 
 export function GetPaid() {
   const [rows, setRows] = useState<Invoice[] | null>(null);
+  const [paused, setPaused] = useState(false);
   const [err, setErr] = useState('');
   const [sel, setSel] = useState<Invoice | null>(null);
   const [chases, setChases] = useState<Chase[] | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => { api<{ invoices: Invoice[] }>('/api/invoices').then((d) => setRows(d.invoices)).catch((e) => setErr(e.message)); }, []);
+  function load() {
+    api<{ invoices: Invoice[]; chasing_paused: boolean }>('/api/invoices')
+      .then((d) => { setRows(d.invoices); setPaused(d.chasing_paused); })
+      .catch((e) => setErr(e.message));
+  }
+  useEffect(load, []);
 
   function open(inv: Invoice) {
     setSel(inv); setChases(null);
     api<{ chases: Chase[] }>(`/api/invoices/${inv.id}`).then((d) => setChases(d.chases)).catch(() => setChases([]));
+  }
+
+  async function toggleChasing() {
+    setBusy(true);
+    try { const r = await api<{ paused: boolean }>('/api/chasing', { method: 'POST', body: JSON.stringify({ paused: !paused }) }); setPaused(r.paused); }
+    catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+  }
+
+  async function act(inv: Invoice, action: 'paid' | 'snooze' | 'dispute') {
+    setBusy(true);
+    try {
+      await api(`/api/invoices/${inv.id}/action`, { method: 'POST', body: JSON.stringify({ action }) });
+      setSel(null); load();
+    } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   }
 
   if (err) return <div className="banner error">{err}</div>;
@@ -38,7 +59,16 @@ export function GetPaid() {
   return (
     <>
       <div className="panel">
-        <div className="panel-head"><h2>Invoices</h2><span className="count">{rows.length} total</span></div>
+        <div className="panel-head">
+          <h2>Invoices</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            {paused && <span className="badge b-amber">Chasing paused</span>}
+            <button className={`toggle ${paused ? 'on' : ''}`} onClick={toggleChasing} disabled={busy}>
+              {paused ? 'Resume chasing' : 'Pause chasing'}
+            </button>
+            <span className="count">{rows.length} total</span>
+          </div>
+        </div>
         {rows.length === 0 ? (
           <div className="empty">No invoices yet. Connect an accounting source or import a CSV to start chasing.</div>
         ) : (
@@ -71,6 +101,14 @@ export function GetPaid() {
           <div className="kv"><span className="k">Status</span><span className="v"><span className={`badge ${statusOf(sel).cls}`}>{statusOf(sel).label}</span></span></div>
           <div className="kv"><span className="k">Source</span><span className="v" style={{ textTransform: 'capitalize' }}>{sel.source || '—'}</span></div>
           <div className="kv"><span className="k">Contact</span><span className="v">{sel.contact_phone || sel.contact_email || '—'}</span></div>
+
+          {sel.status !== 'paid' && (
+            <div className="btn-row">
+              <button className="btn primary" disabled={busy} onClick={() => act(sel, 'paid')}>Mark paid</button>
+              <button className="btn" disabled={busy} onClick={() => act(sel, 'snooze')}>Snooze 5 days</button>
+              <button className="btn danger" disabled={busy} onClick={() => act(sel, 'dispute')}>Dispute</button>
+            </div>
+          )}
 
           <h4 style={{ margin: '22px 0 12px', fontSize: 13 }}>Chase timeline</h4>
           {!chases ? <div className="faint">Loading…</div> : chases.length === 0 ? (

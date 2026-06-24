@@ -4,11 +4,12 @@
  * SPA talks to. More endpoints land here as the dashboard phases roll out.
  */
 import type { Request, Response } from 'express';
-import { getAuth } from '../lib/apiAuth';
+import { getAuth, roleAtLeast } from '../lib/apiAuth';
 import {
   getClinic, getTodaysBookings, countConversations, getChaseableInvoices, getOpenEscalations,
   listInvoices, getInvoiceForClinic, getInvoiceChases, listClinicBookings, listConversations,
-  getConversationForClinic, getReportData,
+  getConversationForClinic, getReportData, listClients,
+  setChasingPaused, snoozeInvoice, markInvoicePaidById, disputeInvoice, resolveEscalation,
 } from '../db';
 import { computeReportStats } from '../report';
 import { computeInsights } from '../dashboard';
@@ -57,11 +58,11 @@ export async function handleToday(req: Request, res: Response) {
 
 // ── Phase 2 read views ───────────────────────────────────────────────────────
 
-/** GET /api/invoices — the Get-Paid list. */
+/** GET /api/invoices — the Get-Paid list + whether chasing is paused. */
 export async function handleInvoices(req: Request, res: Response) {
   const auth = getAuth(req);
-  const invoices = await listInvoices(auth.clinicId);
-  res.json({ invoices });
+  const [invoices, clinic] = await Promise.all([listInvoices(auth.clinicId), getClinic(auth.clinicId)]);
+  res.json({ invoices, chasing_paused: !!clinic?.chasing_paused });
 }
 
 /** GET /api/invoices/:id — one invoice + its chase timeline. */
@@ -118,4 +119,45 @@ export async function handleAssistant(req: Request, res: Response) {
     console.error('[assistant]', e?.message ?? e);
     res.status(502).json({ error: 'The assistant had trouble — please try again.' });
   }
+}
+
+// ── Phase 3 controls (write actions) + Customers ─────────────────────────────
+
+/** GET /api/customers — the clinic's contacts. */
+export async function handleCustomers(req: Request, res: Response) {
+  const auth = getAuth(req);
+  res.json({ customers: await listClients(auth.clinicId) });
+}
+
+/** POST /api/chasing { paused:boolean } — global kill switch. Admin/owner only. */
+export async function handleSetChasing(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const paused = !!req.body?.paused;
+  await setChasingPaused(auth.clinicId, paused);
+  res.json({ ok: true, paused });
+}
+
+/** POST /api/invoices/:id/action { action:'paid'|'snooze'|'dispute', days? }. Admin/owner only. */
+export async function handleInvoiceActionWrite(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const inv = await getInvoiceForClinic(auth.clinicId, String(req.params.id));
+  if (!inv) return res.status(404).json({ error: 'Invoice not found' });
+  const action = String(req.body?.action ?? '');
+  if (action === 'paid') await markInvoicePaidById(inv.id);
+  else if (action === 'dispute') await disputeInvoice(inv.id);
+  else if (action === 'snooze') {
+    const days = Number(req.body?.days) > 0 ? Number(req.body.days) : 5;
+    await snoozeInvoice(inv.id, new Date(Date.now() + days * 86_400_000).toISOString());
+  } else return res.status(400).json({ error: 'Unknown action' });
+  res.json({ ok: true, action });
+}
+
+/** POST /api/escalations/:id/resolve — mark a "needs you" item resolved. Admin/owner only. */
+export async function handleResolveEscalation(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const ok = await resolveEscalation(auth.clinicId, String(req.params.id));
+  res.json({ ok });
 }
