@@ -7,9 +7,9 @@ import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedC
 import { sendProactiveWhatsApp } from './lib/twilio';
 import { runChaseForClinic } from './lib/chaseRunner';
 import { syncInvoicesForClinic } from './lib/invoiceSources';
-import { getClinicsWithInvoiceSource, getClinicsWithPendingEmailDomain, updateClinicEmailDomainStatus } from './db';
+import { getClinicsWithInvoiceSource, getClinicsWithPendingEmailDomain, updateClinicEmailDomainStatus, getChaseableInvoices, getOpenEscalations } from './db';
 import { verifyDomain, getDomain } from './lib/resendDomains';
-import { generateReport, computeReportStats, buildHuddle } from './report';
+import { generateReport, computeReportStats, buildMorningBrief } from './report';
 
 function formatWhen(startAt: string, timezone: string): string {
   return new Date(startAt).toLocaleString('en-ZA', {
@@ -227,9 +227,18 @@ async function maybeRunHuddle() {
   const to = clinic?.owner_summary_phone || clinic?.escalation_contact;
   if (!to) return;
   const tz = clinic.timezone ?? 'Africa/Johannesburg';
-  const bookings = await getTodaysBookings(config.defaultClinicId, tz);
-  await sendProactiveWhatsApp(to, { fallbackBody: buildHuddle(bookings, clinic.name, tz, config.intake.enabled) });
-  console.log('[scheduler] morning huddle sent');
+  const [bookings, overdue, esc] = await Promise.all([
+    getTodaysBookings(config.defaultClinicId, tz),
+    getChaseableInvoices(config.defaultClinicId),
+    getOpenEscalations(config.defaultClinicId),
+  ]);
+  const overdueTotal = (overdue as any[]).reduce((sum, i) => sum + (Number(i.amount_due) || 0), 0);
+  const brief = buildMorningBrief({
+    clinicName: clinic.name, timeZone: tz, intakeEnabled: config.intake.enabled,
+    bookings, overdueCount: (overdue as any[]).length, overdueTotalZar: overdueTotal, escalations: (esc as any[]).length,
+  });
+  await sendProactiveWhatsApp(to, { fallbackBody: brief });
+  console.log('[scheduler] morning brief sent');
 }
 
 /** Daily: re-check clinics whose white-label sending domain is awaiting DNS, and

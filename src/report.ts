@@ -158,3 +158,19 @@ if (require.main === module) {
   const days = parseInt(process.argv[2] ?? '30', 10);
   generateReport(clinicId, days).then(console.log).catch(console.error);
 }
+
+/** Morning brief = the huddle's appointments + overdue-invoice + needs-you summary.
+ *  Deterministic (no LLM) so the scheduled send is reliable + free. */
+export function buildMorningBrief(o: {
+  clinicName: string; timeZone?: string; intakeEnabled?: boolean;
+  bookings: any[]; overdueCount: number; overdueTotalZar: number; escalations: number;
+}): string {
+  const tz = o.timeZone ?? 'Africa/Johannesburg';
+  const R = (n: number) => 'R' + (Number(n) || 0).toLocaleString('en-ZA');
+  let out = buildHuddle(o.bookings, o.clinicName, tz, o.intakeEnabled ?? false);
+  const extra: string[] = [];
+  if (o.overdueCount > 0) extra.push(`💸 ${o.overdueCount} overdue invoice${o.overdueCount === 1 ? '' : 's'} (${R(o.overdueTotalZar)}) — Remi is on it.`);
+  if (o.escalations > 0) extra.push(`🔔 ${o.escalations} item${o.escalations === 1 ? '' : 's'} need you in the dashboard.`);
+  if (extra.length) out += `\n\n${extra.join('\n')}`;
+  return out;
+}
