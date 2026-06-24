@@ -31,6 +31,7 @@ import {
   handleSettings, handleUpdateSettings,
   handleConnectStartAuthed, handleConnectSheetAuthed, handleConnectPayment,
   handleTeam, handleTeamInvite, handleTeamRole, handleTeamRemove,
+  handleCreateBooking, handleCancelBooking,
 } from './routes/api';
 
 const app = express();
@@ -128,6 +129,8 @@ app.get('/api/today', requireApiAuth, handleToday);
 app.get('/api/invoices', requireApiAuth, handleInvoices);
 app.get('/api/invoices/:id', requireApiAuth, handleInvoiceDetail);
 app.get('/api/bookings', requireApiAuth, handleBookings);
+app.post('/api/bookings', requireApiAuth, handleCreateBooking);
+app.post('/api/bookings/:id/cancel', requireApiAuth, handleCancelBooking);
 app.get('/api/conversations', requireApiAuth, handleConversations);
 app.get('/api/conversations/:id', requireApiAuth, handleConversationDetail);
 app.get('/api/insights', requireApiAuth, handleInsights);

@@ -865,3 +865,11 @@ export async function countClinicOwners(clinicId: string): Promise<number> {
   const { data } = await supabase.from('clinic_users').select('user_id').eq('clinic_id', clinicId).eq('role', 'owner');
   return (data ?? []).length;
 }
+
+/** Cancel a booking (scoped to clinic). Returns false if not found. */
+export async function cancelClinicBooking(clinicId: string, bookingId: string): Promise<boolean> {
+  const { data } = await supabase.from('bookings').select('id').eq('clinic_id', clinicId).eq('id', bookingId).maybeSingle();
+  if (!data) return false;
+  await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId);
+  return true;
+}

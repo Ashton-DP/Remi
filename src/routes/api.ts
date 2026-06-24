@@ -14,6 +14,7 @@ import {
   setChasingPaused, snoozeInvoice, markInvoicePaidById, disputeInvoice, resolveEscalation,
   updateClinicSettings, setInvoiceSource, setPaymentConfig,
   linkUserToClinic, listClinicUsers, setClinicUserRole, removeClinicUser, countClinicOwners,
+  getOrCreateClient, setClientName, createBookingRow, scheduleReminders, cancelClinicBooking,
 } from '../db';
 import { computeReportStats } from '../report';
 import { computeInsights } from '../dashboard';
@@ -29,6 +30,7 @@ export async function handleMe(req: Request, res: Response) {
   res.json({
     user: { id: auth.userId, email: auth.email, role: auth.role },
     clinic: clinic ? { id: clinic.id, name: clinic.name, timezone: clinic.timezone ?? 'Africa/Johannesburg' } : null,
+    plan: clinic?.plan ?? 'complete',
   });
 }
 
@@ -307,4 +309,35 @@ export async function handleTeamRemove(req: Request, res: Response) {
   if (target?.role === 'owner' && (await countClinicOwners(auth.clinicId)) <= 1) return res.status(400).json({ error: "Can't remove the only owner." });
   await removeClinicUser(auth.clinicId, userId);
   res.json({ ok: true });
+}
+
+// ── Appointments: create + cancel (Basic clinic tier) — admin/owner only ─────
+
+/** POST /api/bookings { client_name, phone, service, start_at, duration_min } */
+export async function handleCreateBooking(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const name = String(req.body?.client_name ?? '').trim();
+  const phone = String(req.body?.phone ?? '').trim();
+  const service = String(req.body?.service ?? '').trim();
+  const startAt = String(req.body?.start_at ?? '');
+  const dur = Number(req.body?.duration_min) > 0 ? Number(req.body.duration_min) : 30;
+  if (!service || !startAt || (!phone && !name)) return res.status(400).json({ error: 'Service, time and a contact are required.' });
+  const startDate = new Date(startAt);
+  if (isNaN(startDate.getTime())) return res.status(400).json({ error: 'Invalid date/time.' });
+
+  const { client } = await getOrCreateClient(auth.clinicId, phone || `walkin-${Date.now()}`);
+  if (name) await setClientName(client.id, name);
+  const endAt = new Date(startDate.getTime() + dur * 60_000).toISOString();
+  const booking = await createBookingRow({ clinicId: auth.clinicId, clientId: client.id, service, startAt: startDate.toISOString(), endAt, calendarEventId: 'manual', source: 'dashboard' });
+  await scheduleReminders(booking.id, startDate.toISOString()).catch(() => {});
+  res.json({ ok: true });
+}
+
+/** POST /api/bookings/:id/cancel */
+export async function handleCancelBooking(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const ok = await cancelClinicBooking(auth.clinicId, String(req.params.id));
+  res.json({ ok });
 }
