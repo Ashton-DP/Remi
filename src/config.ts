@@ -21,6 +21,9 @@ export const config = {
   model: opt('ANTHROPIC_MODEL', 'claude-opus-4-8'),
   supabaseUrl: req('SUPABASE_URL'),
   supabaseServiceKey: req('SUPABASE_SERVICE_KEY'),
+  // Public anon key — used by the dashboard SPA for Supabase Auth (login). Safe
+  // to expose to the browser; RLS + API scoping enforce access.
+  supabaseAnonKey: opt('SUPABASE_ANON_KEY'),
   twilio: {
     accountSid: req('TWILIO_ACCOUNT_SID'),
     authToken: req('TWILIO_AUTH_TOKEN'),

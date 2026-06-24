@@ -744,3 +744,25 @@ export async function getOverdueChasedInvoices(clinicId: string) {
     .gt('chase_stage', 0);
   return data ?? [];
 }
+
+// ── Dashboard accounts (Supabase Auth user ↔ clinic ↔ role) ──────────────────
+
+/** The clinic + role a logged-in dashboard user belongs to (one for now). */
+export async function getUserClinic(userId: string): Promise<{ clinic_id: string; role: string } | null> {
+  const { data } = await supabase
+    .from('clinic_users')
+    .select('clinic_id,role')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return data ?? null;
+}
+
+/** Link a user to a clinic with a role (done-for-you onboarding / admin). */
+export async function linkUserToClinic(userId: string, clinicId: string, role = 'owner') {
+  const { error } = await supabase
+    .from('clinic_users')
+    .upsert({ user_id: userId, clinic_id: clinicId, role }, { onConflict: 'user_id,clinic_id' });
+  if (error) throw new Error(`linkUserToClinic: ${error.message}`);
+}
