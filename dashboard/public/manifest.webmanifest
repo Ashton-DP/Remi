@@ -1,0 +1,13 @@
+{
+  "name": "Remi — Command Centre",
+  "short_name": "Remi",
+  "description": "See and control everything Remi does for your business.",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#0a0b0f",
+  "theme_color": "#0a0b0f",
+  "icons": [
+    { "src": "/logo-profile.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
