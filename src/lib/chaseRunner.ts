@@ -14,6 +14,7 @@ import {
 import { sendProactiveWhatsApp } from './twilio';
 import { sendChaseEmail } from './email';
 import { generateChaseMessage } from './chaseMessage';
+import { getPaymentProvider, payUrlForInvoice } from './payments';
 import { nextChaseStage, daysOverdue, phoneKey, emailKey, DEFAULT_CADENCE, type ChaseCadence } from './chase';
 
 export async function runChaseForClinic(clinicId: string): Promise<number> {
@@ -27,6 +28,7 @@ export async function runChaseForClinic(clinicId: string): Promise<number> {
   const cadence: ChaseCadence = clinic.chase_cadence ?? DEFAULT_CADENCE;
   const senderName: string = clinic.name ?? 'our team';
   const phoneChannel = config.twilio.channel; // 'whatsapp' | 'sms'
+  const hasPay = getPaymentProvider(clinic) !== null; // a "Pay now" link is available
   const invoices = await getChaseableInvoices(clinicId);
   let chased = 0;
 
@@ -38,16 +40,19 @@ export async function runChaseForClinic(clinicId: string): Promise<number> {
     );
     if (!stage) continue;
 
+    const payUrl = hasPay ? payUrlForInvoice(inv.id) : null;
     const base = {
       contactName: inv.contact_name, invoiceNumber: inv.invoice_number, amount: inv.amount_due,
       currency: inv.currency, daysOverdue: overdue, dueDate: inv.due_date, stage, senderName,
+      hasPayLink: hasPay,
     };
     let sentAny = false;
 
     // ── Phone (WhatsApp / SMS) ──────────────────────────────────────────────
     if (inv.contact_phone && !(await isSuppressed(clinicId, phoneChannel, phoneKey(inv.contact_phone)))) {
       try {
-        const body = await generateChaseMessage({ ...base, channel: phoneChannel });
+        const msg = await generateChaseMessage({ ...base, channel: phoneChannel });
+        const body = payUrl ? `${msg}\n\nPay now: ${payUrl}` : msg;
         await sendProactiveWhatsApp(inv.contact_phone, { fallbackBody: body });
         await logInvoiceChase({ invoiceId: inv.id, clinicId, stage, channel: phoneChannel, recipient: inv.contact_phone, body });
         sentAny = true;
@@ -62,7 +67,7 @@ export async function runChaseForClinic(clinicId: string): Promise<number> {
         const raw = await generateChaseMessage({ ...base, channel: 'email' });
         await sendChaseEmail({
           to: inv.contact_email, toName: inv.contact_name, rawMessage: raw,
-          invoiceNumber: inv.invoice_number, senderName,
+          invoiceNumber: inv.invoice_number, senderName, paymentUrl: payUrl,
           // Send AS THE CLINIC. Use their own From address only once their domain
           // is VERIFIED in Resend (else it'd bounce/spam) — until then it's
           // send-on-behalf (clinic name on Remi's domain). Reply-To always routes

@@ -22,6 +22,7 @@ import { handleStripeWebhook } from './routes/stripeWebhook';
 import { handleInvoiceImport, handleInvoiceList, handleSourcePreview } from './routes/invoices';
 import { handleConnectStart, handleConnectCallback, handleConnectSheet } from './routes/connect';
 import { handleEmailDomainSetup, handleEmailDomainVerify, handleEmailDomainStatus } from './routes/emailDomain';
+import { handlePay, handlePaySuccess, handlePayCancel, handlePayfastNotify } from './routes/pay';
 
 const app = express();
 // Render/Railway terminate TLS and forward — trust the proxy so forwarded
@@ -94,6 +95,12 @@ app.post('/intake', webhookLimiter, handleIntakeSubmit);
 app.post('/invoices/import', webhookLimiter, handleInvoiceImport);
 app.get('/invoices', webhookLimiter, handleInvoiceList);
 app.get('/invoices/source-preview', webhookLimiter, handleSourcePreview); // read-only: what the connected source exposes
+
+// Payment links — customers pay an overdue invoice from the chase message.
+app.get('/pay/success', handlePaySuccess);
+app.get('/pay/cancel', handlePayCancel);
+app.get('/pay/:invoiceId', handlePay);
+app.post('/webhooks/payfast', webhookLimiter, handlePayfastNotify);
 
 // Invoice sources — connect an accounting tool so invoices auto-load.
 app.post('/connect/gsheet', webhookLimiter, handleConnectSheet);   // Google Sheet (no OAuth)

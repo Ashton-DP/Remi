@@ -719,3 +719,16 @@ export async function getClinicsWithPendingEmailDomain() {
     .not('email_domain_id', 'is', null);
   return data ?? [];
 }
+
+/** Fetch one invoice by id (for the /pay route + payment webhooks). */
+export async function getInvoiceById(id: string) {
+  const { data } = await supabase.from('invoices').select('*').eq('id', id).maybeSingle();
+  return data;
+}
+
+/** Mark an invoice paid by id (idempotent — only flips overdue→paid). */
+export async function markInvoicePaidById(id: string) {
+  await supabase.from('invoices')
+    .update({ status: 'paid', paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', id).eq('status', 'overdue');
+}

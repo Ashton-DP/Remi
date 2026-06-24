@@ -105,6 +105,13 @@ export const config = {
     hour: parseInt(opt('CHASE_HOUR', '9'), 10),
     importToken: opt('CHASE_IMPORT_TOKEN') || opt('ONBOARD_TOKEN'),
   },
+  // Payment links in chase messages. Each clinic brings its own provider +
+  // credentials (PayFast merchant / Paystack secret / a static pay link),
+  // stored on the clinic. PUBLIC_BASE_URL is where /pay/:id is served.
+  payments: {
+    publicBase: opt('PUBLIC_BASE_URL', 'https://www.remireception.com'),
+    payfastSandbox: opt('PAYFAST_SANDBOX') === 'true',
+  },
   // Email channel for invoice chasing (invoice contacts usually have email, not
   // phone). Sends via Resend when RESEND_API_KEY is set; otherwise logs only.
   // EMAIL_FROM must be on a domain verified in Resend (e.g. billing@remireception.com).

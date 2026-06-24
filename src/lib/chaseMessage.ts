@@ -57,6 +57,7 @@ export type ChaseMsgInput = {
   stage: number;
   senderName: string;
   channel: 'whatsapp' | 'sms' | 'email';
+  hasPayLink?: boolean;
 };
 
 /** Generate a chase message; returns AI text on success, deterministic fallback otherwise. */
@@ -95,6 +96,7 @@ ${i.stage === 1 ? '- Friendly; assume an oversight. A polite nudge, no pressure.
 ${i.stage === 2 ? '- Firm but professional. Note it is a follow-up; ask for a specific payment date.' : ''}
 ${i.stage === 3 ? `- Serious final notice. ${tier === 'high' ? 'State that non-payment will be referred to collections.' : 'Mention further steps may follow.'} Professional, not threatening.` : ''}
 ${tierGuidance}
+${i.hasPayLink ? '- A secure payment link is included separately. End with a brief call to action to use the payment link (e.g. "you can settle it via the secure link below") — do NOT write a URL yourself.' : ''}
 
 ${i.channel === 'email'
   ? `Format: first line "Subject: <short subject>", then a blank line, then the body addressed to "${name}", signed off as "${i.senderName}".`
