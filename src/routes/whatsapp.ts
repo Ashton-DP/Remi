@@ -13,6 +13,7 @@ import {
 import { runAgent } from '../brain/agent';
 import { twimlReply } from '../lib/twilio';
 import { captureError } from '../lib/monitoring';
+import { tryHandleInvoiceReply } from '../lib/chaseReply';
 
 /** Twilio inbound WhatsApp webhook (application/x-www-form-urlencoded). */
 export async function handleInboundWhatsApp(req: Request, res: Response) {
@@ -41,6 +42,17 @@ export async function handleInboundWhatsApp(req: Request, res: Response) {
 
     const { client: customer, isNew } = await getOrCreateClient(clinic.id, from);
     const convo = await getOrCreateConversation(clinic.id, customer.id);
+
+    // Invoice chase reply? (paid / snooze / dispute / stop from a recently-chased
+    // contact). Handled directly — never routed to the receptionist brain. Returns
+    // null for ordinary messages, which fall through to the normal flow below.
+    const invoiceReply = await tryHandleInvoiceReply(clinic.id, from, body);
+    if (invoiceReply) {
+      await saveMessage(convo.id, 'in', body);
+      await saveMessage(convo.id, 'out', invoiceReply);
+      res.type('text/xml').send(twimlReply(invoiceReply));
+      return;
+    }
 
     // POPIA opt-out
     if (/^stop$/i.test(body)) {

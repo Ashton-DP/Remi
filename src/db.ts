@@ -732,3 +732,15 @@ export async function markInvoicePaidById(id: string) {
     .update({ status: 'paid', paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq('id', id).eq('status', 'overdue');
 }
+
+/** Overdue invoices for a clinic that have already been chased (stage > 0) —
+ *  used to match an inbound reply to the right invoices. */
+export async function getOverdueChasedInvoices(clinicId: string) {
+  const { data } = await supabase
+    .from('invoices')
+    .select('id,contact_phone,invoice_number,source')
+    .eq('clinic_id', clinicId)
+    .eq('status', 'overdue')
+    .gt('chase_stage', 0);
+  return data ?? [];
+}
