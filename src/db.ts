@@ -831,10 +831,17 @@ export async function listClients(clinicId: string, limit = 200) {
 
 /** Update whitelisted clinic settings (Settings screen). Never touches secrets/tokens. */
 export async function updateClinicSettings(clinicId: string, patch: Record<string, any>) {
-  const ALLOWED = ['name', 'timezone', 'knowledge', 'owner_summary_phone', 'escalation_contact', 'default_prep', 'chase_cadence'];
+  const ALLOWED = ['name', 'timezone', 'knowledge', 'owner_summary_phone', 'escalation_contact', 'default_prep', 'chase_cadence', 'chase_reply_to'];
   const update: Record<string, any> = {};
   for (const k of ALLOWED) if (k in patch) update[k] = patch[k];
   if (!Object.keys(update).length) return;
   const { error } = await supabase.from('clinics').update(update).eq('id', clinicId);
   if (error) throw new Error(`updateClinicSettings: ${error.message}`);
+}
+
+/** Set a clinic's payment provider + its credentials (Settings → Connections). */
+export async function setPaymentConfig(clinicId: string, provider: string, config: any) {
+  const { error } = await supabase.from('clinics')
+    .update({ payment_provider: provider, payment_config: config }).eq('id', clinicId);
+  if (error) throw new Error(`setPaymentConfig: ${error.message}`);
 }

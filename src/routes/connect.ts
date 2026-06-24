@@ -8,7 +8,7 @@ import { setInvoiceSource } from '../db';
 // State = "<clinicId>.<hmac>" so the OAuth callback can trust which clinic to
 // attach the connection to (signed with the same secret as intake links).
 const STATE_SECRET = config.intake.secret;
-function signState(clinicId: string): string {
+export function signState(clinicId: string): string {
   const sig = crypto.createHmac('sha256', STATE_SECRET).update(clinicId).digest('hex').slice(0, 24);
   return `${clinicId}.${sig}`;
 }

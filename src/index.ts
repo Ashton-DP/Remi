@@ -29,6 +29,7 @@ import {
   handleConversations, handleConversationDetail, handleInsights, handleAssistant,
   handleCustomers, handleSetChasing, handleInvoiceActionWrite, handleResolveEscalation,
   handleSettings, handleUpdateSettings,
+  handleConnectStartAuthed, handleConnectSheetAuthed, handleConnectPayment,
 } from './routes/api';
 
 const app = express();
@@ -132,6 +133,9 @@ app.get('/api/insights', requireApiAuth, handleInsights);
 app.get('/api/customers', requireApiAuth, handleCustomers);
 app.get('/api/settings', requireApiAuth, handleSettings);
 app.post('/api/settings', requireApiAuth, handleUpdateSettings);
+app.get('/api/connect/:provider/start', requireApiAuth, handleConnectStartAuthed);
+app.post('/api/connect/gsheet', requireApiAuth, handleConnectSheetAuthed);
+app.post('/api/connect/payment', requireApiAuth, handleConnectPayment);
 app.post('/api/assistant', requireApiAuth, handleAssistant);
 // Phase 3 controls (write actions)
 app.post('/api/chasing', requireApiAuth, handleSetChasing);

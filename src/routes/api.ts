@@ -10,11 +10,14 @@ import {
   listInvoices, getInvoiceForClinic, getInvoiceChases, listClinicBookings, listConversations,
   getConversationForClinic, getReportData, listClients,
   setChasingPaused, snoozeInvoice, markInvoicePaidById, disputeInvoice, resolveEscalation,
-  updateClinicSettings,
+  updateClinicSettings, setInvoiceSource, setPaymentConfig,
 } from '../db';
 import { computeReportStats } from '../report';
 import { computeInsights } from '../dashboard';
 import { runAssistant } from '../brain/assistant';
+import { getInvoiceSource } from '../lib/invoiceSources';
+import { signState } from './connect';
+import { config } from '../config';
 
 /** GET /api/me — who am I + which clinic/role. */
 export async function handleMe(req: Request, res: Response) {
@@ -177,6 +180,7 @@ export async function handleSettings(req: Request, res: Response) {
       name: c.name ?? '', timezone: c.timezone ?? 'Africa/Johannesburg',
       knowledge: c.knowledge ?? '', owner_summary_phone: c.owner_summary_phone ?? '',
       escalation_contact: c.escalation_contact ?? '', chase_cadence: c.chase_cadence ?? null,
+      chase_reply_to: c.chase_reply_to ?? '',
       services: c.services_json ?? [], hours: c.hours_json ?? {},
     },
     connections: {
@@ -194,5 +198,40 @@ export async function handleUpdateSettings(req: Request, res: Response) {
   const auth = getAuth(req);
   if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
   await updateClinicSettings(auth.clinicId, req.body ?? {});
+  res.json({ ok: true });
+}
+
+// ── Self-serve connections (dashboard-authed; admin/owner only) ──────────────
+
+/** GET /api/connect/:provider/start — OAuth authorize URL for Xero/QBO/Sage. */
+export async function handleConnectStartAuthed(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const provider = String(req.params.provider);
+  const src = getInvoiceSource(provider);
+  if (!src || src.kind !== 'oauth' || !src.getAuthUrl) return res.status(400).json({ error: 'Unknown provider' });
+  const creds = (config.invoiceSources as any)[provider];
+  if (!creds?.clientId) return res.status(503).json({ error: `${src.label} isn't configured on the server yet.` });
+  res.json({ url: src.getAuthUrl(signState(auth.clinicId)) });
+}
+
+/** POST /api/connect/gsheet { sheet_url } — connect a published-CSV Google Sheet. */
+export async function handleConnectSheetAuthed(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const url = String(req.body?.sheet_url ?? '').trim();
+  if (!/^https?:\/\//.test(url)) return res.status(400).json({ error: 'A published-to-web CSV URL is required.' });
+  await setInvoiceSource(auth.clinicId, 'gsheet', null, { sheet_url: url });
+  res.json({ ok: true });
+}
+
+/** POST /api/connect/payment { provider, config } — set the clinic's payment rail. */
+export async function handleConnectPayment(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const provider = String(req.body?.provider ?? '');
+  const cfg = req.body?.config ?? {};
+  if (!['payfast', 'paystack', 'stripe', 'paypal', 'link'].includes(provider)) return res.status(400).json({ error: 'Unknown provider' });
+  await setPaymentConfig(auth.clinicId, provider, { [provider]: cfg });
   res.json({ ok: true });
 }
