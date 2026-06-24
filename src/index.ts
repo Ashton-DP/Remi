@@ -21,6 +21,7 @@ import { renderIntakeForm, handleIntakeSubmit } from './routes/intake';
 import { handleStripeWebhook } from './routes/stripeWebhook';
 import { handleInvoiceImport, handleInvoiceList, handleSourcePreview } from './routes/invoices';
 import { handleConnectStart, handleConnectCallback, handleConnectSheet } from './routes/connect';
+import { handleEmailDomainSetup, handleEmailDomainVerify, handleEmailDomainStatus } from './routes/emailDomain';
 
 const app = express();
 // Render/Railway terminate TLS and forward — trust the proxy so forwarded
@@ -96,6 +97,10 @@ app.get('/invoices/source-preview', webhookLimiter, handleSourcePreview); // rea
 
 // Invoice sources — connect an accounting tool so invoices auto-load.
 app.post('/connect/gsheet', webhookLimiter, handleConnectSheet);   // Google Sheet (no OAuth)
+// White-label email sending domain (Resend) — provision / verify / status
+app.post('/connect/email-domain', webhookLimiter, handleEmailDomainSetup);
+app.post('/connect/email-domain/verify', webhookLimiter, handleEmailDomainVerify);
+app.get('/connect/email-domain', webhookLimiter, handleEmailDomainStatus);
 app.get('/connect/:provider', webhookLimiter, handleConnectStart);          // OAuth start
 app.get('/connect/:provider/callback', webhookLimiter, handleConnectCallback); // OAuth callback
 

@@ -10,7 +10,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx tests/booking.test.ts && tsx tests/dashboardAuth.test.ts && tsx tests/reliability.test.ts && tsx tests/reportAndReminders.test.ts && tsx tests/rateLimit.test.ts && tsx tests/messagingChannel.test.ts && tsx tests/insights.test.ts && tsx tests/onboard.test.ts && tsx tests/intake.test.ts && tsx tests/knowledge.test.ts && tsx tests/chase.test.ts && tsx tests/invoiceSources.test.ts",
+    "test": "tsx tests/booking.test.ts && tsx tests/dashboardAuth.test.ts && tsx tests/reliability.test.ts && tsx tests/reportAndReminders.test.ts && tsx tests/rateLimit.test.ts && tsx tests/messagingChannel.test.ts && tsx tests/insights.test.ts && tsx tests/onboard.test.ts && tsx tests/intake.test.ts && tsx tests/knowledge.test.ts && tsx tests/chase.test.ts && tsx tests/invoiceSources.test.ts && tsx tests/emailDomain.test.ts",
     "scheduler": "tsx src/scheduler.ts",
     "report": "tsx src/report.ts",
     "onboard": "tsx src/onboard.ts"

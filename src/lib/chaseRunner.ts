@@ -63,9 +63,11 @@ export async function runChaseForClinic(clinicId: string): Promise<number> {
         await sendChaseEmail({
           to: inv.contact_email, toName: inv.contact_name, rawMessage: raw,
           invoiceNumber: inv.invoice_number, senderName,
-          // Send AS THE CLINIC: their own verified-domain address if set, and
-          // always their email as Reply-To so replies reach them, not Remi.
-          fromEmail: clinic.chase_from_email ?? undefined,
+          // Send AS THE CLINIC. Use their own From address only once their domain
+          // is VERIFIED in Resend (else it'd bounce/spam) — until then it's
+          // send-on-behalf (clinic name on Remi's domain). Reply-To always routes
+          // replies to the clinic and needs no verification.
+          fromEmail: clinic.email_domain_status === 'verified' ? (clinic.chase_from_email ?? undefined) : undefined,
           replyTo: clinic.chase_reply_to ?? undefined,
         });
         await logInvoiceChase({ invoiceId: inv.id, clinicId, stage, channel: 'email', recipient: inv.contact_email, body: raw });

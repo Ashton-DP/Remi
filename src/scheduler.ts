@@ -7,7 +7,8 @@ import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedC
 import { sendProactiveWhatsApp } from './lib/twilio';
 import { runChaseForClinic } from './lib/chaseRunner';
 import { syncInvoicesForClinic } from './lib/invoiceSources';
-import { getClinicsWithInvoiceSource } from './db';
+import { getClinicsWithInvoiceSource, getClinicsWithPendingEmailDomain, updateClinicEmailDomainStatus } from './db';
+import { verifyDomain, getDomain } from './lib/resendDomains';
 import { generateReport, computeReportStats, buildHuddle } from './report';
 
 function formatWhen(startAt: string, timezone: string): string {
@@ -231,6 +232,26 @@ async function maybeRunHuddle() {
   console.log('[scheduler] morning huddle sent');
 }
 
+/** Daily: re-check clinics whose white-label sending domain is awaiting DNS, and
+ *  flip them to verified once Resend confirms — so they auto-upgrade to sending
+ *  from their own domain with no manual step. */
+async function verifyPendingEmailDomains() {
+  if (!config.email.enabled) return;
+  const pending = await getClinicsWithPendingEmailDomain();
+  for (const c of pending as any[]) {
+    try {
+      await verifyDomain(c.email_domain_id);
+      const d = await getDomain(c.email_domain_id);
+      if (d.status === 'verified') {
+        await updateClinicEmailDomainStatus(c.id, 'verified', d.records);
+        console.log(`[email-domains] ${c.email_domain} verified → ${c.name} now sends white-label`);
+      }
+    } catch (e: any) {
+      console.error(`[email-domains] verify ${c.email_domain} failed:`, e?.message ?? e);
+    }
+  }
+}
+
 async function maybeRunDailyJobs() {
   const { dateStr, hour } = clinicNow();
   if (dateStr === _lastDailyDate || hour < DAILY_HOUR) return;
@@ -239,6 +260,8 @@ async function maybeRunDailyJobs() {
   // POPIA data-retention purge — runs regardless of a default clinic.
   const retentionDays = parseInt(process.env.RETENTION_DAYS ?? '730', 10);
   await purgeExpiredData(retentionDays).catch((e) => console.error('[retention]', e));
+  // Auto-verify pending white-label email domains (flips to live once DNS lands).
+  await verifyPendingEmailDomains().catch((e) => console.error('[email-domains]', e));
   if (config.defaultClinicId) {
     await ownerSummary(config.defaultClinicId).catch((e) => console.error('[ownerSummary]', e));
     await reactivation(config.defaultClinicId).catch((e) => console.error('[reactivation]', e));

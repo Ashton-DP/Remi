@@ -685,3 +685,37 @@ export async function reconcileSourceInvoices(clinicId: string, source: string, 
   }
   return cleared.length;
 }
+
+// ── White-label email sending domains (Resend Domains API) ───────────────────
+
+/** Store a clinic's newly-provisioned sending domain (pending verification). */
+export async function setClinicEmailDomain(clinicId: string, o: {
+  domain: string; id: string; status: string; records: any; fromEmail: string; replyTo?: string;
+}) {
+  const { error } = await supabase.from('clinics').update({
+    email_domain: o.domain,
+    email_domain_id: o.id,
+    email_domain_status: o.status,
+    email_domain_records: o.records,
+    chase_from_email: o.fromEmail,
+    chase_reply_to: o.replyTo ?? o.fromEmail,
+  }).eq('id', clinicId);
+  if (error) throw new Error(`setClinicEmailDomain: ${error.message}`);
+}
+
+export async function updateClinicEmailDomainStatus(clinicId: string, status: string, records?: any) {
+  const u: any = { email_domain_status: status };
+  if (records) u.email_domain_records = records;
+  const { error } = await supabase.from('clinics').update(u).eq('id', clinicId);
+  if (error) throw new Error(`updateClinicEmailDomainStatus: ${error.message}`);
+}
+
+/** Clinics whose sending domain is still awaiting DNS verification. */
+export async function getClinicsWithPendingEmailDomain() {
+  const { data } = await supabase
+    .from('clinics')
+    .select('id,name,email_domain,email_domain_id,email_domain_status')
+    .eq('email_domain_status', 'pending')
+    .not('email_domain_id', 'is', null);
+  return data ?? [];
+}
