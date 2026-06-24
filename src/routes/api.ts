@@ -4,6 +4,8 @@
  * SPA talks to. More endpoints land here as the dashboard phases roll out.
  */
 import type { Request, Response } from 'express';
+import crypto from 'node:crypto';
+import { supabase } from '../lib/supabase';
 import { getAuth, roleAtLeast } from '../lib/apiAuth';
 import {
   getClinic, getTodaysBookings, countConversations, getChaseableInvoices, getOpenEscalations,
@@ -11,6 +13,7 @@ import {
   getConversationForClinic, getReportData, listClients,
   setChasingPaused, snoozeInvoice, markInvoicePaidById, disputeInvoice, resolveEscalation,
   updateClinicSettings, setInvoiceSource, setPaymentConfig,
+  linkUserToClinic, listClinicUsers, setClinicUserRole, removeClinicUser, countClinicOwners,
 } from '../db';
 import { computeReportStats } from '../report';
 import { computeInsights } from '../dashboard';
@@ -233,5 +236,75 @@ export async function handleConnectPayment(req: Request, res: Response) {
   const cfg = req.body?.config ?? {};
   if (!['payfast', 'paystack', 'stripe', 'paypal', 'link'].includes(provider)) return res.status(400).json({ error: 'Unknown provider' });
   await setPaymentConfig(auth.clinicId, provider, { [provider]: cfg });
+  res.json({ ok: true });
+}
+
+// ── Team / users (owner only for writes) ─────────────────────────────────────
+
+const ROLES = ['owner', 'admin', 'staff'];
+
+/** GET /api/team — clinic members with emails. */
+export async function handleTeam(req: Request, res: Response) {
+  const auth = getAuth(req);
+  const members = await listClinicUsers(auth.clinicId);
+  const out: any[] = [];
+  for (const m of members as any[]) {
+    let email: string | null = null;
+    try { const { data } = await supabase.auth.admin.getUserById(m.user_id); email = data.user?.email ?? null; } catch { /* ignore */ }
+    out.push({ user_id: m.user_id, role: m.role, email, you: m.user_id === auth.userId });
+  }
+  res.json({ members: out, can_manage: roleAtLeast(auth.role, 'owner') });
+}
+
+/** POST /api/team/invite { email, role } — create + link a member. Returns a temp password. */
+export async function handleTeamInvite(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'owner')) return res.status(403).json({ error: 'Only an owner can add team members.' });
+  const email = String(req.body?.email ?? '').trim().toLowerCase();
+  const role = ROLES.includes(req.body?.role) ? req.body.role : 'staff';
+  if (!email.includes('@')) return res.status(400).json({ error: 'A valid email is required.' });
+
+  const password = crypto.randomBytes(9).toString('base64url');
+  const { data, error } = await supabase.auth.admin.createUser({ email, password, email_confirm: true });
+  if (error) {
+    if (/registered|already|exists/i.test(error.message)) {
+      const { data: list } = await supabase.auth.admin.listUsers();
+      const u = (list?.users ?? []).find((x: any) => (x.email || '').toLowerCase() === email);
+      if (!u) return res.status(502).json({ error: 'That user exists but could not be located.' });
+      await linkUserToClinic(u.id, auth.clinicId, role);
+      return res.json({ ok: true, existing: true, email });
+    }
+    return res.status(502).json({ error: error.message });
+  }
+  await linkUserToClinic(data.user!.id, auth.clinicId, role);
+  res.json({ ok: true, email, temp_password: password });
+}
+
+/** POST /api/team/:userId/role { role }. Owner only; can't demote the only owner. */
+export async function handleTeamRole(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'owner')) return res.status(403).json({ error: 'Only an owner can change roles.' });
+  const userId = String(req.params.userId);
+  const role = ROLES.includes(req.body?.role) ? req.body.role : null;
+  if (!role) return res.status(400).json({ error: 'Invalid role' });
+  if (role !== 'owner') {
+    const members = await listClinicUsers(auth.clinicId);
+    const target = (members as any[]).find((m) => m.user_id === userId);
+    if (target?.role === 'owner' && (await countClinicOwners(auth.clinicId)) <= 1) return res.status(400).json({ error: "You can't demote the only owner." });
+  }
+  await setClinicUserRole(auth.clinicId, userId, role);
+  res.json({ ok: true });
+}
+
+/** DELETE /api/team/:userId — remove from the clinic. Owner only; not self/last owner. */
+export async function handleTeamRemove(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'owner')) return res.status(403).json({ error: 'Only an owner can remove members.' });
+  const userId = String(req.params.userId);
+  if (userId === auth.userId) return res.status(400).json({ error: "You can't remove yourself." });
+  const members = await listClinicUsers(auth.clinicId);
+  const target = (members as any[]).find((m) => m.user_id === userId);
+  if (target?.role === 'owner' && (await countClinicOwners(auth.clinicId)) <= 1) return res.status(400).json({ error: "Can't remove the only owner." });
+  await removeClinicUser(auth.clinicId, userId);
   res.json({ ok: true });
 }

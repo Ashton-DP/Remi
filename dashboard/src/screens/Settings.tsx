@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { TeamPanel } from '../components/TeamPanel';
 
 type SettingsData = {
   role: string;
@@ -184,6 +185,8 @@ export function Settings() {
 
         </div>
       </div>
+
+      <TeamPanel />
 
       <div className="panel" style={{ marginBottom: 18 }}>
         <div className="panel-head"><h2>Services</h2>{canEdit && <button className="btn sm" onClick={() => setServices([...services, { service: '', duration_min: 30, price_zar: 0 }])}>+ Add service</button>}</div>

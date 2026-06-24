@@ -845,3 +845,23 @@ export async function setPaymentConfig(clinicId: string, provider: string, confi
     .update({ payment_provider: provider, payment_config: config }).eq('id', clinicId);
   if (error) throw new Error(`setPaymentConfig: ${error.message}`);
 }
+
+// ── Team / users (dashboard members) ─────────────────────────────────────────
+
+export async function listClinicUsers(clinicId: string) {
+  const { data } = await supabase.from('clinic_users')
+    .select('user_id,role,created_at').eq('clinic_id', clinicId).order('created_at', { ascending: true });
+  return data ?? [];
+}
+export async function setClinicUserRole(clinicId: string, userId: string, role: string) {
+  const { error } = await supabase.from('clinic_users').update({ role }).eq('clinic_id', clinicId).eq('user_id', userId);
+  if (error) throw new Error(`setClinicUserRole: ${error.message}`);
+}
+export async function removeClinicUser(clinicId: string, userId: string) {
+  const { error } = await supabase.from('clinic_users').delete().eq('clinic_id', clinicId).eq('user_id', userId);
+  if (error) throw new Error(`removeClinicUser: ${error.message}`);
+}
+export async function countClinicOwners(clinicId: string): Promise<number> {
+  const { data } = await supabase.from('clinic_users').select('user_id').eq('clinic_id', clinicId).eq('role', 'owner');
+  return (data ?? []).length;
+}

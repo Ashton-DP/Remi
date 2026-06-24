@@ -30,6 +30,7 @@ import {
   handleCustomers, handleSetChasing, handleInvoiceActionWrite, handleResolveEscalation,
   handleSettings, handleUpdateSettings,
   handleConnectStartAuthed, handleConnectSheetAuthed, handleConnectPayment,
+  handleTeam, handleTeamInvite, handleTeamRole, handleTeamRemove,
 } from './routes/api';
 
 const app = express();
@@ -136,6 +137,10 @@ app.post('/api/settings', requireApiAuth, handleUpdateSettings);
 app.get('/api/connect/:provider/start', requireApiAuth, handleConnectStartAuthed);
 app.post('/api/connect/gsheet', requireApiAuth, handleConnectSheetAuthed);
 app.post('/api/connect/payment', requireApiAuth, handleConnectPayment);
+app.get('/api/team', requireApiAuth, handleTeam);
+app.post('/api/team/invite', requireApiAuth, handleTeamInvite);
+app.post('/api/team/:userId/role', requireApiAuth, handleTeamRole);
+app.delete('/api/team/:userId', requireApiAuth, handleTeamRemove);
 app.post('/api/assistant', requireApiAuth, handleAssistant);
 // Phase 3 controls (write actions)
 app.post('/api/chasing', requireApiAuth, handleSetChasing);
