@@ -1,21 +1,20 @@
 /**
  * Invoice chase runner — the outbound loop (ported from PaidUp's chaser).
  *
- * For each clinic: walk its chaseable invoices, work out the due stage, generate
- * a message, and send it over Remi's existing channel (WhatsApp or SMS) while
- * honouring the per-clinic kill switch and the opt-out suppression list. Every
- * send is logged and the invoice's chase stage advanced.
- *
- * Email is intentionally out of scope for this slice — Remi sends over Twilio
- * (WhatsApp/SMS) today; an email channel can layer on later.
+ * For each clinic: walk its chaseable invoices, work out the due stage, and send
+ * the chase over EVERY channel the contact is reachable on — WhatsApp/SMS (if a
+ * phone) and email (if an address + email configured) — honouring the per-clinic
+ * kill switch and the opt-out suppression list per channel. The stage advances
+ * once if any channel sent; every send is logged.
  */
 import { config } from '../config';
 import {
   getClinic, getChaseableInvoices, advanceInvoiceChase, logInvoiceChase, isSuppressed,
 } from '../db';
 import { sendProactiveWhatsApp } from './twilio';
+import { sendChaseEmail } from './email';
 import { generateChaseMessage } from './chaseMessage';
-import { nextChaseStage, daysOverdue, phoneKey, DEFAULT_CADENCE, type ChaseCadence } from './chase';
+import { nextChaseStage, daysOverdue, phoneKey, emailKey, DEFAULT_CADENCE, type ChaseCadence } from './chase';
 
 export async function runChaseForClinic(clinicId: string): Promise<number> {
   const clinic = await getClinic(clinicId);
@@ -27,7 +26,7 @@ export async function runChaseForClinic(clinicId: string): Promise<number> {
 
   const cadence: ChaseCadence = clinic.chase_cadence ?? DEFAULT_CADENCE;
   const senderName: string = clinic.name ?? 'our team';
-  const channel = config.twilio.channel; // 'whatsapp' | 'sms'
+  const phoneChannel = config.twilio.channel; // 'whatsapp' | 'sms'
   const invoices = await getChaseableInvoices(clinicId);
   let chased = 0;
 
@@ -39,21 +38,39 @@ export async function runChaseForClinic(clinicId: string): Promise<number> {
     );
     if (!stage) continue;
 
-    const phone = inv.contact_phone;
-    if (!phone) continue; // no Twilio-reachable contact in this slice
-    if (await isSuppressed(clinicId, channel, phoneKey(phone))) continue;
+    const base = {
+      contactName: inv.contact_name, invoiceNumber: inv.invoice_number, amount: inv.amount_due,
+      currency: inv.currency, daysOverdue: overdue, dueDate: inv.due_date, stage, senderName,
+    };
+    let sentAny = false;
 
-    try {
-      const body = await generateChaseMessage({
-        contactName: inv.contact_name, invoiceNumber: inv.invoice_number, amount: inv.amount_due,
-        currency: inv.currency, daysOverdue: overdue, dueDate: inv.due_date, stage, senderName, channel,
-      });
-      await sendProactiveWhatsApp(phone, { fallbackBody: body });
-      await logInvoiceChase({ invoiceId: inv.id, clinicId, stage, channel, recipient: phone, body });
+    // ── Phone (WhatsApp / SMS) ──────────────────────────────────────────────
+    if (inv.contact_phone && !(await isSuppressed(clinicId, phoneChannel, phoneKey(inv.contact_phone)))) {
+      try {
+        const body = await generateChaseMessage({ ...base, channel: phoneChannel });
+        await sendProactiveWhatsApp(inv.contact_phone, { fallbackBody: body });
+        await logInvoiceChase({ invoiceId: inv.id, clinicId, stage, channel: phoneChannel, recipient: inv.contact_phone, body });
+        sentAny = true;
+      } catch (err: any) {
+        console.error(`[chase] ${phoneChannel} failed for ${inv.invoice_number}:`, err?.message ?? err);
+      }
+    }
+
+    // ── Email ───────────────────────────────────────────────────────────────
+    if (config.email.enabled && inv.contact_email && !(await isSuppressed(clinicId, 'email', emailKey(inv.contact_email)))) {
+      try {
+        const raw = await generateChaseMessage({ ...base, channel: 'email' });
+        await sendChaseEmail({ to: inv.contact_email, toName: inv.contact_name, rawMessage: raw, invoiceNumber: inv.invoice_number, senderName });
+        await logInvoiceChase({ invoiceId: inv.id, clinicId, stage, channel: 'email', recipient: inv.contact_email, body: raw });
+        sentAny = true;
+      } catch (err: any) {
+        console.error(`[chase] email failed for ${inv.invoice_number}:`, err?.message ?? err);
+      }
+    }
+
+    if (sentAny) {
       await advanceInvoiceChase(inv.id, stage);
       chased++;
-    } catch (err: any) {
-      console.error(`[chase] failed invoice ${inv.invoice_number}:`, err?.message ?? err);
     }
   }
 

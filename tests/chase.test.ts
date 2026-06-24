@@ -5,6 +5,7 @@ import {
   buildChaseFallback, classifyInvoiceReply, parseInvoiceCsv, normaliseDate,
   DEFAULT_CADENCE,
 } from '../src/lib/chase';
+import { parseEmailMessage, buildChaseEmailHtml } from '../src/lib/email';
 
 let passed = 0;
 function test(name: string, fn: () => void) {
@@ -143,6 +144,26 @@ test('parseInvoiceCsv reports bad rows but keeps good ones', () => {
   const { rows, errors } = parseInvoiceCsv(csv);
   assert.equal(rows.length, 1);
   assert.equal(errors.length, 2);
+});
+
+// ── email parsing ────────────────────────────────────────────────────────────
+test('parseEmailMessage extracts Subject line + body', () => {
+  const { subject, body } = parseEmailMessage('Subject: Payment reminder — INV-9\n\nHi Sipho,\nPlease settle R2,500.\n\nThanks, Eden');
+  assert.equal(subject, 'Payment reminder — INV-9');
+  assert.ok(body.startsWith('Hi Sipho,'));
+  assert.ok(!/subject:/i.test(body));
+});
+test('parseEmailMessage defaults subject when absent', () => {
+  assert.equal(parseEmailMessage('Hi, please pay.').subject, 'Invoice payment reminder');
+});
+test('buildChaseEmailHtml includes sender, body, STOP note; pay button only with url', () => {
+  const noBtn = buildChaseEmailHtml({ senderName: 'Eden MediSpa', invoiceNumber: 'INV-9', body: 'Hi Sipho,\n\nPlease pay.' });
+  assert.ok(noBtn.includes('Eden MediSpa'));
+  assert.ok(noBtn.includes('Invoice INV-9'));
+  assert.ok(/STOP/.test(noBtn));
+  assert.ok(!noBtn.includes('Pay now'));
+  const withBtn = buildChaseEmailHtml({ senderName: 'X', body: 'b', paymentUrl: 'https://pay.example/abc' });
+  assert.ok(withBtn.includes('Pay now') && withBtn.includes('https://pay.example/abc'));
 });
 
 console.log(`\n${passed} chase tests passed ✅`);

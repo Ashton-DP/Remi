@@ -56,7 +56,7 @@ export type ChaseMsgInput = {
   dueDate?: string | null;
   stage: number;
   senderName: string;
-  channel: 'whatsapp' | 'sms';
+  channel: 'whatsapp' | 'sms' | 'email';
 };
 
 /** Generate a chase message; returns AI text on success, deterministic fallback otherwise. */
@@ -89,14 +89,16 @@ Keep it concise — these are read on a phone.`;
 - Days overdue: ${i.daysOverdue}
 - Due date: ${i.dueDate ?? '(unknown)'}
 
-Channel: ${i.channel === 'whatsapp' ? 'WhatsApp/SMS (conversational, brief, no letter format)' : 'SMS (conversational, brief)'}
+Channel: ${i.channel === 'email' ? 'Email (professional but warm)' : 'WhatsApp/SMS (conversational, brief, no letter format)'}
 Stage ${i.stage} of 3.
 ${i.stage === 1 ? '- Friendly; assume an oversight. A polite nudge, no pressure.' : ''}
 ${i.stage === 2 ? '- Firm but professional. Note it is a follow-up; ask for a specific payment date.' : ''}
 ${i.stage === 3 ? `- Serious final notice. ${tier === 'high' ? 'State that non-payment will be referred to collections.' : 'Mention further steps may follow.'} Professional, not threatening.` : ''}
 ${tierGuidance}
 
-Plain text only, no markdown, no subject line, 3-5 sentences. Open with "Hi ${name},".
+${i.channel === 'email'
+  ? `Format: first line "Subject: <short subject>", then a blank line, then the body addressed to "${name}", signed off as "${i.senderName}".`
+  : `Plain text only, no markdown, no subject line, 3-5 sentences. Open with "Hi ${name},".`}
 CRITICAL: never output bracketed placeholders like [Name] or [Company]. The client is "${name}" and you write on behalf of "${i.senderName}".
 Output only the message text.`;
 

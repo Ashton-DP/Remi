@@ -105,6 +105,14 @@ export const config = {
     hour: parseInt(opt('CHASE_HOUR', '9'), 10),
     importToken: opt('CHASE_IMPORT_TOKEN') || opt('ONBOARD_TOKEN'),
   },
+  // Email channel for invoice chasing (invoice contacts usually have email, not
+  // phone). Sends via Resend when RESEND_API_KEY is set; otherwise logs only.
+  // EMAIL_FROM must be on a domain verified in Resend (e.g. billing@remireception.com).
+  email: {
+    resendApiKey: opt('RESEND_API_KEY'),
+    fromEmail: opt('EMAIL_FROM', 'billing@remireception.com'),
+    get enabled() { return !!this.resendApiKey; },
+  },
   // Invoice sources — auto-import overdue invoices from accounting tools.
   // OAuth providers need a developer app (client id/secret + redirect URI) per
   // provider; Google Sheet needs nothing but a published-CSV URL on the clinic.
