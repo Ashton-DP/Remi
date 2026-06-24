@@ -6,7 +6,7 @@
  */
 import { config } from '../../config';
 
-export type PaymentProviderKey = 'payfast' | 'paystack' | 'link';
+export type PaymentProviderKey = 'payfast' | 'paystack' | 'stripe' | 'paypal' | 'link';
 
 /** Which payment provider (if any) is fully configured for this clinic. */
 export function getPaymentProvider(clinic: any): PaymentProviderKey | null {
@@ -14,6 +14,8 @@ export function getPaymentProvider(clinic: any): PaymentProviderKey | null {
   const cfg = clinic?.payment_config ?? {};
   if (p === 'payfast' && cfg.payfast?.merchant_id && cfg.payfast?.merchant_key) return 'payfast';
   if (p === 'paystack' && cfg.paystack?.secret_key) return 'paystack';
+  if (p === 'stripe' && cfg.stripe?.secret_key) return 'stripe';
+  if (p === 'paypal' && cfg.paypal?.client_id && cfg.paypal?.secret) return 'paypal';
   if (p === 'link' && cfg.link?.url) return 'link';
   return null;
 }

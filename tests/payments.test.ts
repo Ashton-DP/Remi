@@ -51,6 +51,10 @@ test('getPaymentProvider only returns a provider when fully configured', () => {
   assert.equal(getPaymentProvider({ payment_provider: 'payfast', payment_config: { payfast: { merchant_id: '1', merchant_key: '2' } } }), 'payfast');
   assert.equal(getPaymentProvider({ payment_provider: 'payfast', payment_config: { payfast: { merchant_id: '1' } } }), null); // missing key
   assert.equal(getPaymentProvider({ payment_provider: 'paystack', payment_config: { paystack: { secret_key: 'sk' } } }), 'paystack');
+  assert.equal(getPaymentProvider({ payment_provider: 'stripe', payment_config: { stripe: { secret_key: 'sk_live' } } }), 'stripe');
+  assert.equal(getPaymentProvider({ payment_provider: 'stripe', payment_config: { stripe: {} } }), null); // missing key
+  assert.equal(getPaymentProvider({ payment_provider: 'paypal', payment_config: { paypal: { client_id: 'c', secret: 's' } } }), 'paypal');
+  assert.equal(getPaymentProvider({ payment_provider: 'paypal', payment_config: { paypal: { client_id: 'c' } } }), null); // missing secret
   assert.equal(getPaymentProvider({ payment_provider: 'link', payment_config: { link: { url: 'https://x' } } }), 'link');
   assert.equal(getPaymentProvider({ payment_provider: null }), null);
   assert.equal(getPaymentProvider(null), null);

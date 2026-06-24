@@ -5,6 +5,8 @@ import { getInvoiceById, getClinic, markInvoicePaidById } from '../db';
 import { getPaymentProvider } from '../lib/payments';
 import { payfastProcessUrl, buildPayfastParams, validatePayfastNotify } from '../lib/payments/payfast';
 import { initPaystackPayment } from '../lib/payments/paystack';
+import { createStripeCheckout, retrieveStripeSession } from '../lib/payments/stripe';
+import { createPaypalOrder, capturePaypalOrder } from '../lib/payments/paypal';
 
 const esc = (s: any) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const note = (title: string, body: string) =>
@@ -42,6 +44,26 @@ export async function handlePay(req: Request, res: Response) {
       });
       return res.redirect(out.authorization_url);
     }
+    if (provider === 'stripe') {
+      const base = config.payments.publicBase;
+      const out = await createStripeCheckout(clinic.payment_config.stripe.secret_key, {
+        amountZar: Number(invoice.amount_due), currency: invoice.currency,
+        name: `Invoice ${invoice.invoice_number || invoice.id}`, invoiceId: invoice.id,
+        successUrl: `${base}/pay/stripe/return?inv=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${base}/pay/cancel`,
+      });
+      return res.redirect(out.url);
+    }
+    if (provider === 'paypal') {
+      const base = config.payments.publicBase;
+      const out = await createPaypalOrder(clinic.payment_config.paypal, {
+        amount: Number(invoice.amount_due), currency: invoice.currency, invoiceId: invoice.id,
+        itemName: `Invoice ${invoice.invoice_number || invoice.id}`,
+        returnUrl: `${base}/pay/paypal/return?inv=${invoice.id}`,
+        cancelUrl: `${base}/pay/cancel`,
+      });
+      return res.redirect(out.approveUrl);
+    }
     // static link
     return res.redirect(clinic.payment_config.link.url);
   } catch (e: any) {
@@ -55,6 +77,40 @@ export function handlePaySuccess(_req: Request, res: Response) {
 }
 export function handlePayCancel(_req: Request, res: Response) {
   res.type('text/html').send(note('Payment cancelled', 'No payment was taken. You can use the link again any time.'));
+}
+
+/** GET /pay/stripe/return?inv=&session_id= — confirm a Stripe payment + mark paid. */
+export async function handleStripeReturn(req: Request, res: Response) {
+  try {
+    const invoiceId = qp(req.query.inv) ?? '';
+    const sessionId = qp(req.query.session_id) ?? '';
+    const invoice = await getInvoiceById(invoiceId);
+    if (!invoice) return res.type('text/html').send(note('Thank you', 'Payment received.'));
+    const clinic = await getClinic(invoice.clinic_id);
+    const { paid } = await retrieveStripeSession(clinic.payment_config.stripe.secret_key, sessionId);
+    if (paid) { await markInvoicePaidById(invoiceId); return res.type('text/html').send(note('Paid ✅', 'Thank you! Your payment was successful.')); }
+    return res.type('text/html').send(note('Thank you 💛', 'Your payment is being processed.'));
+  } catch (e: any) {
+    console.error('[pay/stripe]', e?.message ?? e);
+    return res.type('text/html').send(note('Thank you 💛', 'Your payment is being processed.'));
+  }
+}
+
+/** GET /pay/paypal/return?inv=&token= — capture an approved PayPal order + mark paid. */
+export async function handlePaypalReturn(req: Request, res: Response) {
+  try {
+    const invoiceId = qp(req.query.inv) ?? '';
+    const orderId = qp(req.query.token) ?? ''; // PayPal appends ?token=<orderId>
+    const invoice = await getInvoiceById(invoiceId);
+    if (!invoice) return res.type('text/html').send(note('Thank you', 'Payment received.'));
+    const clinic = await getClinic(invoice.clinic_id);
+    const { completed } = await capturePaypalOrder(clinic.payment_config.paypal, orderId);
+    if (completed) { await markInvoicePaidById(invoiceId); return res.type('text/html').send(note('Paid ✅', 'Thank you! Your payment was successful.')); }
+    return res.type('text/html').send(note('Thank you 💛', 'Your payment is being processed.'));
+  } catch (e: any) {
+    console.error('[pay/paypal]', e?.message ?? e);
+    return res.type('text/html').send(note('Thank you 💛', 'Your payment is being processed.'));
+  }
 }
 
 /** POST /webhooks/payfast — PayFast ITN. Marks the invoice paid on COMPLETE. */

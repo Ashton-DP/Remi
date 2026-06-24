@@ -111,6 +111,7 @@ export const config = {
   payments: {
     publicBase: opt('PUBLIC_BASE_URL', 'https://www.remireception.com'),
     payfastSandbox: opt('PAYFAST_SANDBOX') === 'true',
+    paypalSandbox: opt('PAYPAL_SANDBOX') === 'true',
   },
   // Email channel for invoice chasing (invoice contacts usually have email, not
   // phone). Sends via Resend when RESEND_API_KEY is set; otherwise logs only.
