@@ -1,6 +1,8 @@
-// Creates Remi's 3 subscription tiers (products + recurring ZAR prices + Payment
+// Creates Remi's subscription tiers (products + recurring ZAR prices + Payment
 // Links) in YOUR Stripe account. Run ONCE: node --env-file=.env scripts/setupStripePlans.mjs
-// (re-running creates duplicates). Requires STRIPE_SECRET_KEY in .env.
+// (re-running creates duplicates — use cleanupStripeDuplicates.mjs to clear them).
+// Requires STRIPE_SECRET_KEY in .env. "Remi for Chains" is custom-quoted, so it
+// has no fixed link and is intentionally omitted.
 import Stripe from 'stripe';
 
 const key = process.env.STRIPE_SECRET_KEY;
@@ -10,19 +12,24 @@ console.log(`Using Stripe key: ${key.startsWith('sk_live') ? 'LIVE 🔴 (will cr
 
 const TIERS = [
   {
-    name: 'Remi — Starter',
-    zar: 2500,
-    desc: 'Your 24/7 WhatsApp receptionist — answers enquiries, books & reschedules appointments, sends no-show reminders, backfills cancellations from a waitlist, and a monthly revenue-recovered report.',
+    name: 'PaidUp — Invoice Chasing',
+    zar: 299,
+    desc: 'Automated invoice chasing — Remi politely follows up your overdue invoices over WhatsApp & email until you are paid, with one-tap payment links and reply handling. Connects to Xero, QuickBooks, Sage or a Google Sheet.',
+  },
+  {
+    name: 'Remi — Basic',
+    zar: 990,
+    desc: 'Bookings, handled. Your AI receptionist takes bookings, reschedules and cancellations 24/7 over WhatsApp, and sends automatic no-show reminders. The simplest way to stop losing appointments.',
   },
   {
     name: 'Remi — Standard',
-    zar: 4500,
-    desc: 'Everything in Starter, plus a 24/7 AI voice receptionist that answers your phone, instant missed-call → WhatsApp recovery, and a live booking dashboard.',
+    zar: 2900,
+    desc: 'The full AI receptionist — answers your phone and WhatsApp 24/7, books and reschedules, instantly recovers missed calls, and gives you a live dashboard plus a daily brief. A fraction of a front-desk salary.',
   },
   {
-    name: 'Remi — Premium',
+    name: 'Remi — Complete',
     zar: 6500,
-    desc: 'The complete AI front desk — everything in Standard, plus booking deposits, automatic review requests, lapsed-patient reactivation, a daily revenue report, a custom brand voice & persona, multi-location support, and priority direct support.',
+    desc: 'The whole front office — everything in Standard, plus invoice chasing (Get Paid built in), lapsed-customer reactivation, automatic review requests, multi-location support, a custom brand voice & persona, and priority support.',
   },
 ];
 
@@ -43,5 +50,6 @@ async function main() {
     console.log(`  ${link.url}\n`);
   }
   console.log('Done. Send the matching link to each clinic — payments land in your Stripe.');
+  console.log('Remi for Chains is custom-quoted — no fixed link.');
 }
 main().catch((e) => { console.error('❌', e.message); process.exit(1); });
