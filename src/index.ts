@@ -43,10 +43,18 @@ app.use(express.static(path.join(process.cwd(), 'public'), { extensions: ['html'
 // Master dashboard SPA (built into dashboard/dist by the deploy build step).
 // Static assets first, then a catch-all so client-side routes return index.html.
 const dashDist = path.join(process.cwd(), 'dashboard', 'dist');
-app.use('/app', express.static(dashDist));
+app.use('/app', express.static(dashDist, {
+  setHeaders: (res, filePath) => {
+    // index.html must always revalidate so new asset hashes are picked up
+    // immediately; hashed assets are content-addressed → cache forever.
+    if (filePath.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache');
+    else if (filePath.includes('/assets/')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  },
+}));
 // SPA fallback (Express 5 needs a regex, not a bare '*'). Static files above are
 // served first; only non-file /app routes fall through to index.html.
-app.get(/^\/app(\/.*)?$/, (_req, res) => res.sendFile(path.join(dashDist, 'index.html')));
+app.get(/^\/app(\/.*)?$/, (_req, res) =>
+  res.sendFile(path.join(dashDist, 'index.html'), { headers: { 'Cache-Control': 'no-cache' } }));
 
 app.use(requestLogger);
 
