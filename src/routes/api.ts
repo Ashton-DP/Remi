@@ -7,7 +7,11 @@ import type { Request, Response } from 'express';
 import { getAuth } from '../lib/apiAuth';
 import {
   getClinic, getTodaysBookings, countConversations, getChaseableInvoices, getOpenEscalations,
+  listInvoices, getInvoiceForClinic, getInvoiceChases, listClinicBookings, listConversations,
+  getConversationForClinic, getReportData,
 } from '../db';
+import { computeReportStats } from '../report';
+import { computeInsights } from '../dashboard';
 
 /** GET /api/me — who am I + which clinic/role. */
 export async function handleMe(req: Request, res: Response) {
@@ -48,4 +52,53 @@ export async function handleToday(req: Request, res: Response) {
       id: e.id, reason: e.reason, summary: e.summary, created_at: e.created_at,
     })),
   });
+}
+
+// ── Phase 2 read views ───────────────────────────────────────────────────────
+
+/** GET /api/invoices — the Get-Paid list. */
+export async function handleInvoices(req: Request, res: Response) {
+  const auth = getAuth(req);
+  const invoices = await listInvoices(auth.clinicId);
+  res.json({ invoices });
+}
+
+/** GET /api/invoices/:id — one invoice + its chase timeline. */
+export async function handleInvoiceDetail(req: Request, res: Response) {
+  const auth = getAuth(req);
+  const inv = await getInvoiceForClinic(auth.clinicId, String(req.params.id));
+  if (!inv) return res.status(404).json({ error: 'Invoice not found' });
+  const chases = await getInvoiceChases(inv.id);
+  res.json({ invoice: inv, chases });
+}
+
+/** GET /api/bookings — recent + upcoming appointments. */
+export async function handleBookings(req: Request, res: Response) {
+  const auth = getAuth(req);
+  res.json({ bookings: await listClinicBookings(auth.clinicId) });
+}
+
+/** GET /api/conversations — the inbox list. */
+export async function handleConversations(req: Request, res: Response) {
+  const auth = getAuth(req);
+  res.json({ conversations: await listConversations(auth.clinicId) });
+}
+
+/** GET /api/conversations/:id — a transcript. */
+export async function handleConversationDetail(req: Request, res: Response) {
+  const auth = getAuth(req);
+  const out = await getConversationForClinic(auth.clinicId, String(req.params.id));
+  if (!out) return res.status(404).json({ error: 'Conversation not found' });
+  res.json(out);
+}
+
+/** GET /api/insights — last-30-day performance. */
+export async function handleInsights(req: Request, res: Response) {
+  const auth = getAuth(req);
+  const sinceISO = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const { events, bookings } = await getReportData(auth.clinicId, sinceISO);
+  const convCount = await countConversations(auth.clinicId, sinceISO);
+  const stats = computeReportStats(events as any[], bookings as any[]);
+  const insights = computeInsights(bookings as any[], convCount, stats.bookedN);
+  res.json({ stats, insights, conversations_30d: convCount });
 }

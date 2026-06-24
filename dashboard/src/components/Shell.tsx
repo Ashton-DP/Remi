@@ -1,17 +1,22 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { Icon } from './icons';
 import { Today } from '../screens/Today';
+import { Inbox } from '../screens/Inbox';
+import { Bookings } from '../screens/Bookings';
+import { GetPaid } from '../screens/GetPaid';
+import { Insights } from '../screens/Insights';
 
 type Me = { user: { email: string; role: string }; clinic: { name: string } | null };
 
 const NAV = [
-  { key: 'today', label: 'Today', icon: '🏠', ready: true },
-  { key: 'inbox', label: 'Inbox', icon: '💬', ready: false },
-  { key: 'bookings', label: 'Bookings', icon: '📅', ready: false },
-  { key: 'getpaid', label: 'Get Paid', icon: '💸', ready: false },
-  { key: 'customers', label: 'Customers', icon: '👥', ready: false },
-  { key: 'insights', label: 'Insights', icon: '📊', ready: false },
-  { key: 'settings', label: 'Settings', icon: '⚙️', ready: false },
+  { key: 'today', label: 'Today', icon: 'today', title: 'Today', sub: "What Remi is handling right now", ready: true },
+  { key: 'inbox', label: 'Inbox', icon: 'inbox', title: 'Inbox', sub: 'Calls & messages Remi handled', ready: true },
+  { key: 'bookings', label: 'Bookings', icon: 'bookings', title: 'Bookings', sub: 'Appointments Remi booked', ready: true },
+  { key: 'getpaid', label: 'Get Paid', icon: 'getpaid', title: 'Get Paid', sub: 'Invoices Remi is chasing', ready: true },
+  { key: 'insights', label: 'Insights', icon: 'insights', title: 'Insights', sub: 'Last 30 days', ready: true },
+  { key: 'customers', label: 'Customers', icon: 'customers', title: 'Customers', sub: '', ready: false },
+  { key: 'settings', label: 'Settings', icon: 'settings', title: 'Settings', sub: '', ready: false },
 ];
 
 export function Shell({ onSignOut }: { onSignOut: () => void }) {
@@ -20,6 +25,8 @@ export function Shell({ onSignOut }: { onSignOut: () => void }) {
   const [err, setErr] = useState('');
 
   useEffect(() => { api<Me>('/api/me').then(setMe).catch((e) => setErr(e.message)); }, []);
+  const active = NAV.find((n) => n.key === view)!;
+  const initial = (me?.user?.email ?? '?').charAt(0).toUpperCase();
 
   return (
     <div className="shell">
@@ -32,28 +39,41 @@ export function Shell({ onSignOut }: { onSignOut: () => void }) {
           </div>
         </div>
         <nav>
+          <div className="nav-sec">Operations</div>
           {NAV.map((n) => (
-            <button
-              key={n.key}
-              className={`nav-item ${view === n.key ? 'active' : ''}`}
-              onClick={() => n.ready && setView(n.key)}
-              disabled={!n.ready}
-              title={n.ready ? '' : 'Coming soon'}
-            >
-              <span className="nav-ico">{n.icon}</span>{n.label}
+            <button key={n.key} className={`nav-item ${view === n.key ? 'active' : ''}`}
+              onClick={() => n.ready && setView(n.key)} disabled={!n.ready} title={n.ready ? '' : 'Coming soon'}>
+              <span className="ico"><Icon name={n.icon} size={18} /></span>
+              <span className="label">{n.label}</span>
               {!n.ready && <span className="soon">soon</span>}
             </button>
           ))}
         </nav>
         <div className="sidebar-foot">
-          <div className="who">{me?.user?.email}<span className="role">{me?.user?.role}</span></div>
-          <button className="signout" onClick={onSignOut}>Sign out</button>
+          <div className="who">
+            <div className="avatar">{initial}</div>
+            <div className="who-meta">
+              <div className="who-email">{me?.user?.email ?? '…'}</div>
+              <div className="who-role">{me?.user?.role ?? ''}</div>
+            </div>
+          </div>
+          <button className="signout" onClick={onSignOut}><Icon name="signout" size={15} /> Sign out</button>
         </div>
       </aside>
-      <main className="content">
-        {err && <div className="banner error">{err}</div>}
-        {view === 'today' && <Today />}
-      </main>
+
+      <div className="content">
+        <header className="topbar">
+          <div><h1 style={{ display: 'inline' }}>{active.title}</h1>{active.sub && <span className="sub">{active.sub}</span>}</div>
+        </header>
+        <div className="inner">
+          {err && <div className="banner error">{err}</div>}
+          {view === 'today' && <Today />}
+          {view === 'inbox' && <Inbox />}
+          {view === 'bookings' && <Bookings />}
+          {view === 'getpaid' && <GetPaid />}
+          {view === 'insights' && <Insights />}
+        </div>
+      </div>
     </div>
   );
 }

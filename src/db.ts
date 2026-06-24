@@ -766,3 +766,35 @@ export async function linkUserToClinic(userId: string, clinicId: string, role = 
     .upsert({ user_id: userId, clinic_id: clinicId, role }, { onConflict: 'user_id,clinic_id' });
   if (error) throw new Error(`linkUserToClinic: ${error.message}`);
 }
+
+// ── Dashboard Phase 2 read views ─────────────────────────────────────────────
+
+export async function getInvoiceForClinic(clinicId: string, invoiceId: string) {
+  const { data } = await supabase.from('invoices').select('*').eq('clinic_id', clinicId).eq('id', invoiceId).maybeSingle();
+  return data;
+}
+export async function getInvoiceChases(invoiceId: string) {
+  const { data } = await supabase.from('invoice_chases')
+    .select('stage,channel,recipient,created_at').eq('invoice_id', invoiceId).order('created_at', { ascending: true });
+  return data ?? [];
+}
+export async function listClinicBookings(clinicId: string, limit = 100) {
+  const { data } = await supabase.from('bookings')
+    .select('id,service,start_at,end_at,status,source,created_at,clients(name,phone)')
+    .eq('clinic_id', clinicId).order('start_at', { ascending: false }).limit(limit);
+  return data ?? [];
+}
+export async function listConversations(clinicId: string, limit = 100) {
+  const { data } = await supabase.from('conversations')
+    .select('id,channel,status,last_message_at,created_at,clients(name,phone)')
+    .eq('clinic_id', clinicId).order('last_message_at', { ascending: false }).limit(limit);
+  return data ?? [];
+}
+export async function getConversationForClinic(clinicId: string, conversationId: string) {
+  const { data: convo } = await supabase.from('conversations')
+    .select('id,channel,status,clients(name,phone)').eq('clinic_id', clinicId).eq('id', conversationId).maybeSingle();
+  if (!convo) return null;
+  const { data: messages } = await supabase.from('messages')
+    .select('direction,body,created_at').eq('conversation_id', conversationId).order('created_at', { ascending: true });
+  return { conversation: convo, messages: messages ?? [] };
+}

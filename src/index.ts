@@ -24,7 +24,10 @@ import { handleConnectStart, handleConnectCallback, handleConnectSheet } from '.
 import { handleEmailDomainSetup, handleEmailDomainVerify, handleEmailDomainStatus } from './routes/emailDomain';
 import { handlePay, handlePaySuccess, handlePayCancel, handlePayfastNotify, handleStripeReturn, handlePaypalReturn } from './routes/pay';
 import { requireApiAuth } from './lib/apiAuth';
-import { handleMe, handleToday } from './routes/api';
+import {
+  handleMe, handleToday, handleInvoices, handleInvoiceDetail, handleBookings,
+  handleConversations, handleConversationDetail, handleInsights,
+} from './routes/api';
 
 const app = express();
 // Render/Railway terminate TLS and forward — trust the proxy so forwarded
@@ -110,6 +113,12 @@ app.get('/invoices/source-preview', webhookLimiter, handleSourcePreview); // rea
 // Dashboard API (v1) — SPA talks to these; all behind Supabase-Auth + clinic scope.
 app.get('/api/me', requireApiAuth, handleMe);
 app.get('/api/today', requireApiAuth, handleToday);
+app.get('/api/invoices', requireApiAuth, handleInvoices);
+app.get('/api/invoices/:id', requireApiAuth, handleInvoiceDetail);
+app.get('/api/bookings', requireApiAuth, handleBookings);
+app.get('/api/conversations', requireApiAuth, handleConversations);
+app.get('/api/conversations/:id', requireApiAuth, handleConversationDetail);
+app.get('/api/insights', requireApiAuth, handleInsights);
 
 // Payment links — customers pay an overdue invoice from the chase message.
 app.get('/pay/success', handlePaySuccess);
