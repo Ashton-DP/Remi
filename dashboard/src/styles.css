@@ -199,3 +199,11 @@ td .primary { font-weight: 550; } td .secondary { color: var(--faint); font-size
 .conn-input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; color: var(--text); font-size: 13.5px; font-family: inherit; }
 .conn-input:focus { outline: none; border-color: var(--purple); }
 select.conn-input { cursor: pointer; }
+
+/* copilot voice controls */
+.voice-btn, .mic-btn { width: 46px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); color: var(--muted); display: grid; place-items: center; }
+.voice-btn:hover, .mic-btn:hover { color: var(--text); border-color: var(--purple); }
+.voice-btn.on { color: var(--teal); border-color: rgba(45,212,191,.4); background: rgba(45,212,191,.1); }
+.mic-btn.live { color: var(--red); border-color: rgba(248,113,113,.5); background: var(--red-bg); animation: pulse 1.3s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+.mic-btn:disabled { opacity: .5; }
