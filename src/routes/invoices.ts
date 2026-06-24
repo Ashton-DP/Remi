@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
 import { config } from '../config';
 import { safeEqual, qp } from '../lib/dashboardAuth';
-import { upsertInvoice, listInvoices } from '../db';
+import { upsertInvoice, listInvoices, getClinic, setInvoiceSourceData } from '../db';
 import { parseInvoiceCsv } from '../lib/chase';
+import { getInvoiceSource } from '../lib/invoiceSources';
 
 /** Token check shared by both endpoints. Fail-closed when no token configured. */
 function authed(req: Request): boolean {
@@ -53,4 +54,34 @@ export async function handleInvoiceList(req: Request, res: Response) {
   if (!clinicId) return res.status(400).json({ error: 'clinic_id is required.' });
   const invoices = await listInvoices(clinicId);
   return res.json({ count: invoices.length, invoices });
+}
+
+/**
+ * GET /invoices/source-preview?clinic_id=&token=
+ * Read-only: counts the overdue invoices Remi can see in the clinic's connected
+ * source (Xero/QBO/Sage/Sheet) WITHOUT loading them into the DB or chasing them.
+ * Confirms the connection + data pipe on the live server.
+ */
+export async function handleSourcePreview(req: Request, res: Response) {
+  if (!authed(req)) return res.status(403).json({ error: 'Invalid token.' });
+  const clinicId = qp(req.query.clinic_id) ?? '';
+  if (!clinicId) return res.status(400).json({ error: 'clinic_id is required.' });
+
+  const clinic = await getClinic(clinicId);
+  const source = getInvoiceSource(clinic?.invoice_source);
+  if (!clinic || !source) return res.json({ connected: false });
+
+  try {
+    const inv = await source.fetchOverdue(clinic, (patch) => setInvoiceSourceData(clinicId, patch));
+    const total = inv.reduce((s, i) => s + (Number(i.amount_due) || 0), 0);
+    return res.json({
+      connected: true,
+      source: source.key,
+      overdue: inv.length,
+      total_zar: total,
+      with_phone: inv.filter((i) => i.contact_phone).length,
+    });
+  } catch (e: any) {
+    return res.status(502).json({ connected: true, source: source.key, error: e?.message ?? String(e) });
+  }
 }

@@ -19,7 +19,7 @@ import { handleAgentTool } from './routes/agentTools';
 import { handleOnboard } from './routes/onboard';
 import { renderIntakeForm, handleIntakeSubmit } from './routes/intake';
 import { handleStripeWebhook } from './routes/stripeWebhook';
-import { handleInvoiceImport, handleInvoiceList } from './routes/invoices';
+import { handleInvoiceImport, handleInvoiceList, handleSourcePreview } from './routes/invoices';
 import { handleConnectStart, handleConnectCallback, handleConnectSheet } from './routes/connect';
 
 const app = express();
@@ -92,6 +92,7 @@ app.post('/intake', webhookLimiter, handleIntakeSubmit);
 // Invoice chasing (PaidUp): bulk CSV import + operator list. Token-gated.
 app.post('/invoices/import', webhookLimiter, handleInvoiceImport);
 app.get('/invoices', webhookLimiter, handleInvoiceList);
+app.get('/invoices/source-preview', webhookLimiter, handleSourcePreview); // read-only: what the connected source exposes
 
 // Invoice sources — connect an accounting tool so invoices auto-load.
 app.post('/connect/gsheet', webhookLimiter, handleConnectSheet);   // Google Sheet (no OAuth)
