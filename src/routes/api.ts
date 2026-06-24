@@ -12,6 +12,7 @@ import {
 } from '../db';
 import { computeReportStats } from '../report';
 import { computeInsights } from '../dashboard';
+import { runAssistant } from '../brain/assistant';
 
 /** GET /api/me — who am I + which clinic/role. */
 export async function handleMe(req: Request, res: Response) {
@@ -101,4 +102,20 @@ export async function handleInsights(req: Request, res: Response) {
   const stats = computeReportStats(events as any[], bookings as any[]);
   const insights = computeInsights(bookings as any[], convCount, stats.bookedN);
   res.json({ stats, insights, conversations_30d: convCount });
+}
+
+/** POST /api/assistant — talk to the Remi copilot. Body: { messages:[{role,content}] }. */
+export async function handleAssistant(req: Request, res: Response) {
+  const auth = getAuth(req);
+  const clinic = await getClinic(auth.clinicId);
+  if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+  const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
+  if (!messages.length) return res.status(400).json({ error: 'messages required' });
+  try {
+    const reply = await runAssistant(clinic, auth.role, messages);
+    res.json({ reply });
+  } catch (e: any) {
+    console.error('[assistant]', e?.message ?? e);
+    res.status(502).json({ error: 'The assistant had trouble — please try again.' });
+  }
 }

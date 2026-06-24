@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Icon } from './icons';
+import { Assistant } from '../screens/Assistant';
 import { Today } from '../screens/Today';
 import { Inbox } from '../screens/Inbox';
 import { Bookings } from '../screens/Bookings';
@@ -10,6 +11,7 @@ import { Insights } from '../screens/Insights';
 type Me = { user: { email: string; role: string }; clinic: { name: string } | null };
 
 const NAV = [
+  { key: 'assistant', label: 'Ask Remi', icon: 'assistant', title: 'Ask Remi', sub: 'Your AI office manager', ready: true, lead: true },
   { key: 'today', label: 'Today', icon: 'today', title: 'Today', sub: "What Remi is handling right now", ready: true },
   { key: 'inbox', label: 'Inbox', icon: 'inbox', title: 'Inbox', sub: 'Calls & messages Remi handled', ready: true },
   { key: 'bookings', label: 'Bookings', icon: 'bookings', title: 'Bookings', sub: 'Appointments Remi booked', ready: true },
@@ -21,7 +23,7 @@ const NAV = [
 
 export function Shell({ onSignOut }: { onSignOut: () => void }) {
   const [me, setMe] = useState<Me | null>(null);
-  const [view, setView] = useState('today');
+  const [view, setView] = useState('assistant');
   const [err, setErr] = useState('');
 
   useEffect(() => { api<Me>('/api/me').then(setMe).catch((e) => setErr(e.message)); }, []);
@@ -39,14 +41,16 @@ export function Shell({ onSignOut }: { onSignOut: () => void }) {
           </div>
         </div>
         <nav>
-          <div className="nav-sec">Operations</div>
-          {NAV.map((n) => (
-            <button key={n.key} className={`nav-item ${view === n.key ? 'active' : ''}`}
-              onClick={() => n.ready && setView(n.key)} disabled={!n.ready} title={n.ready ? '' : 'Coming soon'}>
-              <span className="ico"><Icon name={n.icon} size={18} /></span>
-              <span className="label">{n.label}</span>
-              {!n.ready && <span className="soon">soon</span>}
-            </button>
+          {NAV.map((n, i) => (
+            <div key={n.key} style={{ display: 'contents' }}>
+              {i === 1 && <div className="nav-sec">Operations</div>}
+              <button className={`nav-item ${view === n.key ? 'active' : ''} ${n.lead ? 'lead' : ''}`}
+                onClick={() => n.ready && setView(n.key)} disabled={!n.ready} title={n.ready ? '' : 'Coming soon'}>
+                <span className="ico"><Icon name={n.icon} size={18} /></span>
+                <span className="label">{n.label}</span>
+                {!n.ready && <span className="soon">soon</span>}
+              </button>
+            </div>
           ))}
         </nav>
         <div className="sidebar-foot">
@@ -67,6 +71,7 @@ export function Shell({ onSignOut }: { onSignOut: () => void }) {
         </header>
         <div className="inner">
           {err && <div className="banner error">{err}</div>}
+          {view === 'assistant' && <Assistant />}
           {view === 'today' && <Today />}
           {view === 'inbox' && <Inbox />}
           {view === 'bookings' && <Bookings />}

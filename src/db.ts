@@ -798,3 +798,26 @@ export async function getConversationForClinic(clinicId: string, conversationId:
     .select('direction,body,created_at').eq('conversation_id', conversationId).order('created_at', { ascending: true });
   return { conversation: convo, messages: messages ?? [] };
 }
+
+// ── Remi copilot (manager assistant) actions ─────────────────────────────────
+
+export async function getInvoiceByNumber(clinicId: string, invoiceNumber: string) {
+  const { data } = await supabase.from('invoices').select('*')
+    .eq('clinic_id', clinicId).eq('invoice_number', invoiceNumber).maybeSingle();
+  return data;
+}
+
+export async function setChasingPaused(clinicId: string, paused: boolean) {
+  const { error } = await supabase.from('clinics').update({ chasing_paused: paused }).eq('id', clinicId);
+  if (error) throw new Error(`setChasingPaused: ${error.message}`);
+}
+
+/** Resolve an escalation, scoped to the clinic via its conversation. Returns false if not found/owned. */
+export async function resolveEscalation(clinicId: string, escalationId: string): Promise<boolean> {
+  const { data } = await supabase.from('escalations')
+    .select('id,conversations!inner(clinic_id)')
+    .eq('id', escalationId).eq('conversations.clinic_id', clinicId).maybeSingle();
+  if (!data) return false;
+  await supabase.from('escalations').update({ status: 'resolved' }).eq('id', escalationId);
+  return true;
+}

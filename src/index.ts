@@ -26,7 +26,7 @@ import { handlePay, handlePaySuccess, handlePayCancel, handlePayfastNotify, hand
 import { requireApiAuth } from './lib/apiAuth';
 import {
   handleMe, handleToday, handleInvoices, handleInvoiceDetail, handleBookings,
-  handleConversations, handleConversationDetail, handleInsights,
+  handleConversations, handleConversationDetail, handleInsights, handleAssistant,
 } from './routes/api';
 
 const app = express();
@@ -127,6 +127,7 @@ app.get('/api/bookings', requireApiAuth, handleBookings);
 app.get('/api/conversations', requireApiAuth, handleConversations);
 app.get('/api/conversations/:id', requireApiAuth, handleConversationDetail);
 app.get('/api/insights', requireApiAuth, handleInsights);
+app.post('/api/assistant', requireApiAuth, handleAssistant);
 
 // Payment links — customers pay an overdue invoice from the chase message.
 app.get('/pay/success', handlePaySuccess);
