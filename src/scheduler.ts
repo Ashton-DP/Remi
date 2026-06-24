@@ -3,13 +3,13 @@
  * Polls every 60 seconds for due reminders and sends WhatsApp messages.
  */
 import { config } from './config'; // also loads dotenv
-import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getClinicIdsWithOverdueInvoices } from './db';
+import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getBookingsForDate, getClinicsWithSummaryPhone, getClinicIdsWithOverdueInvoices } from './db';
 import { sendProactiveWhatsApp } from './lib/twilio';
 import { runChaseForClinic } from './lib/chaseRunner';
 import { syncInvoicesForClinic } from './lib/invoiceSources';
 import { getClinicsWithInvoiceSource, getClinicsWithPendingEmailDomain, updateClinicEmailDomainStatus, getChaseableInvoices, getOpenEscalations } from './db';
 import { verifyDomain, getDomain } from './lib/resendDomains';
-import { generateReport, computeReportStats, buildMorningBrief } from './report';
+import { generateReport, computeReportStats, buildMorningBrief, buildEveningBrief } from './report';
 
 function formatWhen(startAt: string, timezone: string): string {
   return new Date(startAt).toLocaleString('en-ZA', {
@@ -214,31 +214,89 @@ async function maybeRunInvoiceChase() {
 }
 
 const HUDDLE_HOUR = parseInt(process.env.HUDDLE_HOUR ?? '7', 10);
-let _lastHuddleDate = '';
+const EVENING_HOUR = parseInt(process.env.EVENING_BRIEF_HOUR ?? '17', 10);
 
-/** Morning "here's your day" brief to the clinic team — today's appointments,
- *  with an intake-pending flag. Runs once each morning on/after HUDDLE_HOUR. */
+// Per-clinic once-a-day guard, keyed `${clinicId}:${dateStr}:${kind}`. Cleared
+// when the day rolls over so it never grows unbounded.
+const _briefsSent = new Set<string>();
+let _briefsDay = '';
+function alreadySent(key: string, dateStr: string): boolean {
+  if (dateStr !== _briefsDay) { _briefsSent.clear(); _briefsDay = dateStr; }
+  if (_briefsSent.has(key)) return true;
+  _briefsSent.add(key);
+  return false;
+}
+
+/** Every clinic that has opted into proactive briefs (summary phone set), plus
+ *  the default clinic if one is configured (so single-clinic deploys still work
+ *  even when only an escalation contact is set). De-duplicated by id. */
+async function briefRecipients() {
+  const list = (await getClinicsWithSummaryPhone().catch(() => [])) as any[];
+  const byId = new Map<string, any>(list.map((c) => [c.id, c]));
+  if (config.defaultClinicId && !byId.has(config.defaultClinicId)) {
+    const c = await getClinic(config.defaultClinicId).catch(() => null);
+    if (c) byId.set(c.id, c);
+  }
+  return [...byId.values()];
+}
+
+/** Morning "here's your day" brief — today's appointments + overdue/escalation
+ *  flags. Runs once each morning on/after HUDDLE_HOUR, for every opted-in clinic. */
 async function maybeRunHuddle() {
-  if (!config.defaultClinicId) return;
   const { dateStr, hour } = clinicNow();
-  if (dateStr === _lastHuddleDate || hour < HUDDLE_HOUR) return;
-  _lastHuddleDate = dateStr;
-  const clinic = await getClinic(config.defaultClinicId);
-  const to = clinic?.owner_summary_phone || clinic?.escalation_contact;
-  if (!to) return;
-  const tz = clinic.timezone ?? 'Africa/Johannesburg';
-  const [bookings, overdue, esc] = await Promise.all([
-    getTodaysBookings(config.defaultClinicId, tz),
-    getChaseableInvoices(config.defaultClinicId),
-    getOpenEscalations(config.defaultClinicId),
-  ]);
-  const overdueTotal = (overdue as any[]).reduce((sum, i) => sum + (Number(i.amount_due) || 0), 0);
-  const brief = buildMorningBrief({
-    clinicName: clinic.name, timeZone: tz, intakeEnabled: config.intake.enabled,
-    bookings, overdueCount: (overdue as any[]).length, overdueTotalZar: overdueTotal, escalations: (esc as any[]).length,
-  });
-  await sendProactiveWhatsApp(to, { fallbackBody: brief });
-  console.log('[scheduler] morning brief sent');
+  if (hour < HUDDLE_HOUR) return;
+  for (const clinic of await briefRecipients()) {
+    const to = clinic.owner_summary_phone || clinic.escalation_contact;
+    if (!to || alreadySent(`${clinic.id}:${dateStr}:morning`, dateStr)) continue;
+    try {
+      const tz = clinic.timezone ?? 'Africa/Johannesburg';
+      const [bookings, overdue, esc] = await Promise.all([
+        getTodaysBookings(clinic.id, tz),
+        getChaseableInvoices(clinic.id),
+        getOpenEscalations(clinic.id),
+      ]);
+      const overdueTotal = (overdue as any[]).reduce((sum, i) => sum + (Number(i.amount_due) || 0), 0);
+      const brief = buildMorningBrief({
+        clinicName: clinic.name, timeZone: tz, intakeEnabled: config.intake.enabled,
+        bookings, overdueCount: (overdue as any[]).length, overdueTotalZar: overdueTotal, escalations: (esc as any[]).length,
+      });
+      await sendProactiveWhatsApp(to, { fallbackBody: brief });
+      console.log(`[scheduler] morning brief sent → ${clinic.name}`);
+    } catch (e: any) {
+      console.error('[scheduler] morning brief failed', clinic.id, e?.message ?? e);
+    }
+  }
+}
+
+/** Evening wrap — what happened today + tomorrow's schedule + open items.
+ *  Runs once each evening on/after EVENING_HOUR, for every opted-in clinic. */
+async function maybeRunEveningBrief() {
+  const { dateStr, hour } = clinicNow();
+  if (hour < EVENING_HOUR) return;
+  for (const clinic of await briefRecipients()) {
+    const to = clinic.owner_summary_phone || clinic.escalation_contact;
+    if (!to || alreadySent(`${clinic.id}:${dateStr}:evening`, dateStr)) continue;
+    try {
+      const tz = clinic.timezone ?? 'Africa/Johannesburg';
+      const tomorrowStr = new Date(Date.now() + 86_400_000).toLocaleDateString('en-CA', { timeZone: tz });
+      const [today, tomorrow, overdue, esc] = await Promise.all([
+        getTodaysBookings(clinic.id, tz),
+        getBookingsForDate(clinic.id, tomorrowStr, tz),
+        getChaseableInvoices(clinic.id),
+        getOpenEscalations(clinic.id),
+      ]);
+      const overdueTotal = (overdue as any[]).reduce((sum, i) => sum + (Number(i.amount_due) || 0), 0);
+      const brief = buildEveningBrief({
+        clinicName: clinic.name, timeZone: tz,
+        todayCount: (today as any[]).length, tomorrow: tomorrow as any[],
+        overdueCount: (overdue as any[]).length, overdueTotalZar: overdueTotal, escalations: (esc as any[]).length,
+      });
+      await sendProactiveWhatsApp(to, { fallbackBody: brief });
+      console.log(`[scheduler] evening brief sent → ${clinic.name}`);
+    } catch (e: any) {
+      console.error('[scheduler] evening brief failed', clinic.id, e?.message ?? e);
+    }
+  }
 }
 
 /** Daily: re-check clinics whose white-label sending domain is awaiting DNS, and
@@ -303,6 +361,7 @@ export function startScheduler() {
   setInterval(() => {
     tick().catch((e) => console.error('[scheduler] tick error:', e));
     maybeRunHuddle().catch((e) => console.error('[scheduler] huddle error:', e));
+    maybeRunEveningBrief().catch((e) => console.error('[scheduler] evening brief error:', e));
     maybeRunDailyJobs().catch((e) => console.error('[scheduler] daily jobs error:', e));
     maybeRunInvoiceChase().catch((e) => console.error('[scheduler] invoice chase error:', e));
   }, 60_000);

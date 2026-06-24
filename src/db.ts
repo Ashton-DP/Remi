@@ -347,11 +347,11 @@ export async function getRecentConversations(clinicId: string, limit = 15) {
 
 /** Open escalations waiting for a human. */
 /** Today's confirmed bookings (clinic-local day) for the morning team huddle. */
-export async function getTodaysBookings(clinicId: string, timeZone = 'Africa/Johannesburg') {
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('en-CA', { timeZone }); // YYYY-MM-DD clinic-local
+/** Confirmed bookings on a specific clinic-local calendar day (YYYY-MM-DD). */
+export async function getBookingsForDate(clinicId: string, dateStr: string, timeZone = 'Africa/Johannesburg') {
+  // Anchor the UTC-offset lookup to the target date (handles DST in tz's that have it).
   const part = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' })
-    .formatToParts(now).find((p) => p.type === 'timeZoneName')?.value;
+    .formatToParts(new Date(`${dateStr}T12:00:00Z`)).find((p) => p.type === 'timeZoneName')?.value;
   const off = part?.match(/GMT([+-]\d{2}:\d{2})/)?.[1] ?? '+00:00';
   const start = new Date(`${dateStr}T00:00:00${off}`).toISOString();
   const end = new Date(`${dateStr}T23:59:59${off}`).toISOString();
@@ -363,6 +363,20 @@ export async function getTodaysBookings(clinicId: string, timeZone = 'Africa/Joh
     .gte('start_at', start)
     .lte('start_at', end)
     .order('start_at', { ascending: true });
+  return data ?? [];
+}
+
+export async function getTodaysBookings(clinicId: string, timeZone = 'Africa/Johannesburg') {
+  const dateStr = new Date().toLocaleDateString('en-CA', { timeZone }); // YYYY-MM-DD clinic-local
+  return getBookingsForDate(clinicId, dateStr, timeZone);
+}
+
+/** Clinics that have opted into proactive briefs by configuring a summary phone. */
+export async function getClinicsWithSummaryPhone() {
+  const { data } = await supabase
+    .from('clinics')
+    .select('id,name,timezone,owner_summary_phone,escalation_contact')
+    .not('owner_summary_phone', 'is', null);
   return data ?? [];
 }
 

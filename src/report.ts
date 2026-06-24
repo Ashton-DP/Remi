@@ -174,3 +174,33 @@ export function buildMorningBrief(o: {
   if (extra.length) out += `\n\n${extra.join('\n')}`;
   return out;
 }
+
+/** End-of-day wrap: what Remi handled today + what tomorrow looks like. */
+export function buildEveningBrief(o: {
+  clinicName: string; timeZone?: string;
+  todayCount: number; tomorrow: any[]; overdueCount: number; overdueTotalZar: number; escalations: number;
+}): string {
+  const tz = o.timeZone ?? 'Africa/Johannesburg';
+  const R = (n: number) => 'R' + (Number(n) || 0).toLocaleString('en-ZA');
+  const lines: string[] = [`🌙 Evening wrap for ${o.clinicName}.`];
+  lines.push(o.todayCount > 0
+    ? `✅ ${o.todayCount} appointment${o.todayCount === 1 ? '' : 's'} on the books today.`
+    : `No appointments today.`);
+
+  if (o.tomorrow.length === 0) {
+    lines.push(`📅 Nothing booked for tomorrow yet.`);
+  } else {
+    const preview = o.tomorrow.slice(0, 5).map((b) => {
+      const t = new Date(b.start_at).toLocaleTimeString('en-ZA', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
+      return `${t} · ${b.service} · ${b.clients?.name ?? 'Unknown'}`;
+    });
+    let block = `📅 Tomorrow — ${o.tomorrow.length} appointment${o.tomorrow.length === 1 ? '' : 's'}:\n${preview.join('\n')}`;
+    if (o.tomorrow.length > 5) block += `\n…and ${o.tomorrow.length - 5} more.`;
+    lines.push(block);
+  }
+
+  if (o.overdueCount > 0) lines.push(`💸 ${o.overdueCount} overdue invoice${o.overdueCount === 1 ? '' : 's'} (${R(o.overdueTotalZar)}) — Remi keeps chasing.`);
+  if (o.escalations > 0) lines.push(`🔔 ${o.escalations} item${o.escalations === 1 ? ' still needs' : 's still need'} you in the dashboard.`);
+  else lines.push(`👍 Nothing needs you tonight. Rest easy.`);
+  return lines.join('\n\n');
+}
