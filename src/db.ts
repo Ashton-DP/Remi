@@ -828,3 +828,13 @@ export async function listClients(clinicId: string, limit = 200) {
     .select('*').eq('clinic_id', clinicId).order('created_at', { ascending: false }).limit(limit);
   return data ?? [];
 }
+
+/** Update whitelisted clinic settings (Settings screen). Never touches secrets/tokens. */
+export async function updateClinicSettings(clinicId: string, patch: Record<string, any>) {
+  const ALLOWED = ['name', 'timezone', 'knowledge', 'owner_summary_phone', 'escalation_contact', 'default_prep', 'chase_cadence'];
+  const update: Record<string, any> = {};
+  for (const k of ALLOWED) if (k in patch) update[k] = patch[k];
+  if (!Object.keys(update).length) return;
+  const { error } = await supabase.from('clinics').update(update).eq('id', clinicId);
+  if (error) throw new Error(`updateClinicSettings: ${error.message}`);
+}

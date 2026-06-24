@@ -178,3 +178,16 @@ td .primary { font-weight: 550; } td .secondary { color: var(--faint); font-size
 .toggle:hover:not(:disabled) { color: var(--text); border-color: var(--border); }
 .toggle.on { color: var(--amber); border-color: rgba(251,191,36,.4); background: var(--amber-bg); }
 .toggle:disabled { opacity: .5; }
+
+/* settings forms */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 18px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field.full { grid-column: 1 / -1; }
+.field label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.field input, .field textarea { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; color: var(--text); font-size: 13.5px; font-family: inherit; }
+.field input:focus, .field textarea:focus { outline: none; border-color: var(--purple); }
+.field input:disabled, .field textarea:disabled { opacity: .55; cursor: default; }
+.field textarea { resize: vertical; }
+.save-row { display: flex; align-items: center; gap: 14px; }
+.saved { color: var(--green); font-size: 13px; font-weight: 600; }
+@media (max-width: 640px) { .form-grid { grid-template-columns: 1fr; } }

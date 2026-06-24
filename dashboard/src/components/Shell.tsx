@@ -8,6 +8,7 @@ import { Bookings } from '../screens/Bookings';
 import { GetPaid } from '../screens/GetPaid';
 import { Insights } from '../screens/Insights';
 import { Customers } from '../screens/Customers';
+import { Settings } from '../screens/Settings';
 
 type Me = { user: { email: string; role: string }; clinic: { name: string } | null };
 
@@ -19,7 +20,7 @@ const NAV = [
   { key: 'getpaid', label: 'Get Paid', icon: 'getpaid', title: 'Get Paid', sub: 'Invoices Remi is chasing', ready: true },
   { key: 'insights', label: 'Insights', icon: 'insights', title: 'Insights', sub: 'Last 30 days', ready: true },
   { key: 'customers', label: 'Customers', icon: 'customers', title: 'Customers', sub: 'Everyone Remi has spoken to', ready: true },
-  { key: 'settings', label: 'Settings', icon: 'settings', title: 'Settings', sub: '', ready: false },
+  { key: 'settings', label: 'Settings', icon: 'settings', title: 'Settings', sub: 'Your business & how Remi runs', ready: true },
 ];
 
 export function Shell({ onSignOut }: { onSignOut: () => void }) {
@@ -79,6 +80,7 @@ export function Shell({ onSignOut }: { onSignOut: () => void }) {
           {view === 'getpaid' && <GetPaid />}
           {view === 'insights' && <Insights />}
           {view === 'customers' && <Customers />}
+          {view === 'settings' && <Settings />}
         </div>
       </div>
     </div>

@@ -10,6 +10,7 @@ import {
   listInvoices, getInvoiceForClinic, getInvoiceChases, listClinicBookings, listConversations,
   getConversationForClinic, getReportData, listClients,
   setChasingPaused, snoozeInvoice, markInvoicePaidById, disputeInvoice, resolveEscalation,
+  updateClinicSettings,
 } from '../db';
 import { computeReportStats } from '../report';
 import { computeInsights } from '../dashboard';
@@ -160,4 +161,38 @@ export async function handleResolveEscalation(req: Request, res: Response) {
   if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
   const ok = await resolveEscalation(auth.clinicId, String(req.params.id));
   res.json({ ok });
+}
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+
+/** GET /api/settings — editable clinic fields + read-only connection status.
+ *  Never returns tokens/secrets. */
+export async function handleSettings(req: Request, res: Response) {
+  const auth = getAuth(req);
+  const c = await getClinic(auth.clinicId);
+  if (!c) return res.status(404).json({ error: 'Clinic not found' });
+  res.json({
+    role: auth.role,
+    clinic: {
+      name: c.name ?? '', timezone: c.timezone ?? 'Africa/Johannesburg',
+      knowledge: c.knowledge ?? '', owner_summary_phone: c.owner_summary_phone ?? '',
+      escalation_contact: c.escalation_contact ?? '', chase_cadence: c.chase_cadence ?? null,
+      services: c.services_json ?? [], hours: c.hours_json ?? {},
+    },
+    connections: {
+      invoice_source: c.invoice_source ?? null,
+      payment_provider: c.payment_provider ?? null,
+      email_domain: c.email_domain ?? null,
+      email_domain_status: c.email_domain_status ?? null,
+      chasing_paused: !!c.chasing_paused,
+    },
+  });
+}
+
+/** POST /api/settings — update whitelisted clinic fields. Admin/owner only. */
+export async function handleUpdateSettings(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  await updateClinicSettings(auth.clinicId, req.body ?? {});
+  res.json({ ok: true });
 }
