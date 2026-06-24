@@ -36,6 +36,15 @@ app.post('/webhooks/stripe', express.raw({ type: 'application/json' }), handleSt
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(express.static(path.join(process.cwd(), 'public'), { extensions: ['html'] }));
+
+// Master dashboard SPA (built into dashboard/dist by the deploy build step).
+// Static assets first, then a catch-all so client-side routes return index.html.
+const dashDist = path.join(process.cwd(), 'dashboard', 'dist');
+app.use('/app', express.static(dashDist));
+// SPA fallback (Express 5 needs a regex, not a bare '*'). Static files above are
+// served first; only non-file /app routes fall through to index.html.
+app.get(/^\/app(\/.*)?$/, (_req, res) => res.sendFile(path.join(dashDist, 'index.html')));
+
 app.use(requestLogger);
 
 // Health
