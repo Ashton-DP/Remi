@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 import { Login } from './components/Login';
 import { Shell } from './components/Shell';
+import { InstallBanner } from './components/InstallBanner';
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -15,5 +16,10 @@ export function App() {
   }, []);
 
   if (!ready) return <div className="boot">Loading…</div>;
-  return session ? <Shell onSignOut={() => supabase.auth.signOut()} /> : <Login />;
+  return (
+    <>
+      <InstallBanner />
+      {session ? <Shell onSignOut={() => supabase.auth.signOut()} /> : <Login />}
+    </>
+  );
 }

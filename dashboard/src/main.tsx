@@ -3,6 +3,12 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import './styles.css';
 
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/app/sw.js', { scope: '/app/' }).catch(() => {});
+  });
+}
+
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />
