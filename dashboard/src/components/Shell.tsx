@@ -16,7 +16,7 @@ type Me = { user: { email: string; role: string }; clinic: { name: string } | nu
 const NAV = [
   { key: 'assistant', label: 'Ask Remi', icon: 'assistant', title: 'Ask Remi', sub: 'Your AI office manager', ready: true, lead: true },
   { key: 'today', label: 'Today', icon: 'today', title: 'Today', sub: "What Remi is handling right now", ready: true },
-  { key: 'inbox', label: 'Inbox', icon: 'inbox', title: 'Inbox', sub: 'Calls & messages Remi handled', ready: true },
+  { key: 'inbox', label: 'Conversations', icon: 'inbox', title: 'Conversations', sub: 'Calls & messages Remi handled', ready: true },
   { key: 'bookings', label: 'Appointments', icon: 'bookings', title: 'Appointments', sub: 'Book, view and cancel appointments', ready: true },
   { key: 'getpaid', label: 'Get Paid', icon: 'getpaid', title: 'Get Paid', sub: 'Invoices Remi is chasing', ready: true },
   { key: 'insights', label: 'Insights', icon: 'insights', title: 'Insights', sub: 'Last 30 days', ready: true },
@@ -28,7 +28,7 @@ const NAV = [
 // Which screens each plan/tier opens. The tier the clinic bought decides the dashboard.
 const PLAN_NAV: Record<string, string[]> = {
   paidup: ['getpaid', 'team', 'settings'],
-  basic: ['bookings', 'team', 'settings'],
+  basic: ['bookings', 'inbox', 'team', 'settings'],
   standard: ['assistant', 'today', 'inbox', 'bookings', 'customers', 'team', 'settings'],
   complete: NAV.map((n) => n.key),
 };
