@@ -10,6 +10,14 @@ import {
 } from '../db';
 import { runAgent } from '../brain/agent';
 import { speechNormalize, xmlEscape } from './voiceRelay';
+import {
+  azureSpeechEnabled, createAzureRecognizer, azureSynthesize, voiceForReply,
+  type AzureRecognizer, type AzureSynthesis,
+} from '../voice/azureSpeech';
+
+// Prefer Azure (bilingual af-ZA/en-ZA STT + natural neural voices) when configured;
+// otherwise fall back to the Deepgram + ElevenLabs pipeline.
+const USE_AZURE = azureSpeechEnabled();
 
 /**
  * Custom voice pipeline using Twilio Media Streams (raw audio) + our OWN providers:
@@ -40,7 +48,9 @@ interface CallCtx {
   customer: any;
   convo: { id: string };
   isFirstTurn: boolean;
-  dg: WebSocket | null; // Deepgram STT socket
+  dg: WebSocket | null; // Deepgram STT socket (fallback path)
+  azureStt: AzureRecognizer | null; // Azure STT (preferred path)
+  azureTts: AzureSynthesis | null;  // in-flight Azure TTS (for barge-in)
   botSpeaking: boolean;
   thinking: boolean;
   ttsAbort: AbortController | null;
@@ -77,8 +87,37 @@ function openDeepgram(
   return dg;
 }
 
-/** Stream ElevenLabs TTS (μ-law 8k) for `text` straight to the Twilio socket. */
+/** Stream Azure TTS (μ-law 8k, natural af-ZA/en-ZA voice) to the Twilio socket. */
+function azureSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string): Promise<void> {
+  const clean = speechNormalize(text);
+  const voice = voiceForReply(clean);
+  ctx.botSpeaking = true;
+  return new Promise<void>((resolve) => {
+    const tts = azureSynthesize({
+      text: clean,
+      voice,
+      onChunk: (mulaw) => {
+        if (ctx.closed) return;
+        twilioWs.send(JSON.stringify({
+          event: 'media',
+          streamSid: ctx.streamSid,
+          media: { payload: mulaw.toString('base64') },
+        }));
+      },
+      onDone: () => {
+        if (!ctx.closed) twilioWs.send(JSON.stringify({ event: 'mark', streamSid: ctx.streamSid, mark: { name: 'eos' } }));
+        if (ctx.azureTts === tts) ctx.azureTts = null;
+        ctx.botSpeaking = false;
+        resolve();
+      },
+    });
+    ctx.azureTts = tts;
+  });
+}
+
+/** Speak `text` to the caller via the active TTS provider. */
 async function speak(ctx: CallCtx, twilioWs: WebSocket, text: string) {
+  if (USE_AZURE) return azureSpeak(ctx, twilioWs, text);
   const clean = speechNormalize(text);
   const url =
     `https://api.elevenlabs.io/v1/text-to-speech/${config.voice.elevenLabsVoiceId}/stream` +
@@ -136,6 +175,7 @@ async function speak(ctx: CallCtx, twilioWs: WebSocket, text: string) {
 /** Stop any in-progress TTS and flush Twilio's playback buffer (barge-in). */
 function bargeIn(ctx: CallCtx, twilioWs: WebSocket) {
   if (ctx.ttsAbort) ctx.ttsAbort.abort();
+  if (ctx.azureTts) { ctx.azureTts.stop(); ctx.azureTts = null; }
   if (ctx.botSpeaking && !ctx.closed) {
     twilioWs.send(JSON.stringify({ event: 'clear', streamSid: ctx.streamSid }));
   }
@@ -153,6 +193,8 @@ export function attachMediaStream(server: Server) {
       convo: { id: '' },
       isFirstTurn: false,
       dg: null,
+      azureStt: null,
+      azureTts: null,
       botSpeaking: false,
       thinking: false,
       ttsAbort: null,
@@ -200,26 +242,33 @@ export function attachMediaStream(server: Server) {
           } catch (e) {
             console.error('[mediaStream] start/setup error', e);
           }
-          // Open Deepgram; barge-in on interim speech, run a turn on final utterance.
-          ctx.dg = openDeepgram(
-            (utterance) => handleUtterance(utterance),
-            () => bargeIn(ctx, twilioWs),
-          );
-          // Greet the caller once the socket is ready.
-          const greet = () =>
-            speak(
-              ctx,
-              twilioWs,
-              `Thanks for calling ${ctx.clinic?.name ?? 'the clinic'}. I'm Remi, the virtual assistant. How can I help you today?`,
+          const greeting = `Thanks for calling ${ctx.clinic?.name ?? 'the clinic'}. I'm Remi, the virtual assistant. How can I help you today?`;
+          if (USE_AZURE) {
+            // Azure STT auto-detects af-ZA/en-ZA; barge-in on interim, turn on final.
+            ctx.azureStt = createAzureRecognizer({
+              onInterim: () => bargeIn(ctx, twilioWs),
+              onFinal: (utterance) => handleUtterance(utterance),
+            });
+            speak(ctx, twilioWs, greeting);
+          } else {
+            // Fallback: Deepgram STT (English).
+            ctx.dg = openDeepgram(
+              (utterance) => handleUtterance(utterance),
+              () => bargeIn(ctx, twilioWs),
             );
-          if (ctx.dg.readyState === WebSocket.OPEN) greet();
-          else ctx.dg.on('open', greet);
+            const greet = () => speak(ctx, twilioWs, greeting);
+            if (ctx.dg.readyState === WebSocket.OPEN) greet();
+            else ctx.dg.on('open', greet);
+          }
           break;
         }
         case 'media': {
-          // Forward caller audio (base64 μ-law) to Deepgram.
+          // Forward caller audio (base64 μ-law) to the active STT.
           const payload = msg.media?.payload;
-          if (payload && ctx.dg && ctx.dg.readyState === WebSocket.OPEN) {
+          if (!payload) break;
+          if (USE_AZURE) {
+            if (ctx.azureStt) ctx.azureStt.write(Buffer.from(payload, 'base64'));
+          } else if (ctx.dg && ctx.dg.readyState === WebSocket.OPEN) {
             ctx.dg.send(Buffer.from(payload, 'base64'));
           }
           break;
@@ -231,6 +280,8 @@ export function attachMediaStream(server: Server) {
         case 'stop':
           ctx.closed = true;
           if (ctx.dg) try { ctx.dg.close(); } catch {}
+          if (ctx.azureStt) try { ctx.azureStt.close(); } catch {}
+          if (ctx.azureTts) try { ctx.azureTts.stop(); } catch {}
           break;
       }
     });
@@ -239,6 +290,8 @@ export function attachMediaStream(server: Server) {
       ctx.closed = true;
       if (ctx.ttsAbort) ctx.ttsAbort.abort();
       if (ctx.dg) try { ctx.dg.close(); } catch {}
+      if (ctx.azureStt) try { ctx.azureStt.close(); } catch {}
+      if (ctx.azureTts) try { ctx.azureTts.stop(); } catch {}
     });
   });
 

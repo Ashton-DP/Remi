@@ -25,6 +25,7 @@
     "dotenv": "latest",
     "express": "latest",
     "googleapis": "latest",
+    "microsoft-cognitiveservices-speech-sdk": "^1.50.0",
     "stripe": "^22.2.2",
     "tsx": "latest",
     "twilio": "latest",

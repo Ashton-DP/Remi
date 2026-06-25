@@ -57,6 +57,17 @@ export const config = {
     deepgramApiKey: opt('DEEPGRAM_API_KEY'),
     deepgramModel: opt('DEEPGRAM_MODEL', 'nova-2-phonecall'),
     mediaWsUrl: opt('PUBLIC_MEDIA_WS_URL', 'wss://www.remireception.com/ws/media'),
+    // --- Azure Speech (preferred for bilingual SA Afrikaans/English) ---
+    // When AZURE_SPEECH_KEY is set, the mediastream pipeline uses Azure for BOTH
+    // STT (auto-detect across azureSttLanguages) and TTS (natural af-ZA/en-ZA
+    // neural voices), instead of Deepgram + ElevenLabs.
+    azureSpeechKey: opt('AZURE_SPEECH_KEY'),
+    azureSpeechRegion: opt('AZURE_SPEECH_REGION', 'southafricanorth'),
+    // Candidate languages for auto-detection (handles Afrikaans/English code-switching).
+    azureSttLanguages: opt('AZURE_STT_LANGUAGES', 'af-ZA,en-ZA').split(',').map((s) => s.trim()).filter(Boolean),
+    // Neural voices chosen per detected reply language.
+    azureVoiceAf: opt('AZURE_VOICE_AF', 'af-ZA-AdriNeural'),
+    azureVoiceEn: opt('AZURE_VOICE_EN', 'en-ZA-LeahNeural'),
   },
   // WhatsApp Business API approved-template Content SIDs (HX…). Set after Meta
   // approval; when blank, proactive sends fall back to free-form text (sandbox).
