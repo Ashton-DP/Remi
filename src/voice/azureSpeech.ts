@@ -65,6 +65,9 @@ export function createAzureRecognizer(handlers: {
   onFinal: (text: string, language: string) => void;
 }): AzureRecognizer {
   const speechConfig = sdk.SpeechConfig.fromSubscription(config.voice.azureSpeechKey, config.voice.azureSpeechRegion);
+  // Continuous language-ID so it keeps detecting af-ZA vs en-ZA throughout the
+  // call (the default "at-start" mode fails to switch on code-switching).
+  speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_LanguageIdMode, 'Continuous');
   const autoDetect = sdk.AutoDetectSourceLanguageConfig.fromLanguages(config.voice.azureSttLanguages);
 
   const format = sdk.AudioStreamFormat.getWaveFormatPCM(8000, 16, 1);
