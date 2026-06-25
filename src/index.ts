@@ -209,8 +209,15 @@ attachErrorHandler(app);
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 // Use an explicit HTTP server so the ConversationRelay WebSocket can share the port.
 const server = http.createServer(app);
-attachVoiceRelay(server); // mounts the /ws/voice WebSocket endpoint (ConversationRelay)
-attachMediaStream(server); // mounts the /ws/media WebSocket endpoint (custom pipeline)
+// Attach ONLY the WebSocket endpoint the active voice mode needs. Binding two
+// `ws` servers to the same HTTP server via { server, path } makes them fight over
+// the 'upgrade' event — the non-matching one aborts the handshake with HTTP 400,
+// which dropped media-stream calls instantly. One mode → one WS server.
+if (config.voice.mode === 'conversationrelay') {
+  attachVoiceRelay(server); // /ws/voice (ConversationRelay)
+} else if (config.voice.mode === 'mediastream') {
+  attachMediaStream(server); // /ws/media (custom Azure / Deepgram+ElevenLabs pipeline)
+}
 server.listen(PORT, () => {
   console.log(`Remi listening on :${config.port} (model: ${config.model}, voice: ${config.voice.mode})`);
   void initMonitoring();
