@@ -27,6 +27,7 @@ const NAV = [
 
 // Which screens each plan/tier opens. The tier the clinic bought decides the dashboard.
 const PLAN_NAV: Record<string, string[]> = {
+  paidup: ['getpaid', 'team', 'settings'],
   basic: ['bookings', 'team', 'settings'],
   standard: ['assistant', 'today', 'inbox', 'bookings', 'customers', 'team', 'settings'],
   complete: NAV.map((n) => n.key),

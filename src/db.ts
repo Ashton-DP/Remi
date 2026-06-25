@@ -406,6 +406,8 @@ export async function createClinic(obj: {
   escalation_contact?: string;
   knowledge?: string;
   dashboard_token: string;
+  plan?: string;
+  subscription_status?: string;
 }) {
   const { data, error } = await supabase
     .from('clinics')
@@ -420,11 +422,19 @@ export async function createClinic(obj: {
       knowledge: obj.knowledge ?? null,
       dashboard_token: obj.dashboard_token,
       booking_provider: 'google',
+      ...(obj.plan ? { plan: obj.plan } : {}),
+      ...(obj.subscription_status ? { subscription_status: obj.subscription_status } : {}),
     })
     .select('id')
     .single();
   if (error) throw new Error(error.message);
   return data;
+}
+
+/** Set a clinic's dashboard tier ('paidup' | 'basic' | 'standard' | 'complete'). */
+export async function setClinicPlan(clinicId: string, plan: string) {
+  const { error } = await supabase.from('clinics').update({ plan }).eq('id', clinicId);
+  if (error) throw new Error(error.message);
 }
 
 /** Set a conversation's status (e.g. 'booked' once an appointment is made). */
