@@ -494,6 +494,49 @@ export async function setClinicPlan(clinicId: string, plan: string) {
   if (error) throw new Error(error.message);
 }
 
+// ── Platform admins (operator god-view across all clinics) ────────────────────
+
+/** Is this auth user a Remi platform admin (sees all clinics)? */
+export async function isPlatformAdmin(userId: string): Promise<boolean> {
+  const { data } = await supabase.from('platform_admins').select('user_id').eq('user_id', userId).maybeSingle();
+  return !!data;
+}
+
+/** Grant platform-admin (used by scripts/addPlatformAdmin.ts). */
+export async function addPlatformAdmin(userId: string) {
+  const { error } = await supabase.from('platform_admins').upsert({ user_id: userId }, { onConflict: 'user_id' });
+  if (error) throw new Error(error.message);
+}
+
+/** Every clinic with rolled-up stats for the operator dashboard. */
+export async function listClinicsForAdmin() {
+  const { data: clinics } = await supabase
+    .from('clinics')
+    .select('id,name,plan,subscription_status,created_at')
+    .order('created_at', { ascending: true });
+  const out: any[] = [];
+  for (const c of clinics ?? []) {
+    const [bk, cv, esc, lastConv] = await Promise.all([
+      supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('clinic_id', c.id).eq('status', 'confirmed'),
+      supabase.from('conversations').select('id', { count: 'exact', head: true }).eq('clinic_id', c.id),
+      getOpenEscalations(c.id).catch(() => []),
+      supabase.from('conversations').select('last_message_at').eq('clinic_id', c.id).order('last_message_at', { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    out.push({
+      id: c.id,
+      name: c.name,
+      plan: c.plan ?? 'complete',
+      subscription_status: c.subscription_status ?? null,
+      created_at: c.created_at,
+      bookings: bk.count ?? 0,
+      conversations: cv.count ?? 0,
+      open_escalations: Array.isArray(esc) ? esc.length : 0,
+      last_activity: (lastConv as any)?.data?.last_message_at ?? null,
+    });
+  }
+  return out;
+}
+
 /** Set a conversation's status (e.g. 'booked' once an appointment is made). */
 export async function setConversationStatus(id: string, status: string) {
   await supabase.from('conversations').update({ status }).eq('id', id);

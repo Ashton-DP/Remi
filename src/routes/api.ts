@@ -16,6 +16,7 @@ import {
   linkUserToClinic, listClinicUsers, setClinicUserRole, removeClinicUser, countClinicOwners,
   getOrCreateClient, setClientName, createBookingRow, scheduleReminders, cancelClinicBooking,
   listWaitlist, addWaitlistAtEnd, setWaitlistOrder, removeWaitlistEntry, getWaitlistEntry,
+  isPlatformAdmin, listClinicsForAdmin,
 } from '../db';
 import { computeReportStats } from '../report';
 import { computeInsights } from '../dashboard';
@@ -33,7 +34,21 @@ export async function handleMe(req: Request, res: Response) {
     user: { id: auth.userId, email: auth.email, role: auth.role },
     clinic: clinic ? { id: clinic.id, name: clinic.name, timezone: clinic.timezone ?? 'Africa/Johannesburg' } : null,
     plan: clinic?.plan ?? 'complete',
+    is_platform_admin: await isPlatformAdmin(auth.userId),
   });
+}
+
+/** GET /api/admin/clients — operator god-view: all clinics + rolled-up stats. */
+export async function handleAdminClients(_req: Request, res: Response) {
+  const clients = await listClinicsForAdmin();
+  const totals = {
+    clients: clients.length,
+    bookings: clients.reduce((n, c) => n + (c.bookings || 0), 0),
+    conversations: clients.reduce((n, c) => n + (c.conversations || 0), 0),
+    open_escalations: clients.reduce((n, c) => n + (c.open_escalations || 0), 0),
+    past_due: clients.filter((c) => c.subscription_status === 'past_due').length,
+  };
+  res.json({ clients, totals });
 }
 
 /** GET /api/today — the home "pulse" summary for the caller's clinic. */

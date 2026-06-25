@@ -23,7 +23,7 @@ import { handleInvoiceImport, handleInvoiceList, handleSourcePreview } from './r
 import { handleConnectStart, handleConnectCallback, handleConnectSheet } from './routes/connect';
 import { handleEmailDomainSetup, handleEmailDomainVerify, handleEmailDomainStatus } from './routes/emailDomain';
 import { handlePay, handlePaySuccess, handlePayCancel, handlePayfastNotify, handleStripeReturn, handlePaypalReturn } from './routes/pay';
-import { requireApiAuth } from './lib/apiAuth';
+import { requireApiAuth, requirePlatformAdmin } from './lib/apiAuth';
 import {
   handleMe, handleToday, handleInvoices, handleInvoiceDetail, handleBookings,
   handleConversations, handleConversationDetail, handleInsights, handleAssistant,
@@ -33,6 +33,7 @@ import {
   handleTeam, handleTeamInvite, handleTeamRole, handleTeamRemove,
   handleCreateBooking, handleCancelBooking,
   handleWaitlist, handleAddWaitlist, handleMoveWaitlist, handleRemoveWaitlist, handleBookWaitlist,
+  handleAdminClients,
 } from './routes/api';
 
 const app = express();
@@ -144,6 +145,8 @@ app.get('/api/customers', requireApiAuth, handleCustomers);
 app.get('/api/settings', requireApiAuth, handleSettings);
 app.post('/api/settings', requireApiAuth, handleUpdateSettings);
 app.get('/api/calendar/test', requireApiAuth, handleTestCalendar);
+// Operator dashboard (platform admins only — sees ALL clinics)
+app.get('/api/admin/clients', requirePlatformAdmin, handleAdminClients);
 app.get('/api/connect/:provider/start', requireApiAuth, handleConnectStartAuthed);
 app.post('/api/connect/gsheet', requireApiAuth, handleConnectSheetAuthed);
 app.post('/api/connect/payment', requireApiAuth, handleConnectPayment);

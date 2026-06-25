@@ -5,7 +5,7 @@
  */
 import type { Request, Response, NextFunction } from 'express';
 import { supabase } from './supabase';
-import { getUserClinic } from '../db';
+import { getUserClinic, isPlatformAdmin } from '../db';
 
 export type ApiAuth = { userId: string; email: string | null; clinicId: string; role: string };
 
@@ -44,6 +44,23 @@ export async function requireApiAuth(req: Request, res: Response, next: NextFunc
 /** Read the resolved auth off the request (after requireApiAuth). */
 export function getAuth(req: Request): ApiAuth {
   return (req as any).auth as ApiAuth;
+}
+
+/** Express middleware: require a valid session that is a platform admin (sees all
+ *  clinics). Not clinic-scoped — for the operator dashboard. Fail-closed. */
+export async function requirePlatformAdmin(req: Request, res: Response, next: NextFunction) {
+  try {
+    const token = extractBearer(req.get('Authorization'));
+    if (!token) return res.status(401).json({ error: 'Not authenticated' });
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) return res.status(401).json({ error: 'Invalid or expired session' });
+    if (!(await isPlatformAdmin(data.user.id))) return res.status(403).json({ error: 'Not a platform admin' });
+    (req as any).adminUser = { userId: data.user.id, email: data.user.email ?? null };
+    next();
+  } catch (e: any) {
+    console.error('[apiAuth:admin]', e?.message ?? e);
+    return res.status(401).json({ error: 'Auth check failed' });
+  }
 }
 
 /** Gate an action to owner/admin (vs read-only staff). Pure. */

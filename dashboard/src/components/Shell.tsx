@@ -10,8 +10,13 @@ import { Insights } from '../screens/Insights';
 import { Customers } from '../screens/Customers';
 import { Team } from '../screens/Team';
 import { Settings } from '../screens/Settings';
+import { Operator } from '../screens/Operator';
 
-type Me = { user: { email: string; role: string }; clinic: { name: string } | null; plan?: string };
+type Me = { user: { email: string; role: string }; clinic: { name: string } | null; plan?: string; is_platform_admin?: boolean };
+
+// Platform-admin-only operator view (god-view across all clinics). Kept out of
+// NAV/PLAN_NAV so it never shows for normal clinic logins.
+const OPERATOR_ITEM = { key: 'operator', label: 'Operator', icon: 'today', title: 'Operator', sub: 'All clients — health & numbers', ready: true, lead: true };
 
 const NAV = [
   { key: 'assistant', label: 'Ask Remi', icon: 'assistant', title: 'Ask Remi', sub: 'Your AI office manager', ready: true, lead: true },
@@ -41,9 +46,14 @@ export function Shell({ onSignOut }: { onSignOut: () => void }) {
   useEffect(() => { api<Me>('/api/me').then(setMe).catch((e) => setErr(e.message)); }, []);
 
   const plan = me?.plan ?? 'complete';
+  const isAdmin = !!me?.is_platform_admin;
+  const hasClinic = !!me?.clinic;
   const allowed = PLAN_NAV[plan] ?? PLAN_NAV.complete;
-  const items = NAV.filter((n) => allowed.includes(n.key));
-  useEffect(() => { if (me && !allowed.includes(view)) setView(items[0]?.key ?? 'bookings'); }, [me]);
+  const items = [
+    ...(isAdmin ? [OPERATOR_ITEM] : []),
+    ...(hasClinic ? NAV.filter((n) => allowed.includes(n.key)) : []),
+  ];
+  useEffect(() => { if (me && !items.find((i) => i.key === view)) setView(items[0]?.key ?? 'operator'); }, [me]);
 
   const lead = items.filter((n) => n.lead);
   const rest = items.filter((n) => !n.lead);
@@ -95,6 +105,7 @@ export function Shell({ onSignOut }: { onSignOut: () => void }) {
           {view === 'bookings' && <Bookings />}
           {view === 'getpaid' && <GetPaid />}
           {view === 'insights' && <Insights />}
+          {view === 'operator' && <Operator />}
           {view === 'customers' && <Customers />}
           {view === 'team' && <Team />}
           {view === 'settings' && <Settings />}
