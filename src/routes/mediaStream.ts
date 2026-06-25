@@ -8,8 +8,10 @@ import {
   saveMessage,
   getHistory,
 } from '../db';
-import { runAgent } from '../brain/agent';
+import { runAgentStream } from '../brain/agent';
 import { speechNormalize, xmlEscape } from './voiceRelay';
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 import {
   azureSpeechEnabled, createAzureRecognizer, azureSynthesize, voiceForReply,
   type AzureRecognizer, type AzureSynthesis,
@@ -51,6 +53,7 @@ interface CallCtx {
   dg: WebSocket | null; // Deepgram STT socket (fallback path)
   azureStt: AzureRecognizer | null; // Azure STT (preferred path)
   azureTts: AzureSynthesis | null;  // in-flight Azure TTS (for barge-in)
+  turnAbort: { aborted: boolean } | null; // aborts the in-flight streamed turn
   botSpeaking: boolean;
   thinking: boolean;
   ttsAbort: AbortController | null;
@@ -174,6 +177,7 @@ async function speak(ctx: CallCtx, twilioWs: WebSocket, text: string) {
 
 /** Stop any in-progress TTS and flush Twilio's playback buffer (barge-in). */
 function bargeIn(ctx: CallCtx, twilioWs: WebSocket) {
+  if (ctx.turnAbort) ctx.turnAbort.aborted = true; // stop LLM stream + sentence queue
   if (ctx.ttsAbort) ctx.ttsAbort.abort();
   if (ctx.azureTts) { ctx.azureTts.stop(); ctx.azureTts = null; }
   if (ctx.botSpeaking && !ctx.closed) {
@@ -195,6 +199,7 @@ export function attachMediaStream(server: Server) {
       dg: null,
       azureStt: null,
       azureTts: null,
+      turnAbort: null,
       botSpeaking: false,
       thinking: false,
       ttsAbort: null,
@@ -204,17 +209,38 @@ export function attachMediaStream(server: Server) {
     const handleUtterance = async (text: string) => {
       if (ctx.thinking || ctx.closed) return; // one turn at a time
       ctx.thinking = true;
+      const abort = { aborted: false };
+      ctx.turnAbort = abort;
+
+      // Speak streamed sentences strictly in order: one at a time, as they arrive.
+      const queue: string[] = [];
+      let pumping = false;
+      const pump = async () => {
+        if (pumping) return;
+        pumping = true;
+        while (queue.length && !ctx.closed && !abort.aborted) {
+          await speak(ctx, twilioWs, queue.shift()!);
+        }
+        pumping = false;
+      };
+
       try {
         await saveMessage(ctx.convo.id, 'in', text);
         const history = await getHistory(ctx.convo.id);
-        const reply = await runAgent(ctx.clinic, ctx.customer, ctx.convo, history, ctx.isFirstTurn, true);
+        const reply = await runAgentStream(
+          ctx.clinic, ctx.customer, ctx.convo, history, ctx.isFirstTurn, true,
+          (sentence) => { if (!abort.aborted && !ctx.closed) { queue.push(sentence); void pump(); } },
+          abort,
+        );
         ctx.isFirstTurn = false;
-        await saveMessage(ctx.convo.id, 'out', reply);
-        if (!ctx.closed) await speak(ctx, twilioWs, reply);
+        if (reply && !abort.aborted) await saveMessage(ctx.convo.id, 'out', reply);
+        // Wait for the queued sentences to finish before ending the turn.
+        while ((queue.length || pumping) && !ctx.closed && !abort.aborted) await sleep(50);
       } catch (e) {
         console.error('[mediaStream] turn error', e);
-        if (!ctx.closed) await speak(ctx, twilioWs, "Sorry, could you say that again?");
+        if (!ctx.closed && !abort.aborted) await speak(ctx, twilioWs, 'Sorry, could you say that again?');
       } finally {
+        if (ctx.turnAbort === abort) ctx.turnAbort = null;
         ctx.thinking = false;
       }
     };
@@ -279,6 +305,7 @@ export function attachMediaStream(server: Server) {
           break;
         case 'stop':
           ctx.closed = true;
+          if (ctx.turnAbort) ctx.turnAbort.aborted = true;
           if (ctx.dg) try { ctx.dg.close(); } catch {}
           if (ctx.azureStt) try { ctx.azureStt.close(); } catch {}
           if (ctx.azureTts) try { ctx.azureTts.stop(); } catch {}
@@ -288,6 +315,7 @@ export function attachMediaStream(server: Server) {
 
     twilioWs.on('close', () => {
       ctx.closed = true;
+      if (ctx.turnAbort) ctx.turnAbort.aborted = true;
       if (ctx.ttsAbort) ctx.ttsAbort.abort();
       if (ctx.dg) try { ctx.dg.close(); } catch {}
       if (ctx.azureStt) try { ctx.azureStt.close(); } catch {}

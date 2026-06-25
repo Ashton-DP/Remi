@@ -1,6 +1,6 @@
 import { config } from '../config';
 import { runClaudeAgent } from './claudeAgent';
-import { runGeminiAgent } from './geminiAgent';
+import { runGeminiAgent, runGeminiAgentStream } from './geminiAgent';
 import { createEscalation } from '../db';
 
 /** Warm hand-off shown when the AI provider fails, so we never dead-end a lead. */
@@ -42,5 +42,41 @@ export async function runAgent(
       console.error('[agent] escalation also failed', esc);
     }
     return aiFallbackMessage(isVoice);
+  }
+}
+
+/**
+ * Streaming version for voice. Emits complete sentences via `onSentence` as the
+ * reply is generated (so TTS can start speaking sooner), and returns the full
+ * reply. Claude has no streaming path here, so it falls back to one whole
+ * "sentence". `signal.aborted` stops generation (barge-in).
+ */
+export async function runAgentStream(
+  clinic: any,
+  customer: any,
+  convo: any,
+  history: any[],
+  isFirstContact: boolean,
+  isVoice: boolean,
+  onSentence: (sentence: string) => void,
+  signal?: { aborted: boolean },
+): Promise<string> {
+  try {
+    if (config.aiProvider === 'claude') {
+      const full = await runClaudeAgent(clinic, customer, convo, history, isFirstContact, isVoice);
+      if (!signal?.aborted && full) onSentence(full);
+      return full;
+    }
+    return await runGeminiAgentStream(clinic, customer, convo, history, isFirstContact, isVoice, onSentence, signal);
+  } catch (e) {
+    console.error('[agent] AI provider failed (stream) — escalating to human', e);
+    try {
+      await createEscalation(convo.id, 'ai_error', `AI provider (${config.aiProvider}) failed: ${(e as Error)?.message ?? 'unknown error'}`);
+    } catch (esc) {
+      console.error('[agent] escalation also failed', esc);
+    }
+    const fb = aiFallbackMessage(isVoice);
+    if (!signal?.aborted) onSentence(fb);
+    return fb;
   }
 }
