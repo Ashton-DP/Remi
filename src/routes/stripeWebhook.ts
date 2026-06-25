@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import type Stripe from 'stripe';
 import { constructWebhookEvent } from '../lib/stripe';
 import { provisionFromCheckout } from '../lib/provisionClinic';
+import { onTrialWillEnd, onPaymentFailed, onInvoicePaid } from '../lib/billingNotifications';
 import { setClinicSubscriptionStatus } from '../db';
 
 /**
@@ -65,6 +66,24 @@ export async function handleStripeWebhook(req: Request, res: Response) {
     } else {
       console.log('[stripe] subscription event without clinic_id metadata — skipped');
     }
+  }
+
+  // Trial about to end (~3 days out) — nudge the clinic to convert.
+  if (event.type === 'customer.subscription.trial_will_end') {
+    try { await onTrialWillEnd(event.data.object as Stripe.Subscription); }
+    catch (e: any) { console.error('[stripe] trial_will_end error', e?.message ?? e); }
+  }
+
+  // Renewal card declined — flag past_due + email to update the card.
+  if (event.type === 'invoice.payment_failed') {
+    try { await onPaymentFailed(event.data.object as Stripe.Invoice); }
+    catch (e: any) { console.error('[stripe] payment_failed error', e?.message ?? e); }
+  }
+
+  // Renewal succeeded — re-assert live status (recovers a past_due clinic) + log.
+  if (event.type === 'invoice.paid') {
+    try { await onInvoicePaid(event.data.object as Stripe.Invoice); }
+    catch (e: any) { console.error('[stripe] invoice.paid error', e?.message ?? e); }
   }
 
   res.json({ received: true });
