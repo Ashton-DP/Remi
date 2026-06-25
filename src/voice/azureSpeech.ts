@@ -48,9 +48,9 @@ export function detectAfrikaans(text: string): boolean {
   return hits >= 2 || hits / words.length >= 0.25;
 }
 
-/** Pick the Azure neural voice for a reply, based on its language. */
-export function voiceForReply(text: string): string {
-  return detectAfrikaans(text) ? config.voice.azureVoiceAf : config.voice.azureVoiceEn;
+/** Azure TTS voice for Afrikaans replies. English goes through ElevenLabs. */
+export function afrikaaansTtsVoice(): string {
+  return config.voice.azureVoiceAf;
 }
 
 // ── STT: continuous recognition with language auto-detect ─────────────────────
@@ -64,7 +64,9 @@ export function createAzureRecognizer(handlers: {
   onInterim: () => void;
   onFinal: (text: string, language: string) => void;
 }): AzureRecognizer {
-  const speechConfig = sdk.SpeechConfig.fromSubscription(config.voice.azureSpeechKey, config.voice.azureSpeechRegion);
+  // STT uses azureSttRegion (westeurope/eastus) — southafricanorth does NOT support
+  // af-ZA continuous language ID and silently falls back to English-only recognition.
+  const speechConfig = sdk.SpeechConfig.fromSubscription(config.voice.azureSpeechKey, config.voice.azureSttRegion);
   // Continuous language-ID so it keeps detecting af-ZA vs en-ZA throughout the
   // call (the default "at-start" mode fails to switch on code-switching).
   speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_LanguageIdMode, 'Continuous');

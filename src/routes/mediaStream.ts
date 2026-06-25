@@ -13,7 +13,7 @@ import { speechNormalize, xmlEscape } from './voiceRelay';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 import {
-  azureSpeechEnabled, createAzureRecognizer, azureSynthesize, voiceForReply,
+  azureSpeechEnabled, createAzureRecognizer, azureSynthesize, detectAfrikaans,
   type AzureRecognizer, type AzureSynthesis,
 } from '../voice/azureSpeech';
 
@@ -90,22 +90,16 @@ function openDeepgram(
   return dg;
 }
 
-/** Stream Azure TTS (μ-law 8k, natural af-ZA/en-ZA voice) to the Twilio socket. */
+/** Stream Azure TTS μ-law 8k to Twilio — used only for Afrikaans replies. */
 function azureSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string): Promise<void> {
-  const clean = speechNormalize(text);
-  const voice = voiceForReply(clean);
   ctx.botSpeaking = true;
   return new Promise<void>((resolve) => {
     const tts = azureSynthesize({
-      text: clean,
-      voice,
+      text,
+      voice: config.voice.azureVoiceAf,
       onChunk: (mulaw) => {
         if (ctx.closed) return;
-        twilioWs.send(JSON.stringify({
-          event: 'media',
-          streamSid: ctx.streamSid,
-          media: { payload: mulaw.toString('base64') },
-        }));
+        twilioWs.send(JSON.stringify({ event: 'media', streamSid: ctx.streamSid, media: { payload: mulaw.toString('base64') } }));
       },
       onDone: () => {
         if (!ctx.closed) twilioWs.send(JSON.stringify({ event: 'mark', streamSid: ctx.streamSid, mark: { name: 'eos' } }));
@@ -118,61 +112,43 @@ function azureSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string): Promise<vo
   });
 }
 
-/** Speak `text` to the caller via the active TTS provider. */
-async function speak(ctx: CallCtx, twilioWs: WebSocket, text: string) {
-  if (USE_AZURE) return azureSpeak(ctx, twilioWs, text);
-  const clean = speechNormalize(text);
-  const url =
-    `https://api.elevenlabs.io/v1/text-to-speech/${config.voice.elevenLabsVoiceId}/stream` +
-    `?output_format=ulaw_8000`;
+/** Stream ElevenLabs TTS μ-law 8k to Twilio — used for all English replies. */
+async function elevenLabsSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string) {
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${config.voice.elevenLabsVoiceId}/stream?output_format=ulaw_8000`;
   const abort = new AbortController();
   ctx.ttsAbort = abort;
   ctx.botSpeaking = true;
   try {
     const res = await fetch(url, {
-      method: 'POST',
-      signal: abort.signal,
-      headers: {
-        'xi-api-key': config.voice.elevenLabsApiKey,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        text: clean,
-        model_id: config.voice.elevenLabsTtsModel,
-        voice_settings: { stability: 0.5, similarity_boost: 0.8 },
-      }),
+      method: 'POST', signal: abort.signal,
+      headers: { 'xi-api-key': config.voice.elevenLabsApiKey, 'content-type': 'application/json' },
+      body: JSON.stringify({ text, model_id: config.voice.elevenLabsTtsModel, voice_settings: { stability: 0.5, similarity_boost: 0.8 } }),
     });
-    if (!res.ok || !res.body) {
-      console.error('[mediaStream] ElevenLabs TTS failed', res.status, await res.text().catch(() => ''));
-      return;
-    }
-    // Stream audio chunks → Twilio media messages (base64 μ-law).
+    if (!res.ok || !res.body) { console.error('[mediaStream] ElevenLabs TTS failed', res.status); return; }
     const reader = (res.body as any).getReader();
     while (true) {
       const { done, value } = await reader.read();
       if (done || ctx.closed || abort.signal.aborted) break;
-      if (value && value.length) {
-        twilioWs.send(
-          JSON.stringify({
-            event: 'media',
-            streamSid: ctx.streamSid,
-            media: { payload: Buffer.from(value).toString('base64') },
-          }),
-        );
-      }
+      if (value?.length) twilioWs.send(JSON.stringify({ event: 'media', streamSid: ctx.streamSid, media: { payload: Buffer.from(value).toString('base64') } }));
     }
-    // Mark end of this utterance so we can detect playback completion.
-    if (!ctx.closed && !abort.signal.aborted) {
-      twilioWs.send(
-        JSON.stringify({ event: 'mark', streamSid: ctx.streamSid, mark: { name: 'eos' } }),
-      );
-    }
+    if (!ctx.closed && !abort.signal.aborted)
+      twilioWs.send(JSON.stringify({ event: 'mark', streamSid: ctx.streamSid, mark: { name: 'eos' } }));
   } catch (e: any) {
-    if (e?.name !== 'AbortError') console.error('[mediaStream] speak error', e);
+    if (e?.name !== 'AbortError') console.error('[mediaStream] ElevenLabs speak error', e);
   } finally {
     if (ctx.ttsAbort === abort) ctx.ttsAbort = null;
     ctx.botSpeaking = false;
   }
+}
+
+/**
+ * Route TTS: Afrikaans reply → Azure af-ZA-AdriNeural (natural Afrikaans voice).
+ *            English reply  → ElevenLabs (warm, conversational English voice).
+ */
+async function speak(ctx: CallCtx, twilioWs: WebSocket, text: string) {
+  const clean = speechNormalize(text);
+  if (USE_AZURE && detectAfrikaans(clean)) return azureSpeak(ctx, twilioWs, clean);
+  return elevenLabsSpeak(ctx, twilioWs, clean);
 }
 
 /** Stop any in-progress TTS and flush Twilio's playback buffer (barge-in). */
@@ -271,9 +247,15 @@ export function attachMediaStream(server: Server) {
           const greeting = `Thanks for calling ${ctx.clinic?.name ?? 'the clinic'}. I'm Remi, the virtual assistant. How can I help you today?`;
           if (USE_AZURE) {
             // Azure STT auto-detects af-ZA/en-ZA; barge-in on interim, turn on final.
+            // Pass detected language through so the brain knows to reply in Afrikaans.
             ctx.azureStt = createAzureRecognizer({
               onInterim: () => bargeIn(ctx, twilioWs),
-              onFinal: (utterance) => handleUtterance(utterance),
+              onFinal: (utterance, lang) => {
+                // Prefix Afrikaans utterances so Gemini knows to mirror the language.
+                const isAf = lang.startsWith('af') || detectAfrikaans(utterance);
+                const text = isAf ? `[Caller is speaking Afrikaans] ${utterance}` : utterance;
+                handleUtterance(text);
+              },
             });
             speak(ctx, twilioWs, greeting);
           } else {
