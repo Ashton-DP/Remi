@@ -2,11 +2,8 @@ import Anthropic from '@anthropic-ai/sdk';
 
 /** Tools Remi can call. The orchestrator (executeTool) owns all side effects. */
 export const tools: Anthropic.Tool[] = [
-  {
-    name: 'get_services',
-    description: "List the clinic's treatments, prices (ZAR) and durations.",
-    input_schema: { type: 'object', properties: {} },
-  },
+  // (get_services removed — the full service list + prices are already in the
+  // system prompt, so a tool call just added a wasted round-trip of latency.)
   {
     name: 'check_availability',
     description:

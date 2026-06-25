@@ -20,9 +20,6 @@ export async function executeTool(
   input: any,
 ): Promise<unknown> {
   switch (name) {
-    case 'get_services':
-      return { services: clinic.services_json ?? [] };
-
     case 'check_availability': {
       const slots = await computeFreeSlots(clinic, input.date, input.service);
       return { date: input.date, service: input.service, available_slots: slots };
