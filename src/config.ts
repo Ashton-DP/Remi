@@ -163,7 +163,7 @@ export const config = {
   stripe: {
     secretKey: opt('STRIPE_SECRET_KEY'),
     webhookSecret: opt('STRIPE_WEBHOOK_SECRET'),
-    // Where Stripe sends the patient after paying (a simple thank-you page).
-    successUrl: opt('STRIPE_SUCCESS_URL', 'https://www.remireception.com/?deposit=paid'),
+    // Where Stripe sends a new subscriber after checkout — lands on the dashboard login with a welcome banner.
+    successUrl: opt('STRIPE_SUCCESS_URL', 'https://www.remireception.com/app?welcome=1'),
   },
 };

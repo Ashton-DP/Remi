@@ -99,6 +99,12 @@
   .nav-links { display: flex; align-items: center; gap: 28px; }
   .nav-links a.nav-link { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color .2s; }
   .nav-links a.nav-link:hover { color: var(--text); }
+  .nav-login {
+    color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500;
+    padding: 7px 16px; border: 1px solid var(--border); border-radius: 8px;
+    transition: border-color .2s, color .2s;
+  }
+  .nav-login:hover { border-color: var(--purple); color: var(--text); }
   .nav-cta {
     background: var(--purple); color: #fff;
     padding: 8px 20px; border-radius: 8px;
@@ -390,6 +396,7 @@
     <a href="#offers" class="nav-link">Offers</a>
     <a href="#how" class="nav-link">How it works</a>
     <a href="#pricing" class="nav-link">Pricing</a>
+    <a href="/app" class="nav-login">Client login</a>
     <a href="#demo" class="nav-cta">Book a free demo</a>
   </div>
 </nav>

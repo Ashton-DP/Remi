@@ -34,6 +34,10 @@ button { font-family: inherit; cursor: pointer; }
 .login-card button { margin-top: 24px; background: var(--purple); color: #fff; border: 0; border-radius: 9px; padding: 12px; font-weight: 600; font-size: 14px; }
 .login-card button:hover { background: #6a5de0; } .login-card button:disabled { opacity: .6; }
 .hint { font-size: 12px; color: var(--faint); margin-top: 16px; text-align: center; }
+.hint .link { color: var(--purple); cursor: pointer; text-decoration: underline; }
+.login-banner { border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.5; margin-bottom: 4px; }
+.login-banner.welcome { background: rgba(124,111,234,.15); border: 1px solid rgba(124,111,234,.3); color: #c4bbf7; }
+.login-banner.info { background: var(--blue-bg); border: 1px solid rgba(96,165,250,.25); color: #bfdbfe; }
 
 /* shell */
 .shell { display: grid; grid-template-columns: 244px 1fr; min-height: 100vh; }
