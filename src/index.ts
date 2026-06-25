@@ -32,6 +32,7 @@ import {
   handleConnectStartAuthed, handleConnectSheetAuthed, handleConnectPayment,
   handleTeam, handleTeamInvite, handleTeamRole, handleTeamRemove,
   handleCreateBooking, handleCancelBooking,
+  handleWaitlist, handleAddWaitlist, handleMoveWaitlist, handleRemoveWaitlist, handleBookWaitlist,
 } from './routes/api';
 
 const app = express();
@@ -131,6 +132,11 @@ app.get('/api/invoices/:id', requireApiAuth, handleInvoiceDetail);
 app.get('/api/bookings', requireApiAuth, handleBookings);
 app.post('/api/bookings', requireApiAuth, handleCreateBooking);
 app.post('/api/bookings/:id/cancel', requireApiAuth, handleCancelBooking);
+app.get('/api/waitlist', requireApiAuth, handleWaitlist);
+app.post('/api/waitlist', requireApiAuth, handleAddWaitlist);
+app.post('/api/waitlist/:id/move', requireApiAuth, handleMoveWaitlist);
+app.post('/api/waitlist/:id/book', requireApiAuth, handleBookWaitlist);
+app.delete('/api/waitlist/:id', requireApiAuth, handleRemoveWaitlist);
 app.get('/api/conversations', requireApiAuth, handleConversations);
 app.get('/api/conversations/:id', requireApiAuth, handleConversationDetail);
 app.get('/api/insights', requireApiAuth, handleInsights);

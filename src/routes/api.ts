@@ -15,6 +15,7 @@ import {
   updateClinicSettings, setInvoiceSource, setPaymentConfig,
   linkUserToClinic, listClinicUsers, setClinicUserRole, removeClinicUser, countClinicOwners,
   getOrCreateClient, setClientName, createBookingRow, scheduleReminders, cancelClinicBooking,
+  listWaitlist, addWaitlistAtEnd, setWaitlistOrder, removeWaitlistEntry, getWaitlistEntry,
 } from '../db';
 import { computeReportStats } from '../report';
 import { computeInsights } from '../dashboard';
@@ -340,4 +341,70 @@ export async function handleCancelBooking(req: Request, res: Response) {
   if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
   const ok = await cancelClinicBooking(auth.clinicId, String(req.params.id));
   res.json({ ok });
+}
+
+// ── Waitlist: list / add / reorder / remove / book (Basic clinic tier) ────────
+
+/** GET /api/waitlist — active entries in manual-priority order. */
+export async function handleWaitlist(req: Request, res: Response) {
+  const auth = getAuth(req);
+  const waitlist = await listWaitlist(auth.clinicId);
+  res.json({ waitlist });
+}
+
+/** POST /api/waitlist { client_name, phone, service, preferred_window } */
+export async function handleAddWaitlist(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const name = String(req.body?.client_name ?? '').trim();
+  const phone = String(req.body?.phone ?? '').trim();
+  const service = String(req.body?.service ?? '').trim();
+  const pref = String(req.body?.preferred_window ?? '').trim() || undefined;
+  if (!service || (!phone && !name)) return res.status(400).json({ error: 'Service and a contact are required.' });
+  const { client } = await getOrCreateClient(auth.clinicId, phone || `waitlist-${Date.now()}`);
+  if (name) await setClientName(client.id, name);
+  await addWaitlistAtEnd(auth.clinicId, client.id, service, pref);
+  res.json({ ok: true });
+}
+
+/** POST /api/waitlist/:id/move { direction: 'up' | 'down' } */
+export async function handleMoveWaitlist(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const dir = req.body?.direction === 'up' ? 'up' : 'down';
+  const ids = (await listWaitlist(auth.clinicId)).map((e: any) => e.id);
+  const idx = ids.indexOf(String(req.params.id));
+  if (idx < 0) return res.status(404).json({ error: 'Not found' });
+  const swap = dir === 'up' ? idx - 1 : idx + 1;
+  if (swap >= 0 && swap < ids.length) {
+    [ids[idx], ids[swap]] = [ids[swap], ids[idx]];
+    try { await setWaitlistOrder(auth.clinicId, ids); }
+    catch (e: any) { return res.status(400).json({ error: e.message }); }
+  }
+  res.json({ ok: true });
+}
+
+/** DELETE /api/waitlist/:id */
+export async function handleRemoveWaitlist(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  await removeWaitlistEntry(auth.clinicId, String(req.params.id));
+  res.json({ ok: true });
+}
+
+/** POST /api/waitlist/:id/book { start_at, duration_min } — convert to an appointment. */
+export async function handleBookWaitlist(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const entry: any = await getWaitlistEntry(auth.clinicId, String(req.params.id));
+  if (!entry) return res.status(404).json({ error: 'Not found' });
+  const startAt = String(req.body?.start_at ?? '');
+  const dur = Number(req.body?.duration_min) > 0 ? Number(req.body.duration_min) : 30;
+  const startDate = new Date(startAt);
+  if (isNaN(startDate.getTime())) return res.status(400).json({ error: 'Invalid date/time.' });
+  const endAt = new Date(startDate.getTime() + dur * 60_000).toISOString();
+  const booking = await createBookingRow({ clinicId: auth.clinicId, clientId: entry.client_id, service: entry.service, startAt: startDate.toISOString(), endAt, calendarEventId: 'manual', source: 'waitlist' });
+  await scheduleReminders(booking.id, startDate.toISOString()).catch(() => {});
+  await removeWaitlistEntry(auth.clinicId, String(req.params.id));
+  res.json({ ok: true });
 }

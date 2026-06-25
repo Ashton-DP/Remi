@@ -316,6 +316,62 @@ export async function setWaitlistStatus(id: string, status: string) {
   await supabase.from('waitlist').update({ status }).eq('id', id);
 }
 
+// ── Dashboard waitlist management (receptionist add / reorder / remove) ───────
+// `position` (migrate_waitlist_order.sql) drives manual ordering. Reads/adds fall
+// back gracefully when the column isn't present yet so the panel still works.
+
+/** Active (waiting/offered) entries with client info, in manual-priority order. */
+export async function listWaitlist(clinicId: string) {
+  const sel = 'id,service,preferred_window,status,created_at,clients(name,phone)';
+  let res: any = await supabase
+    .from('waitlist').select(`${sel},position`)
+    .eq('clinic_id', clinicId).in('status', ['waiting', 'offered'])
+    .order('position', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true });
+  if (res.error) { // position column not migrated yet — order by age
+    res = await supabase
+      .from('waitlist').select(sel)
+      .eq('clinic_id', clinicId).in('status', ['waiting', 'offered'])
+      .order('created_at', { ascending: true });
+  }
+  return res.data ?? [];
+}
+
+/** Add a receptionist-created entry at the back of the queue. */
+export async function addWaitlistAtEnd(clinicId: string, clientId: string, service: string, preferredWindow?: string) {
+  const base = { clinic_id: clinicId, client_id: clientId, service, preferred_window: preferredWindow ?? null, status: 'waiting' };
+  const { data: last } = await supabase
+    .from('waitlist').select('position').eq('clinic_id', clinicId)
+    .order('position', { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
+  const position = (Number(last?.position) || 0) + 1;
+  let res = await supabase.from('waitlist').insert({ ...base, position }).select('id').single();
+  if (res.error) res = await supabase.from('waitlist').insert(base).select('id').single(); // no position column
+  if (res.error) throw new Error(res.error.message);
+  return res.data;
+}
+
+/** Persist a new ordering (position = rank). Needs the position column. */
+export async function setWaitlistOrder(clinicId: string, orderedIds: string[]) {
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await supabase.from('waitlist').update({ position: i + 1 }).eq('id', orderedIds[i]).eq('clinic_id', clinicId);
+    if (error) throw new Error('Reordering needs the waitlist position column — run db/migrate_waitlist_order.sql.');
+  }
+}
+
+/** Remove a waitlist entry. */
+export async function removeWaitlistEntry(clinicId: string, id: string) {
+  const { error } = await supabase.from('waitlist').delete().eq('id', id).eq('clinic_id', clinicId);
+  if (error) throw new Error(error.message);
+}
+
+/** Single entry (with client id + contact) for converting to a booking. */
+export async function getWaitlistEntry(clinicId: string, id: string) {
+  const { data } = await supabase
+    .from('waitlist').select('id,service,client_id,clients(name,phone)')
+    .eq('clinic_id', clinicId).eq('id', id).maybeSingle();
+  return data;
+}
+
 /** A waiting/offered waitlist row for this client (used to mark a backfill on booking). */
 export async function getClientWaitlist(clinicId: string, clientId: string, service?: string) {
   const { data } = await supabase
