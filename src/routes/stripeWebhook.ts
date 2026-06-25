@@ -46,10 +46,14 @@ export async function handleStripeWebhook(req: Request, res: Response) {
   if (
     event.type === 'customer.subscription.created' ||
     event.type === 'customer.subscription.updated' ||
+    event.type === 'customer.subscription.paused' ||
+    event.type === 'customer.subscription.resumed' ||
     event.type === 'customer.subscription.deleted'
   ) {
     const sub = event.data.object as any;
     const clinicId = sub.metadata?.clinic_id;
+    // 'deleted' = canceled. For paused/resumed/updated, sub.status already
+    // reflects the new state ('paused' / 'active' / 'trialing'), so trust it.
     const status = event.type === 'customer.subscription.deleted' ? 'canceled' : sub.status;
     if (clinicId) {
       try {
