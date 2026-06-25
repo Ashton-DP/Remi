@@ -409,24 +409,25 @@ export async function createClinic(obj: {
   plan?: string;
   subscription_status?: string;
 }) {
-  const { data, error } = await supabase
-    .from('clinics')
-    .insert({
-      name: obj.name,
-      timezone: obj.timezone ?? 'Africa/Johannesburg',
-      hours_json: obj.hours_json ?? null,
-      services_json: obj.services_json ?? null,
-      faq_json: obj.faq_json ?? null,
-      owner_summary_phone: obj.owner_summary_phone ?? null,
-      escalation_contact: obj.escalation_contact ?? null,
-      knowledge: obj.knowledge ?? null,
-      dashboard_token: obj.dashboard_token,
-      booking_provider: 'google',
-      ...(obj.plan ? { plan: obj.plan } : {}),
-      ...(obj.subscription_status ? { subscription_status: obj.subscription_status } : {}),
-    })
-    .select('id')
-    .single();
+  // Only write the columns we were actually given. Forcing nulls for every
+  // optional column makes the whole insert fail if the DB is behind on a
+  // migration (e.g. a missing `knowledge` column) — so set just what's provided.
+  const row: Record<string, any> = {
+    name: obj.name,
+    timezone: obj.timezone ?? 'Africa/Johannesburg',
+    dashboard_token: obj.dashboard_token,
+    booking_provider: 'google',
+  };
+  if (obj.hours_json !== undefined) row.hours_json = obj.hours_json;
+  if (obj.services_json !== undefined) row.services_json = obj.services_json;
+  if (obj.faq_json !== undefined) row.faq_json = obj.faq_json;
+  if (obj.owner_summary_phone !== undefined) row.owner_summary_phone = obj.owner_summary_phone;
+  if (obj.escalation_contact !== undefined) row.escalation_contact = obj.escalation_contact;
+  if (obj.knowledge !== undefined) row.knowledge = obj.knowledge;
+  if (obj.plan) row.plan = obj.plan;
+  if (obj.subscription_status) row.subscription_status = obj.subscription_status;
+
+  const { data, error } = await supabase.from('clinics').insert(row).select('id').single();
   if (error) throw new Error(error.message);
   return data;
 }
