@@ -15,10 +15,18 @@ import { runAgent } from '../brain/agent';
  * "R3,000" / "R3000" / "R3 000" → "3000 rand" so it's spoken "three thousand rand".
  */
 export function speechNormalize(text: string): string {
-  return String(text ?? '').replace(
-    /R\s?(\d{1,3}(?:[, ]\d{3})+|\d+)/g,
-    (_m, num: string) => `${num.replace(/[, ]/g, '')} rand`,
-  );
+  let s = String(text ?? '');
+  // Markdown links [label](url) → just the label.
+  s = s.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  // Strip emphasis/code/heading markers so TTS doesn't read "asterisk" aloud.
+  s = s.replace(/[*_`#]+/g, ' ');
+  // Drop list-item markers at the start of lines.
+  s = s.replace(/^\s*[-•]\s+/gm, '');
+  s = s.replace(/^\s*\d+\.\s+/gm, '');
+  // "R300" / "R1,000" → "300 rand" so it's spoken correctly.
+  s = s.replace(/R\s?(\d{1,3}(?:[, ]\d{3})+|\d+)/g, (_m, num: string) => `${num.replace(/[, ]/g, '')} rand`);
+  // Collapse whitespace left behind.
+  return s.replace(/\s+/g, ' ').trim();
 }
 
 /** XML-escape a value for safe inclusion in TwiML attributes/text. */

@@ -68,6 +68,9 @@ export const config = {
     // Neural voices chosen per detected reply language.
     azureVoiceAf: opt('AZURE_VOICE_AF', 'af-ZA-AdriNeural'),
     azureVoiceEn: opt('AZURE_VOICE_EN', 'en-ZA-LeahNeural'),
+    // How long Azure waits for silence before finalising a caller's utterance.
+    // Lower = snappier turn-taking (less latency) but risks cutting people off.
+    azureSttSilenceMs: parseInt(opt('AZURE_STT_SILENCE_MS', '400'), 10),
   },
   // WhatsApp Business API approved-template Content SIDs (HX…). Set after Meta
   // approval; when blank, proactive sends fall back to free-form text (sandbox).
