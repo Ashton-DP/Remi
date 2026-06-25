@@ -28,7 +28,7 @@ import {
   handleMe, handleToday, handleInvoices, handleInvoiceDetail, handleBookings,
   handleConversations, handleConversationDetail, handleInsights, handleAssistant,
   handleCustomers, handleSetChasing, handleInvoiceActionWrite, handleResolveEscalation,
-  handleSettings, handleUpdateSettings,
+  handleSettings, handleUpdateSettings, handleTestCalendar,
   handleConnectStartAuthed, handleConnectSheetAuthed, handleConnectPayment,
   handleTeam, handleTeamInvite, handleTeamRole, handleTeamRemove,
   handleCreateBooking, handleCancelBooking,
@@ -143,6 +143,7 @@ app.get('/api/insights', requireApiAuth, handleInsights);
 app.get('/api/customers', requireApiAuth, handleCustomers);
 app.get('/api/settings', requireApiAuth, handleSettings);
 app.post('/api/settings', requireApiAuth, handleUpdateSettings);
+app.get('/api/calendar/test', requireApiAuth, handleTestCalendar);
 app.get('/api/connect/:provider/start', requireApiAuth, handleConnectStartAuthed);
 app.post('/api/connect/gsheet', requireApiAuth, handleConnectSheetAuthed);
 app.post('/api/connect/payment', requireApiAuth, handleConnectPayment);

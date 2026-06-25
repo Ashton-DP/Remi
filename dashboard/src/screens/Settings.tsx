@@ -7,11 +7,13 @@ type SettingsData = {
   clinic: {
     name: string; timezone: string; knowledge: string; owner_summary_phone: string;
     escalation_contact: string; chase_reply_to: string; chase_cadence: any; services: any[]; hours: Record<string, any>;
+    google_calendar_id: string;
   };
   connections: {
     invoice_source: string | null; payment_provider: string | null;
     email_domain: string | null; email_domain_status: string | null; chasing_paused: boolean;
   };
+  calendar: { service_account_email: string | null; connected: boolean };
 };
 const DEFAULT_CADENCE = { stage1: 1, stage2: 7, stage3: 21, cooldown: 6 };
 const PAY_FIELDS: Record<string, [string, string][]> = {
@@ -49,11 +51,12 @@ export function Settings() {
   const [payFields, setPayFields] = useState<Record<string, string>>({});
   const [connBusy, setConnBusy] = useState(false);
   const [connMsg, setConnMsg] = useState('');
+  const [calTest, setCalTest] = useState<{ ok?: boolean; error?: string; testing?: boolean }>({});
 
   function load() {
     api<SettingsData>('/api/settings').then((d) => {
       setS(d);
-      setForm({ name: d.clinic.name, timezone: d.clinic.timezone, owner_summary_phone: d.clinic.owner_summary_phone, escalation_contact: d.clinic.escalation_contact, knowledge: d.clinic.knowledge, chase_reply_to: d.clinic.chase_reply_to });
+      setForm({ name: d.clinic.name, timezone: d.clinic.timezone, owner_summary_phone: d.clinic.owner_summary_phone, escalation_contact: d.clinic.escalation_contact, knowledge: d.clinic.knowledge, chase_reply_to: d.clinic.chase_reply_to, google_calendar_id: d.clinic.google_calendar_id ?? '' });
       setCadence({ ...DEFAULT_CADENCE, ...(d.clinic.chase_cadence || {}) });
       setServices(Array.isArray(d.clinic.services) ? d.clinic.services.map((x: any) => ({ ...x })) : []);
       setHours(hydrateHours(d.clinic.hours || {}));
@@ -73,7 +76,7 @@ export function Settings() {
     try {
       const cleanServices = services.filter((sv) => (sv.service || sv.name || '').trim())
         .map((sv) => ({ service: (sv.service || sv.name || '').trim(), duration_min: Number(sv.duration_min) || 0, price_zar: Number(sv.price_zar) || 0, ...(sv.prep ? { prep: sv.prep } : {}) }));
-      await api('/api/settings', { method: 'POST', body: JSON.stringify({ ...form, chase_cadence: cadence, services_json: cleanServices, hours_json: buildHours(hours) }) });
+      await api('/api/settings', { method: 'POST', body: JSON.stringify({ ...form, google_calendar_id: form.google_calendar_id, chase_cadence: cadence, services_json: cleanServices, hours_json: buildHours(hours) }) });
       setSaved(true); setTimeout(() => setSaved(false), 2500);
     }
     catch (e: any) { setErr(e.message); } finally { setSaving(false); }
@@ -93,6 +96,11 @@ export function Settings() {
     try { await api('/api/connect/payment', { method: 'POST', body: JSON.stringify({ provider: payProvider, config: payFields }) }); setConnMsg(`Payment provider set to ${payProvider}.`); setPayFields({}); load(); }
     catch (e: any) { setConnMsg(e.message); } finally { setConnBusy(false); }
   }
+  async function testCalendar() {
+    setCalTest({ testing: true });
+    try { const r = await api<{ ok: boolean; error?: string }>('/api/calendar/test'); setCalTest({ ok: r.ok, error: r.error }); }
+    catch (e: any) { setCalTest({ ok: false, error: e.message }); }
+  }
 
   return (
     <>
@@ -105,6 +113,32 @@ export function Settings() {
           <div className="field"><label>Escalation contact</label><input value={form.escalation_contact} onChange={(e) => f('escalation_contact', e.target.value)} disabled={!canEdit} /></div>
           <div className="field"><label>Reply-to email (for chase emails)</label><input value={form.chase_reply_to} onChange={(e) => f('chase_reply_to', e.target.value)} disabled={!canEdit} placeholder="accounts@yourclinic.co.za" /></div>
           <div className="field full"><label>What Remi should know (location, parking, payment, policies…)</label><textarea rows={4} value={form.knowledge} onChange={(e) => f('knowledge', e.target.value)} disabled={!canEdit} /></div>
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginBottom: 18 }}>
+        <div className="panel-head">
+          <h2>Calendar</h2>
+          <span className={`badge ${s.calendar.connected ? 'b-green' : 'b-grey'}`}>{s.calendar.connected ? 'Connected' : 'Not connected'}</span>
+        </div>
+        <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="conn-sub">Remi books appointments into your Google Calendar. To connect: open Google Calendar → your calendar's <b>Settings and sharing</b> → <b>Share with specific people</b> → add the email below with <b>“Make changes to events”</b>. Then copy your <b>Calendar ID</b> (Settings → “Integrate calendar”) and paste it here.</div>
+          {s.calendar.service_account_email ? (
+            <div className="field"><label>1. Share your calendar with this email</label>
+              <input className="conn-input" readOnly value={s.calendar.service_account_email} onFocus={(e) => e.currentTarget.select()} />
+            </div>
+          ) : <div className="faint">Calendar isn't set up on the server yet — contact support.</div>}
+          <div className="field"><label>2. Your Google Calendar ID</label>
+            <input className="conn-input" placeholder="name@gmail.com or …@group.calendar.google.com" value={form.google_calendar_id} onChange={(e) => f('google_calendar_id', e.target.value)} disabled={!canEdit} />
+          </div>
+          {canEdit && (
+            <div className="btn-row" style={{ alignItems: 'center', gap: 12 }}>
+              <button className="btn" disabled={!!calTest.testing} onClick={testCalendar}>{calTest.testing ? 'Testing…' : 'Test connection'}</button>
+              {calTest.ok === true && <span className="saved">Connected ✓</span>}
+              {calTest.ok === false && <span className="error">{calTest.error}</span>}
+              <span className="faint" style={{ fontSize: 12 }}>Save changes first, then test.</span>
+            </div>
+          )}
         </div>
       </div>
 

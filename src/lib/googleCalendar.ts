@@ -19,6 +19,30 @@ function calId(calendarId?: string): string {
   return calendarId || config.google.calendarId;
 }
 
+/** The service account's email — a clinic must share their calendar with this. */
+export function serviceAccountEmail(): string | null {
+  if (!config.google.serviceAccountJson) return null;
+  try {
+    const creds = JSON.parse(Buffer.from(config.google.serviceAccountJson, 'base64').toString('utf8'));
+    return creds.client_email ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Verify a calendar is reachable (shared with the service account + valid id). */
+export async function testCalendar(calendarId?: string): Promise<{ ok: boolean; error?: string }> {
+  const cal = getCalendar();
+  if (!cal) return { ok: false, error: 'Google not configured on the server.' };
+  try {
+    const now = new Date();
+    await getBusy(now.toISOString(), new Date(now.getTime() + 3600_000).toISOString(), calendarId);
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.errors?.[0]?.message || e?.message || 'Could not read the calendar.' };
+  }
+}
+
 export interface BusyWindow {
   start: string;
   end: string;

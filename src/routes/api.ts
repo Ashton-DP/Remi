@@ -21,6 +21,7 @@ import { computeReportStats } from '../report';
 import { computeInsights } from '../dashboard';
 import { runAssistant } from '../brain/assistant';
 import { getInvoiceSource } from '../lib/invoiceSources';
+import { serviceAccountEmail, testCalendar } from '../lib/googleCalendar';
 import { signState } from './connect';
 import { config } from '../config';
 
@@ -188,6 +189,7 @@ export async function handleSettings(req: Request, res: Response) {
       escalation_contact: c.escalation_contact ?? '', chase_cadence: c.chase_cadence ?? null,
       chase_reply_to: c.chase_reply_to ?? '',
       services: c.services_json ?? [], hours: c.hours_json ?? {},
+      google_calendar_id: c.google_calendar_id ?? '',
     },
     connections: {
       invoice_source: c.invoice_source ?? null,
@@ -196,7 +198,19 @@ export async function handleSettings(req: Request, res: Response) {
       email_domain_status: c.email_domain_status ?? null,
       chasing_paused: !!c.chasing_paused,
     },
+    calendar: {
+      service_account_email: serviceAccountEmail(),
+      connected: !!c.google_calendar_id,
+    },
   });
+}
+
+/** GET /api/calendar/test — verify the clinic's calendar is shared + reachable. */
+export async function handleTestCalendar(req: Request, res: Response) {
+  const auth = getAuth(req);
+  const c = await getClinic(auth.clinicId);
+  const result = await testCalendar(c?.google_calendar_id);
+  res.json(result);
 }
 
 /** POST /api/settings — update whitelisted clinic fields. Admin/owner only. */
