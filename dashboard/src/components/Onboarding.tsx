@@ -38,7 +38,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [name, setName] = useState('');
   const [timezone, setTimezone] = useState('Africa/Johannesburg');
   const [ownerPhone, setOwnerPhone] = useState('');
-  const [escalation, setEscalation] = useState('');
+  const [escalation] = useState('');
 
   // Step 2 — services
   const [services, setServices] = useState<Service[]>([
@@ -331,6 +331,14 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
             </button>
           )}
         </div>
+        {step === STEPS.length && (
+          <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--onb-muted, #94a3b8)', marginTop: 12 }}>
+            By continuing you agree to our{' '}
+            <a href="https://remireception.com/terms" target="_blank" rel="noreferrer" style={{ color: '#7c6fea' }}>Terms of Service</a>
+            {' '}and{' '}
+            <a href="https://remireception.com/privacy" target="_blank" rel="noreferrer" style={{ color: '#7c6fea' }}>Privacy Policy</a>.
+          </p>
+        )}
       </div>
     </div>
   );

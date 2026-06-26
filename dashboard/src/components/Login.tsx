@@ -74,6 +74,12 @@ export function Login() {
                 ? <><span className="link" onClick={() => { setMode('reset'); setErr(''); }}>Forgot password?</span> · Need help? Contact your Remi setup team.</>
                 : <><span className="link" onClick={() => { setMode('login'); setErr(''); }}>Back to sign in</span></>}
             </p>
+            <p className="hint" style={{ marginTop: 12, fontSize: 12 }}>
+              By signing in you agree to our{' '}
+              <a href="https://remireception.com/terms" target="_blank" rel="noreferrer">Terms of Service</a>
+              {' '}and{' '}
+              <a href="https://remireception.com/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>.
+            </p>
           </>
         )}
       </form>
