@@ -9,6 +9,7 @@ import {
   getNextBooking, setBookingStatus, rescheduleBooking,
   addWaitlist, getNextWaitlist, setBookingDepositStatus, setClientName,
   findConfirmedBooking, setConversationStatus,
+  getTodaysBookings, listWaitlist, getOverdueChasedInvoices,
 } from '../db';
 
 /** Executes a tool call and performs all side effects. Returns a JSON-able result. */
@@ -216,6 +217,35 @@ export async function executeTool(
       return {
         ok: true,
         message: `Added to waitlist for ${input.service}. We'll text you as soon as a slot opens.`,
+      };
+    }
+
+    case 'get_daily_brief': {
+      const tz = clinic.timezone ?? 'Africa/Johannesburg';
+      const [bookings, waitlist, overdue] = await Promise.all([
+        getTodaysBookings(clinic.id, tz),
+        listWaitlist(clinic.id),
+        getOverdueChasedInvoices(clinic.id),
+      ]);
+      const fmt = (iso: string) => new Date(iso).toLocaleTimeString('en-ZA', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
+      const appts = bookings.map((b: any) => ({
+        time: fmt(b.start_at),
+        client: b.clients?.name ?? 'Unknown',
+        service: b.service,
+        status: b.status,
+      }));
+      const waiting = waitlist.map((w: any) => ({
+        client: w.clients?.name ?? 'Unknown',
+        service: w.service,
+        window: w.preferred_window ?? 'any time',
+      }));
+      return {
+        date: new Date().toLocaleDateString('en-ZA', { timeZone: tz, dateStyle: 'full' }),
+        total_appointments: appts.length,
+        appointments: appts,
+        waitlist_count: waiting.length,
+        waitlist: waiting,
+        overdue_invoices: overdue.length,
       };
     }
 

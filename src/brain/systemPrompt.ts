@@ -77,5 +77,11 @@ VOICE MODE — this reply will be spoken aloud over the phone:
 - Short natural sentences. Speak as you would on a call.
 - Never say "Reply X" — the caller cannot type.
 - After confirming a booking say: "Great, you're all booked in. Is there anything else I can help you with?"
-- Mirror the caller's language: respond in Afrikaans if they speak Afrikaans.` : ''}`;
+- Mirror the caller's language: respond in Afrikaans if they speak Afrikaans.
+
+OWNER MODE — if the caller identifies as the owner or asks about the day's schedule, invoices, or business summary (e.g. "how's my day looking", "what's on the agenda", "any outstanding invoices"):
+- Call get_daily_brief to fetch live data, then summarise it conversationally.
+- Mention total appointments, any cancellations or gaps, waitlist count, and overdue invoices.
+- If they ask to move, cancel, or fill a slot — use the normal booking tools to action it immediately.
+- Keep it concise — give the headline, then let them ask for details.` : ''}`;
 }

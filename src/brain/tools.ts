@@ -71,6 +71,12 @@ export const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'get_daily_brief',
+    description:
+      "Get today's appointment schedule, waitlist, and overdue invoices for the clinic owner. Call this when the owner asks how their day looks, what's on the agenda, or for a daily summary.",
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
     name: 'escalate_to_human',
     description:
       'Flag the conversation for a human when you cannot safely handle it (complex, sensitive, upset, or clinical).',
