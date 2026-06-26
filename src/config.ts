@@ -88,6 +88,7 @@ export const config = {
     deposit: opt('WA_TEMPLATE_DEPOSIT'),
   },
   defaultClinicId: opt('DEFAULT_CLINIC_ID'),
+  operatorAlertPhone: opt('OPERATOR_ALERT_PHONE'), // Ashton's WhatsApp for new-clinic alerts
   // Dashboard / report access. FAIL-CLOSED: if no token is set, /dashboard and
   // /report are disabled (they expose patient data). Set a long random value.
   // A clinic can also have its own clinics.dashboard_token for a scoped link.

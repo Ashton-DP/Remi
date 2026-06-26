@@ -17,7 +17,9 @@ import {
   getOrCreateClient, setClientName, createBookingRow, scheduleReminders, cancelClinicBooking,
   listWaitlist, addWaitlistAtEnd, setWaitlistOrder, removeWaitlistEntry, getWaitlistEntry,
   isPlatformAdmin, listClinicsForAdmin,
+  completeOnboarding, submitWhatsAppNumber,
 } from '../db';
+import { sendProactiveWhatsApp } from '../lib/twilio';
 import { computeReportStats } from '../report';
 import { computeInsights } from '../dashboard';
 import { runAssistant } from '../brain/assistant';
@@ -35,6 +37,7 @@ export async function handleMe(req: Request, res: Response) {
     clinic: clinic ? { id: clinic.id, name: clinic.name, timezone: clinic.timezone ?? 'Africa/Johannesburg' } : null,
     plan: clinic?.plan ?? 'complete',
     is_platform_admin: await isPlatformAdmin(auth.userId),
+    onboarding_completed: !!clinic?.onboarding_completed_at,
   });
 }
 
@@ -435,5 +438,39 @@ export async function handleBookWaitlist(req: Request, res: Response) {
   const booking = await createBookingRow({ clinicId: auth.clinicId, clientId: entry.client_id, service: entry.service, startAt: startDate.toISOString(), endAt, calendarEventId: 'manual', source: 'waitlist' });
   await scheduleReminders(booking.id, startDate.toISOString()).catch(() => {});
   await removeWaitlistEntry(auth.clinicId, String(req.params.id));
+  res.json({ ok: true });
+}
+
+// ── Onboarding ────────────────────────────────────────────────────────────────
+
+/** POST /api/onboarding/complete — marks setup done; saves settings in one shot. */
+export async function handleCompleteOnboarding(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'owner')) return res.status(403).json({ error: 'Owner only.' });
+  // Save all clinic settings submitted from the wizard
+  if (req.body && Object.keys(req.body).length) {
+    await updateClinicSettings(auth.clinicId, req.body);
+  }
+  await completeOnboarding(auth.clinicId);
+  res.json({ ok: true });
+}
+
+/** POST /api/onboarding/whatsapp { number } — saves clinic WhatsApp number + alerts operator. */
+export async function handleSubmitWhatsApp(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'owner')) return res.status(403).json({ error: 'Owner only.' });
+  const raw = String(req.body?.number ?? '').trim().replace(/\s/g, '');
+  if (!raw) return res.status(400).json({ error: 'A WhatsApp number is required.' });
+  // Normalise to E.164 (+27…)
+  const number = raw.startsWith('+') ? raw : `+${raw}`;
+  await submitWhatsAppNumber(auth.clinicId, number);
+  // Alert operator (Ashton) via WhatsApp so he can connect it in Twilio
+  const clinic = await getClinic(auth.clinicId);
+  const operatorPhone = config.operatorAlertPhone;
+  if (operatorPhone) {
+    await sendProactiveWhatsApp(operatorPhone, {
+      fallbackBody: `🔔 New WhatsApp setup request\nClinic: ${clinic?.name ?? auth.clinicId}\nNumber: ${number}\nAction: Add this number as a WhatsApp sender in Twilio, then forward the OTP to the clinic.`,
+    }).catch((e) => console.error('[whatsapp-alert]', e));
+  }
   res.json({ ok: true });
 }

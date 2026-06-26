@@ -34,6 +34,7 @@ import {
   handleCreateBooking, handleCancelBooking,
   handleWaitlist, handleAddWaitlist, handleMoveWaitlist, handleRemoveWaitlist, handleBookWaitlist,
   handleAdminClients,
+  handleCompleteOnboarding, handleSubmitWhatsApp,
 } from './routes/api';
 
 const app = express();
@@ -155,6 +156,8 @@ app.post('/api/team/invite', requireApiAuth, handleTeamInvite);
 app.post('/api/team/:userId/role', requireApiAuth, handleTeamRole);
 app.delete('/api/team/:userId', requireApiAuth, handleTeamRemove);
 app.post('/api/assistant', requireApiAuth, handleAssistant);
+app.post('/api/onboarding/complete', requireApiAuth, handleCompleteOnboarding);
+app.post('/api/onboarding/whatsapp', requireApiAuth, handleSubmitWhatsApp);
 // Phase 3 controls (write actions)
 app.post('/api/chasing', requireApiAuth, handleSetChasing);
 app.post('/api/invoices/:id/action', requireApiAuth, handleInvoiceActionWrite);

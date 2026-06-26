@@ -6,11 +6,27 @@ export async function getClinic(id: string) {
   return data;
 }
 
-/** Look up a clinic by its Twilio number (voice or WhatsApp). */
+/** Look up a clinic by its Twilio number (voice or WhatsApp).
+ *  For WhatsApp, checks the per-clinic whatsapp_number first (their own number
+ *  connected through our Twilio account), then falls back to the shared twilio_number. */
 export async function getClinicByNumber(to: string) {
   const number = to.replace(/^whatsapp:/, ''); // strip prefix if present
+  // 1. Try per-clinic WhatsApp number (each clinic's own number)
+  const { data: byWa } = await supabase.from('clinics').select('*').eq('whatsapp_number', number).maybeSingle();
+  if (byWa) return byWa;
+  // 2. Fall back to shared Twilio number
   const { data } = await supabase.from('clinics').select('*').eq('twilio_number', number).maybeSingle();
   return data ?? null;
+}
+
+/** Mark a clinic's onboarding as complete. */
+export async function completeOnboarding(clinicId: string) {
+  await supabase.from('clinics').update({ onboarding_completed_at: new Date().toISOString() }).eq('id', clinicId);
+}
+
+/** Save the clinic's WhatsApp number as pending connection by operator. */
+export async function submitWhatsAppNumber(clinicId: string, number: string) {
+  await supabase.from('clinics').update({ whatsapp_number: number, whatsapp_pending: true }).eq('id', clinicId);
 }
 
 export async function getOrCreateClient(clinicId: string, phone: string) {

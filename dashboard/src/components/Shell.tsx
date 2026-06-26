@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Icon } from './icons';
+import { Onboarding } from './Onboarding';
 import { Assistant } from '../screens/Assistant';
 import { Today } from '../screens/Today';
 import { Inbox } from '../screens/Inbox';
@@ -12,7 +13,7 @@ import { Team } from '../screens/Team';
 import { Settings } from '../screens/Settings';
 import { Operator } from '../screens/Operator';
 
-type Me = { user: { email: string; role: string }; clinic: { name: string } | null; plan?: string; is_platform_admin?: boolean };
+type Me = { user: { email: string; role: string }; clinic: { name: string } | null; plan?: string; is_platform_admin?: boolean; onboarding_completed?: boolean };
 
 // Platform-admin-only operator view (god-view across all clinics). Kept out of
 // NAV/PLAN_NAV so it never shows for normal clinic logins.
@@ -54,6 +55,11 @@ export function Shell({ onSignOut }: { onSignOut: () => void }) {
     ...(hasClinic ? NAV.filter((n) => allowed.includes(n.key)) : []),
   ];
   useEffect(() => { if (me && !items.find((i) => i.key === view)) setView(items[0]?.key ?? 'operator'); }, [me]);
+
+  // Show onboarding wizard for new clinics that haven't completed setup
+  if (me && me.clinic && me.user.role === 'owner' && me.onboarding_completed === false) {
+    return <Onboarding onComplete={() => setMe({ ...me, onboarding_completed: true })} />;
+  }
 
   const lead = items.filter((n) => n.lead);
   const rest = items.filter((n) => !n.lead);

@@ -52,9 +52,12 @@ async function createBooking(clientId: string, service: string, startIso: string
 
 async function createInvoice(clientId: string, amount: number, status: 'overdue' | 'paid', chaseStage = 1) {
   const num = `INV-DEMO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const due = new Date();
+  due.setDate(due.getDate() - 14); // 2 weeks overdue
   const { error } = await supabase.from('invoices').insert({
     clinic_id: clinicId, client_id: clientId,
-    invoice_number: num, amount_zar: amount,
+    invoice_number: num, amount_due: amount,
+    due_date: due.toISOString().slice(0, 10),
     status, chase_stage: chaseStage, source: 'demo',
   });
   if (error) throw new Error(`Invoice ${num}: ${error.message}`);
