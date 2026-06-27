@@ -23,6 +23,11 @@ async function accessToken(creds: PaypalCreds): Promise<string> {
   return data.access_token;
 }
 
+/** Verify PayPal app credentials by fetching an OAuth token (throws if invalid). */
+export async function verifyPaypalCreds(creds: PaypalCreds): Promise<void> {
+  await accessToken(creds);
+}
+
 export async function createPaypalOrder(creds: PaypalCreds, o: {
   amount: number; currency?: string; invoiceId: string; itemName: string; returnUrl: string; cancelUrl: string;
 }): Promise<{ approveUrl: string; id: string }> {

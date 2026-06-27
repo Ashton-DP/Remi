@@ -486,6 +486,24 @@ export async function getTodaysBookings(clinicId: string, timeZone = 'Africa/Joh
   return getBookingsForDate(clinicId, dateStr, timeZone);
 }
 
+/** Atomically claim a once-per-period scheduler job. Returns true if THIS call
+ *  claimed it (run the job), false if already claimed by a prior run or another
+ *  instance. Survives restarts and coordinates across multiple instances, so a
+ *  redeploy or a second worker can't re-send owner briefs / chases. */
+export async function claimSchedulerRun(key: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('scheduler_runs')
+    .upsert({ key }, { onConflict: 'key', ignoreDuplicates: true })
+    .select('key');
+  return (data?.length ?? 0) > 0;
+}
+
+/** Trim old scheduler-run markers so the table doesn't grow unbounded. */
+export async function purgeOldSchedulerRuns(days = 45) {
+  const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+  await supabase.from('scheduler_runs').delete().lt('ran_at', cutoff);
+}
+
 /** Clinics that have opted into proactive briefs by configuring a summary phone. */
 export async function getClinicsWithSummaryPhone() {
   const { data } = await supabase

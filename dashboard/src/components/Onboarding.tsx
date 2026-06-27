@@ -62,6 +62,8 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
 
   // Step 5 — calendar
   const [calendarId, setCalendarId] = useState('');
+  const [calTesting, setCalTesting] = useState(false);
+  const [calTest, setCalTest] = useState<{ ok: boolean; error?: string } | null>(null);
 
   // Step 6 — WhatsApp
   const [waNumber, setWaNumber] = useState('');
@@ -114,6 +116,20 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
       setErr(e.message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function testCalendar() {
+    if (!calendarId.trim()) return;
+    setCalTesting(true);
+    setCalTest(null);
+    try {
+      const r = await api<{ ok: boolean; error?: string }>(`/api/calendar/test?calendar_id=${encodeURIComponent(calendarId.trim())}`);
+      setCalTest({ ok: !!r.ok, error: r.error });
+    } catch (e: any) {
+      setCalTest({ ok: false, error: e.message });
+    } finally {
+      setCalTesting(false);
     }
   }
 
@@ -284,7 +300,17 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
               </div>
               <div className="onb-field">
                 <label>Google Calendar ID</label>
-                <input value={calendarId} onChange={(e) => setCalendarId(e.target.value)} placeholder="yourname@gmail.com or …@group.calendar.google.com" />
+                <input value={calendarId} onChange={(e) => { setCalendarId(e.target.value); setCalTest(null); }} placeholder="yourname@gmail.com or …@group.calendar.google.com" />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+                <button
+                  type="button"
+                  className="btn sm"
+                  disabled={!calendarId.trim() || calTesting}
+                  onClick={testCalendar}
+                >{calTesting ? 'Testing…' : 'Test connection'}</button>
+                {calTest?.ok === true && <span style={{ color: 'var(--green)', fontSize: 13 }}>✓ Connected — Remi can see this calendar.</span>}
+                {calTest?.ok === false && <span style={{ color: 'var(--red)', fontSize: 13 }}>✗ {calTest.error || "Couldn't reach it — check the ID and that you shared it with the email above."}</span>}
               </div>
               <p className="onb-skip">You can skip this for now and connect later in Settings.</p>
             </>

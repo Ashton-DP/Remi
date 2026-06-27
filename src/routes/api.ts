@@ -7,6 +7,7 @@ import type { Request, Response } from 'express';
 import crypto from 'node:crypto';
 import { supabase } from '../lib/supabase';
 import { getAuth, roleAtLeast } from '../lib/apiAuth';
+import { qp } from '../lib/dashboardAuth';
 import {
   getClinic, getTodaysBookings, countConversations, getChaseableInvoices, getOpenEscalations,
   listInvoices, getInvoiceForClinic, getInvoiceChases, listClinicBookings, listConversations,
@@ -33,6 +34,7 @@ import { serviceAccountEmail, testCalendar } from '../lib/googleCalendar';
 import { signState } from './connect';
 import { config } from '../config';
 import { membershipProvider, cancelMembershipSubscription } from '../lib/subscriptions';
+import { getPaymentProvider, verifyPaymentCredentials } from '../lib/payments';
 
 /** GET /api/me — who am I + which clinic/role. */
 export async function handleMe(req: Request, res: Response) {
@@ -84,6 +86,14 @@ export async function handleToday(req: Request, res: Response) {
       overdue_invoices: (overdue as any[]).length,
       overdue_total_zar: overdueTotal,
       open_escalations: (escalations as any[]).length,
+    },
+    // Connection health — so an owner who skipped steps knows what's still not
+    // live, instead of assuming everything's set up.
+    setup: {
+      whatsapp_connected: !!clinic?.whatsapp_number && !clinic?.whatsapp_pending,
+      whatsapp_pending: !!clinic?.whatsapp_pending,
+      calendar_connected: !!clinic?.google_calendar_id,
+      payment_connected: !!getPaymentProvider(clinic),
     },
     needs_you: (escalations as any[]).slice(0, 10).map((e: any) => ({
       id: e.id, reason: e.reason, summary: e.summary, created_at: e.created_at,
@@ -327,7 +337,10 @@ export async function handleSettings(req: Request, res: Response) {
 export async function handleTestCalendar(req: Request, res: Response) {
   const auth = getAuth(req);
   const c = await getClinic(auth.clinicId);
-  const result = await testCalendar(c?.google_calendar_id);
+  // Accept an unsaved calendar id (onboarding tests before saving); fall back to
+  // the saved one for the Settings "test connection" button.
+  const calId = qp(req.query.calendar_id) || c?.google_calendar_id;
+  const result = await testCalendar(calId);
   res.json(result);
 }
 
@@ -370,6 +383,13 @@ export async function handleConnectPayment(req: Request, res: Response) {
   const provider = String(req.body?.provider ?? '');
   const cfg = req.body?.config ?? {};
   if (!['payfast', 'paystack', 'stripe', 'paypal', 'link'].includes(provider)) return res.status(400).json({ error: 'Unknown provider' });
+  // Validate the credentials live before saving — don't let a clinic go "live"
+  // with a broken/test key that fails silently at the customer's checkout.
+  try {
+    await verifyPaymentCredentials(provider as any, cfg);
+  } catch (e: any) {
+    return res.status(400).json({ error: e?.message || 'Those payment details did not verify.' });
+  }
   await setPaymentConfig(auth.clinicId, provider, { [provider]: cfg });
   res.json({ ok: true });
 }

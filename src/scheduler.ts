@@ -5,7 +5,7 @@
 import { config } from './config'; // also loads dotenv
 import { installFetchTimeout } from './lib/httpTimeout';
 import { initMonitoring } from './lib/monitoring';
-import { getDueReminders, markReminderSent, markReminderFailed, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getBookingsForDate, getClinicsWithSummaryPhone, getClinicIdsWithOverdueInvoices, getClientsWithBirthdayToday, getClientsWithAnniversaryToday, getClientsWithLowPackage, getMembershipsToSync, setMembershipStatus, getActiveClinics, getPendingMembershipsToReconcile, activateMembership } from './db';
+import { getDueReminders, markReminderSent, markReminderFailed, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getBookingsForDate, getClinicsWithSummaryPhone, getClinicIdsWithOverdueInvoices, getClientsWithBirthdayToday, getClientsWithAnniversaryToday, getClientsWithLowPackage, getMembershipsToSync, setMembershipStatus, getActiveClinics, getPendingMembershipsToReconcile, activateMembership, claimSchedulerRun, purgeOldSchedulerRuns } from './db';
 import { syncMembershipStatus, reconcilePendingMembership } from './lib/subscriptions';
 import { sendProactiveWhatsApp } from './lib/twilio';
 import { getClinicsWithEmailInbox, getOrCreateClientByEmail, getOrCreateConversation, saveMessage, getHistory, markProcessedOnce } from './db';
@@ -213,7 +213,6 @@ async function ownerSummary(clinicId: string) {
 }
 
 const PUBLIC_BASE = process.env.PUBLIC_BASE_URL || 'https://www.remireception.com';
-let _lastMonthlyKey = '';
 
 /** Once a month, send the owner the headline "revenue recovered" + a link to the
  *  branded report. This is the anti-churn artifact. */
@@ -264,7 +263,8 @@ async function maybeRunInvoiceChase() {
   const { dateStr, hour } = clinicNow();
   const dow = new Date(`${dateStr}T12:00:00Z`).getUTCDay(); // 0=Sun 6=Sat
   if (dateStr === _lastChaseDate || hour < config.chase.hour || dow === 0 || dow === 6) return;
-  _lastChaseDate = dateStr;
+  _lastChaseDate = dateStr; // per-process fast-path
+  if (!(await claimSchedulerRun(`chase:${dateStr}`))) return; // once per weekday, durably
 
   // 1. Auto-sync invoices from connected accounting sources (Xero/QBO/Sage/Sheet).
   const sourceClinics = await getClinicsWithInvoiceSource().catch(() => []);
@@ -272,11 +272,9 @@ async function maybeRunInvoiceChase() {
     await syncInvoicesForClinic(c.id).catch((e) => console.error('[invoice-sync]', c.id, e?.message ?? e));
   }
 
-  // 2. Chase overdue invoices. Default clinic if set, else any clinic that has
-  //    overdue invoices or a connected source.
-  const ids = config.defaultClinicId
-    ? [config.defaultClinicId]
-    : [...new Set([...(await getClinicIdsWithOverdueInvoices()), ...sourceClinics.map((c: any) => c.id)])];
+  // 2. Chase overdue invoices across EVERY clinic with overdue invoices or a
+  //    connected source — not just a single default clinic.
+  const ids = [...new Set([...(await getClinicIdsWithOverdueInvoices()), ...sourceClinics.map((c: any) => c.id)])];
   let total = 0;
   for (const id of ids) total += await runChaseForClinic(id).catch((e) => (console.error('[chase]', e), 0));
   if (total) console.log(`[scheduler] invoice chase: ${total} message(s) sent across ${ids.length} clinic(s)`);
@@ -289,11 +287,14 @@ const EVENING_HOUR = parseInt(process.env.EVENING_BRIEF_HOUR ?? '17', 10);
 // when the day rolls over so it never grows unbounded.
 const _briefsSent = new Set<string>();
 let _briefsDay = '';
-function alreadySent(key: string, dateStr: string): boolean {
+/** True if this brief was already sent today. In-memory Set is a per-process
+ *  fast-path; the DB claim is authoritative across restarts + instances. */
+async function alreadySent(key: string, dateStr: string): Promise<boolean> {
   if (dateStr !== _briefsDay) { _briefsSent.clear(); _briefsDay = dateStr; }
   if (_briefsSent.has(key)) return true;
   _briefsSent.add(key);
-  return false;
+  const claimed = await claimSchedulerRun(`brief:${key}`);
+  return !claimed; // already claimed elsewhere → treat as already sent
 }
 
 /** Every clinic that has opted into proactive briefs (summary phone set), plus
@@ -316,7 +317,7 @@ async function maybeRunHuddle() {
   if (hour < HUDDLE_HOUR) return;
   for (const clinic of await briefRecipients()) {
     const to = clinic.owner_summary_phone || clinic.escalation_contact;
-    if (!to || alreadySent(`${clinic.id}:${dateStr}:morning`, dateStr)) continue;
+    if (!to || await alreadySent(`${clinic.id}:${dateStr}:morning`, dateStr)) continue;
     try {
       const tz = clinic.timezone ?? 'Africa/Johannesburg';
       const [bookings, overdue, esc] = await Promise.all([
@@ -344,7 +345,7 @@ async function maybeRunEveningBrief() {
   if (hour < EVENING_HOUR) return;
   for (const clinic of await briefRecipients()) {
     const to = clinic.owner_summary_phone || clinic.escalation_contact;
-    if (!to || alreadySent(`${clinic.id}:${dateStr}:evening`, dateStr)) continue;
+    if (!to || await alreadySent(`${clinic.id}:${dateStr}:evening`, dateStr)) continue;
     try {
       const tz = clinic.timezone ?? 'Africa/Johannesburg';
       const tomorrowStr = new Date(Date.now() + 86_400_000).toLocaleDateString('en-CA', { timeZone: tz });
@@ -494,11 +495,14 @@ async function reconcilePendingMemberships(clinicId: string) {
 async function maybeRunDailyJobs() {
   const { dateStr, hour } = clinicNow();
   if (dateStr === _lastDailyDate || hour < DAILY_HOUR) return;
-  _lastDailyDate = dateStr;
+  _lastDailyDate = dateStr; // per-process fast-path
+  // Authoritative cross-restart / cross-instance guard: only one run per day wins.
+  if (!(await claimSchedulerRun(`daily:${dateStr}`))) return;
   console.log('[scheduler] running daily jobs for', dateStr);
   // POPIA data-retention purge — runs regardless of a default clinic.
   const retentionDays = parseInt(process.env.RETENTION_DAYS ?? '730', 10);
   await purgeExpiredData(retentionDays).catch((e) => console.error('[retention]', e));
+  await purgeOldSchedulerRuns().catch((e) => console.error('[scheduler-runs purge]', e));
   // Auto-verify pending white-label email domains (flips to live once DNS lands).
   await verifyPendingEmailDomains().catch((e) => console.error('[email-domains]', e));
   // Per-tenant daily jobs run for EVERY onboarded clinic, not just a default one.
@@ -508,8 +512,8 @@ async function maybeRunDailyJobs() {
   const monthKey = dateStr.slice(0, 7);
   const day = parseInt(dateStr.slice(8, 10), 10);
   const reportDay = parseInt(process.env.MONTHLY_REPORT_DAY ?? '1', 10);
-  const doMonthly = monthKey !== _lastMonthlyKey && day >= reportDay;
-  if (doMonthly) _lastMonthlyKey = monthKey;
+  // Once-per-month, durably (claim survives restarts within the month).
+  const doMonthly = day >= reportDay && (await claimSchedulerRun(`monthly:${monthKey}`));
 
   for (const clinic of clinics as any[]) {
     const id = clinic.id;

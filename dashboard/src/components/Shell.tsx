@@ -57,6 +57,13 @@ export function Shell({ onSignOut }: { onSignOut: () => void }) {
 
   useEffect(() => { api<Me>('/api/me').then(setMe).catch((e) => setErr(e.message)); }, []);
 
+  // Lets other screens jump to a tab (e.g. the "Finish setup" panel → Settings).
+  useEffect(() => {
+    const h = (e: Event) => setView((e as CustomEvent).detail);
+    window.addEventListener('remi:nav', h);
+    return () => window.removeEventListener('remi:nav', h);
+  }, []);
+
   const plan = me?.plan ?? 'complete';
   const isAdmin = !!me?.is_platform_admin;
   const hasClinic = !!me?.clinic;

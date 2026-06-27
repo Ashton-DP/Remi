@@ -27,6 +27,15 @@ export async function createStripeCheckout(secretKey: string, o: {
   return { url: data.url, id: data.id };
 }
 
+/** Verify a Stripe secret key works (a real live/restricted key, not a typo/test). */
+export async function verifyStripeKey(secretKey: string): Promise<void> {
+  const res = await fetch('https://api.stripe.com/v1/balance', { headers: { Authorization: `Bearer ${secretKey}` } });
+  if (!res.ok) {
+    const d: any = await res.json().catch(() => ({}));
+    throw new Error(d?.error?.message || `Stripe rejected the key (${res.status})`);
+  }
+}
+
 /** Returns true if the checkout session is paid. */
 export async function retrieveStripeSession(secretKey: string, sessionId: string): Promise<{ paid: boolean }> {
   const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`, {

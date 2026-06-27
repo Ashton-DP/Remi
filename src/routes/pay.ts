@@ -148,6 +148,8 @@ export async function handlePayfastNotify(req: Request, res: Response) {
       if (!membership) return;
       const clinic = await getClinic(membership.clinic_id);
       const passphrase = clinic?.payment_config?.payfast?.passphrase;
+      // Without a passphrase the signature is forgeable — refuse to act on the ITN.
+      if (!passphrase) { console.warn('[payfast] no passphrase set — rejecting membership ITN', membershipId); return; }
       if (!validatePayfastNotify(body, passphrase)) { console.warn('[payfast] bad signature for membership', membershipId); return; }
       const token = body.token || body.subscription_token;
       if (body.payment_status === 'COMPLETE' && token) {
@@ -170,6 +172,7 @@ export async function handlePayfastNotify(req: Request, res: Response) {
     if (!invoice) return;
     const clinic = await getClinic(invoice.clinic_id);
     const passphrase = clinic?.payment_config?.payfast?.passphrase;
+    if (!passphrase) { console.warn('[payfast] no passphrase set — rejecting invoice ITN', invoiceId); return; }
     if (!validatePayfastNotify(body, passphrase)) { console.warn('[payfast] bad signature for', invoiceId); return; }
     if (body.payment_status === 'COMPLETE') {
       await markInvoicePaidById(invoiceId);

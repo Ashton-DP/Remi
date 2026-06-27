@@ -93,6 +93,19 @@ function apiHeaders(creds: { merchant_id?: string; passphrase?: string }, timest
   return { ...base, signature, 'content-type': 'application/json' };
 }
 
+/** Verify PayFast merchant credentials via the server-API /ping (validates the
+ *  merchant-id + passphrase signature; a 200 means the creds are good). */
+export async function verifyPayfastCreds(creds: { merchant_id?: string; passphrase?: string }): Promise<void> {
+  const timestamp = payfastTimestamp();
+  const res = await fetch(`${apiBase()}/ping?testing=${config.payments.payfastSandbox ? 'true' : 'false'}`, {
+    headers: apiHeaders(creds, timestamp),
+  });
+  if (!res.ok) {
+    const d: any = await res.json().catch(() => ({}));
+    throw new Error(d?.data?.response || d?.message || `PayFast rejected the credentials (${res.status})`);
+  }
+}
+
 /** Cancel a PayFast subscription by token (stops all future billing). */
 export async function cancelPayfastSubscription(
   creds: { merchant_id?: string; passphrase?: string },

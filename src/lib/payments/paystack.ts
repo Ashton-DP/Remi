@@ -24,6 +24,13 @@ export async function initPaystackPayment(secretKey: string, o: {
   return data.data;
 }
 
+/** Verify a Paystack secret key works (a real key, not a typo/wrong-mode key). */
+export async function verifyPaystackKey(secretKey: string): Promise<void> {
+  const res = await fetch('https://api.paystack.co/balance', { headers: { Authorization: `Bearer ${secretKey}` } });
+  const d: any = await res.json().catch(() => ({}));
+  if (!res.ok || d?.status === false) throw new Error(d?.message || `Paystack rejected the key (${res.status})`);
+}
+
 /** Verify a transaction by reference (server-side). Returns whether it's paid. */
 export async function verifyPaystackTransaction(secretKey: string, reference: string): Promise<{ paid: boolean }> {
   const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {

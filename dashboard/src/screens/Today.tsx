@@ -6,6 +6,7 @@ type TodayData = {
   clinic: { name: string; chasing_paused: boolean } | null;
   today: { appointments: number; conversations_24h: number; overdue_invoices: number; overdue_total_zar: number; open_escalations: number };
   needs_you: { id: string; reason: string; summary?: string; created_at: string }[];
+  setup?: { whatsapp_connected: boolean; whatsapp_pending: boolean; calendar_connected: boolean; payment_connected: boolean };
 };
 const rand = (n: number) => 'R' + (n || 0).toLocaleString('en-ZA');
 
@@ -34,8 +35,37 @@ export function Today() {
     { label: 'Needs you', value: d.today.open_escalations, accent: d.today.open_escalations ? 'a-red' : 'a-green' },
   ];
 
+  // Surface anything not yet connected so the owner knows they're not fully live.
+  const s = d.setup;
+  const setupItems = s ? [
+    { done: s.whatsapp_connected, pending: s.whatsapp_pending, label: 'WhatsApp', hint: s.whatsapp_pending ? 'Submitted — we’re connecting your number' : 'Connect your WhatsApp number' },
+    { done: s.calendar_connected, pending: false, label: 'Calendar', hint: 'Connect Google Calendar so Remi can book' },
+    { done: s.payment_connected, pending: false, label: 'Payments', hint: 'Connect a provider to take deposits & invoices' },
+  ].filter((i) => !i.done) : [];
+
   return (
     <>
+      {setupItems.length > 0 && (
+        <div className="panel" style={{ borderColor: 'var(--amber)' }}>
+          <div className="panel-head">
+            <h2>Finish setting up</h2>
+            <span className="count">{setupItems.length} to go</span>
+          </div>
+          <div className="needs">
+            {setupItems.map((i) => (
+              <div className="needs-row" key={i.label}>
+                <span className="needs-ico"><Icon name="alert" size={16} /></span>
+                <div>
+                  <div className="needs-reason">{i.label}{i.pending && <span className="badge b-amber" style={{ marginLeft: 8 }}>Pending</span>}</div>
+                  <div className="needs-summary">{i.hint}</div>
+                </div>
+                {!i.pending && <a className="btn sm" href="#settings" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('remi:nav', { detail: 'settings' })); }}>Set up</a>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <section className="cards">
         {cards.map((c) => (
           <div key={c.label} className="card">
