@@ -60,6 +60,24 @@ export async function handleInboundWhatsApp(req: Request, res: Response) {
       return;
     }
 
+    // No text to read (voice note, image, sticker, audio, location, etc.). The
+    // brain can't transcribe media, so without this guard an empty body reaches
+    // the model and comes back as "Sorry, could you rephrase that?" on every
+    // voice note. Reply helpfully and skip the brain instead.
+    const numMedia = parseInt(String(req.body.NumMedia ?? '0'), 10) || 0;
+    if (!body) {
+      const mediaType = String(req.body.MediaContentType0 ?? '');
+      const reply = numMedia > 0 && mediaType.startsWith('audio')
+        ? "I can't listen to voice notes just yet — please type your message and I'll help you straight away. 🙏"
+        : numMedia > 0
+          ? "Thanks! I can't open attachments yet — please type what you need and I'll help right away. 🙏"
+          : "Sorry, I didn't get any text there — could you type your message?";
+      await saveMessage(convo.id, 'in', numMedia > 0 ? `[${mediaType || 'media'} message]` : '[empty message]');
+      await saveMessage(convo.id, 'out', reply);
+      res.type('text/xml').send(twimlReply(reply));
+      return;
+    }
+
     await saveMessage(convo.id, 'in', body);
     const history = await getHistory(convo.id);
     const reply = await runAgent(clinic, customer, convo, history, isNew);
