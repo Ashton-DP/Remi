@@ -3,6 +3,8 @@
  * Polls every 60 seconds for due reminders and sends WhatsApp messages.
  */
 import { config } from './config'; // also loads dotenv
+import { installFetchTimeout } from './lib/httpTimeout';
+import { initMonitoring } from './lib/monitoring';
 import { getDueReminders, markReminderSent, markReminderFailed, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getBookingsForDate, getClinicsWithSummaryPhone, getClinicIdsWithOverdueInvoices, getClientsWithBirthdayToday, getClientsWithAnniversaryToday, getClientsWithLowPackage, getMembershipsToSync, setMembershipStatus, getActiveClinics, getPendingMembershipsToReconcile, activateMembership } from './db';
 import { syncMembershipStatus, reconcilePendingMembership } from './lib/subscriptions';
 import { sendProactiveWhatsApp } from './lib/twilio';
@@ -536,6 +538,9 @@ let _started = false;
 export function startScheduler() {
   if (_started) return;
   _started = true;
+  // A hung external call must never freeze the serial tick (which would silently
+  // halt all reminders). Bound every outbound fetch.
+  installFetchTimeout();
   console.log('[scheduler] started — checking every 60s');
   tick().catch((e) => console.error('[scheduler] tick error:', e));
   setInterval(() => {
@@ -547,5 +552,9 @@ export function startScheduler() {
   }, 60_000);
 }
 
-// Run standalone when invoked directly (e.g. a dedicated Render worker).
-if (require.main === module) startScheduler();
+// Run standalone when invoked directly (e.g. a dedicated Render worker). Register
+// crash handlers + alerting too — otherwise a worker crash is invisible.
+if (require.main === module) {
+  void initMonitoring();
+  startScheduler();
+}

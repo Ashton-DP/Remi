@@ -50,7 +50,9 @@ async function main() {
       console.log('ok');
     } catch (e) {
       console.log('FAILED');
-      console.error(`   ${e.message}`);
+      // Stop on the first failure so a half-applied migration set is obvious and
+      // exits non-zero, instead of silently continuing past a broken file.
+      throw new Error(`migration ${f} failed: ${e.message}`);
     }
   }
   console.log('\nDone.');

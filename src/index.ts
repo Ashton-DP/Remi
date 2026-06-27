@@ -1,7 +1,8 @@
 import express from 'express';
 import http from 'node:http';
 import path from 'node:path';
-import { config } from './config';
+import { config, assertProductionConfig } from './config';
+import { installFetchTimeout } from './lib/httpTimeout';
 import { handleInboundWhatsApp } from './routes/whatsapp';
 import { handleInboundCall, handleVoiceGather, handleCallStatus } from './routes/voice';
 import { generateReport, renderReportPage } from './report';
@@ -42,6 +43,11 @@ import {
   handleCreateMembership, handleCancelMembership,
 } from './routes/api';
 import { handleMembershipStart, handleMembershipReturn } from './routes/membership';
+
+// Bound every outbound fetch so a hung dependency can't stall a request, and fail
+// fast if a critical production env var is missing (rather than booting broken).
+installFetchTimeout();
+assertProductionConfig();
 
 const app = express();
 // Render/Railway terminate TLS and forward — trust the proxy so forwarded

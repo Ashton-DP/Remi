@@ -169,3 +169,25 @@ export const config = {
     successUrl: opt('STRIPE_SUCCESS_URL', 'https://www.remireception.com/app?welcome=1'),
   },
 };
+
+/**
+ * Fail fast at boot if a critical var is missing IN PRODUCTION. Without this,
+ * `req()` only warns and the process boots broken, failing later at first use.
+ * Dev/test are exempt so they can run with partial config. Call once at startup.
+ */
+export function assertProductionConfig(): void {
+  if (process.env.NODE_ENV !== 'production') return;
+  const missing: string[] = [];
+  const need: [string, string][] = [
+    ['SUPABASE_URL', config.supabaseUrl],
+    ['SUPABASE_SERVICE_KEY', config.supabaseServiceKey],
+    ['TWILIO_ACCOUNT_SID', config.twilio.accountSid],
+    ['TWILIO_AUTH_TOKEN', config.twilio.authToken],
+  ];
+  for (const [name, val] of need) if (!val) missing.push(name);
+  // Need at least one LLM key for the brain to function.
+  if (!config.gemini.apiKey && !config.anthropicApiKey) missing.push('GEMINI_API_KEY or ANTHROPIC_API_KEY');
+  if (missing.length) {
+    throw new Error(`[config] FATAL — missing required production env var(s): ${missing.join(', ')}`);
+  }
+}

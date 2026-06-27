@@ -40,6 +40,11 @@ function imapClient(cfg: EmailInboxConfig): ImapFlow {
     secure: port === 993,
     auth: { user: cfg.user, pass: cfg.pass },
     logger: false,
+    // Bound the connection so a stalled mailbox can't freeze the scheduler tick
+    // (ImapFlow's socketTimeout defaults to 5 minutes).
+    connectionTimeout: 15_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 60_000,
   });
 }
 
