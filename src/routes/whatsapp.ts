@@ -14,6 +14,7 @@ import { runAgent } from '../brain/agent';
 import { twimlReply } from '../lib/twilio';
 import { captureError } from '../lib/monitoring';
 import { tryHandleInvoiceReply } from '../lib/chaseReply';
+import { transcribeTwilioAudio } from '../lib/transcribe';
 
 /** Twilio inbound WhatsApp webhook (application/x-www-form-urlencoded). */
 export async function handleInboundWhatsApp(req: Request, res: Response) {
@@ -21,7 +22,7 @@ export async function handleInboundWhatsApp(req: Request, res: Response) {
   let sid = '';
   try {
     const from = String(req.body.From ?? '');
-    const body = String(req.body.Body ?? '').trim();
+    let body = String(req.body.Body ?? '').trim();
 
     // Idempotency: Twilio retries inbound webhooks (e.g. on slow/5xx responses).
     // Skip a message we've already handled so we don't double-book or double-reply.
@@ -43,6 +44,17 @@ export async function handleInboundWhatsApp(req: Request, res: Response) {
     const { client: customer, isNew } = await getOrCreateClient(clinic.id, from);
     const convo = await getOrCreateConversation(clinic.id, customer.id);
 
+    // Voice note → transcribe it (Gemini, EN/AF) and treat the transcript as the
+    // message body so the normal brain flow runs. If transcription yields nothing
+    // we fall through to the media guard below and ask them to type.
+    const numMedia = parseInt(String(req.body.NumMedia ?? '0'), 10) || 0;
+    const mediaType = String(req.body.MediaContentType0 ?? '');
+    const mediaUrl = String(req.body.MediaUrl0 ?? '');
+    if (!body && numMedia > 0 && mediaType.startsWith('audio') && mediaUrl) {
+      const transcript = await transcribeTwilioAudio(mediaUrl, mediaType);
+      if (transcript) body = transcript;
+    }
+
     // Invoice chase reply? (paid / snooze / dispute / stop from a recently-chased
     // contact). Handled directly — never routed to the receptionist brain. Returns
     // null for ordinary messages, which fall through to the normal flow below.
@@ -60,15 +72,11 @@ export async function handleInboundWhatsApp(req: Request, res: Response) {
       return;
     }
 
-    // No text to read (voice note, image, sticker, audio, location, etc.). The
-    // brain can't transcribe media, so without this guard an empty body reaches
-    // the model and comes back as "Sorry, could you rephrase that?" on every
-    // voice note. Reply helpfully and skip the brain instead.
-    const numMedia = parseInt(String(req.body.NumMedia ?? '0'), 10) || 0;
+    // Still no text — a media message we can't read (image, sticker, location) or
+    // a voice note we couldn't transcribe. Reply helpfully and skip the brain.
     if (!body) {
-      const mediaType = String(req.body.MediaContentType0 ?? '');
       const reply = numMedia > 0 && mediaType.startsWith('audio')
-        ? "I can't listen to voice notes just yet — please type your message and I'll help you straight away. 🙏"
+        ? "I couldn't quite make out that voice note — could you try again, or type your message? 🙏"
         : numMedia > 0
           ? "Thanks! I can't open attachments yet — please type what you need and I'll help right away. 🙏"
           : "Sorry, I didn't get any text there — could you type your message?";
