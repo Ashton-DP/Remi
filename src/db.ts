@@ -46,6 +46,36 @@ export async function getOrCreateClient(clinicId: string, phone: string) {
   return { client: data, isNew: true };
 }
 
+/** Like getOrCreateClient but keyed on email — for the inbound-email channel. */
+export async function getOrCreateClientByEmail(clinicId: string, email: string, name?: string) {
+  const addr = (email || '').toLowerCase().trim();
+  const { data: existing } = await supabase
+    .from('clients')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .eq('email', addr)
+    .maybeSingle();
+  if (existing) return { client: existing, isNew: false };
+
+  const { data } = await supabase
+    .from('clients')
+    .insert({ clinic_id: clinicId, email: addr, name: name || null, consent_at: new Date().toISOString() })
+    .select()
+    .single();
+  return { client: data, isNew: true };
+}
+
+/** Clinics that have an enabled email inbox configured (Remi reads/replies to it). */
+export async function getClinicsWithEmailInbox() {
+  const { data } = await supabase.from('clinics').select('*').not('email_inbox', 'is', null);
+  return (data ?? []).filter((c: any) => c.email_inbox?.imap_host && c.email_inbox?.enabled !== false);
+}
+
+/** Save a clinic's email-inbox connection config (IMAP/SMTP + app-password). */
+export async function setEmailInbox(clinicId: string, cfg: any) {
+  await supabase.from('clinics').update({ email_inbox: cfg }).eq('id', clinicId);
+}
+
 export async function getOrCreateConversation(clinicId: string, clientId: string) {
   const { data: existing } = await supabase
     .from('conversations')

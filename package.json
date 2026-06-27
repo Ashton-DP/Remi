@@ -10,7 +10,7 @@
     "build": "tsc && npm --prefix dashboard install && npm --prefix dashboard run build",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx tests/booking.test.ts && tsx tests/dashboardAuth.test.ts && tsx tests/reliability.test.ts && tsx tests/reportAndReminders.test.ts && tsx tests/rateLimit.test.ts && tsx tests/messagingChannel.test.ts && tsx tests/insights.test.ts && tsx tests/onboard.test.ts && tsx tests/intake.test.ts && tsx tests/knowledge.test.ts && tsx tests/chase.test.ts && tsx tests/invoiceSources.test.ts && tsx tests/emailDomain.test.ts && tsx tests/payments.test.ts && tsx tests/apiAuth.test.ts",
+    "test": "tsx tests/booking.test.ts && tsx tests/dashboardAuth.test.ts && tsx tests/reliability.test.ts && tsx tests/reportAndReminders.test.ts && tsx tests/rateLimit.test.ts && tsx tests/messagingChannel.test.ts && tsx tests/insights.test.ts && tsx tests/onboard.test.ts && tsx tests/intake.test.ts && tsx tests/knowledge.test.ts && tsx tests/chase.test.ts && tsx tests/invoiceSources.test.ts && tsx tests/emailDomain.test.ts && tsx tests/payments.test.ts && tsx tests/apiAuth.test.ts && tsx tests/emailInbox.test.ts",
     "scheduler": "tsx src/scheduler.ts",
     "report": "tsx src/report.ts",
     "onboard": "tsx src/onboard.ts"
@@ -25,7 +25,10 @@
     "dotenv": "latest",
     "express": "latest",
     "googleapis": "latest",
+    "imapflow": "^1.4.3",
+    "mailparser": "^3.9.12",
     "microsoft-cognitiveservices-speech-sdk": "^1.50.0",
+    "nodemailer": "^9.0.1",
     "stripe": "^22.2.2",
     "tsx": "latest",
     "twilio": "latest",
@@ -33,6 +36,8 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
+    "@types/mailparser": "^3.4.6",
+    "@types/nodemailer": "^8.0.1",
     "localtunnel": "^2.0.2",
     "pg": "^8.22.0"
   }

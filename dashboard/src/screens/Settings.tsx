@@ -11,7 +11,8 @@ type SettingsData = {
   };
   connections: {
     invoice_source: string | null; payment_provider: string | null;
-    email_domain: string | null; email_domain_status: string | null; chasing_paused: boolean;
+    email_domain: string | null; email_domain_status: string | null;
+    email_inbox: string | null; chasing_paused: boolean;
   };
   calendar: { service_account_email: string | null; connected: boolean };
 };
@@ -51,6 +52,7 @@ export function Settings() {
   const [payFields, setPayFields] = useState<Record<string, string>>({});
   const [connBusy, setConnBusy] = useState(false);
   const [connMsg, setConnMsg] = useState('');
+  const [emailCfg, setEmailCfg] = useState<Record<string, string>>({ imap_host: '', imap_port: '993', smtp_host: '', smtp_port: '465', user: '', pass: '', from_name: '' });
   const [calTest, setCalTest] = useState<{ ok?: boolean; error?: string; testing?: boolean }>({});
 
   function load() {
@@ -94,6 +96,16 @@ export function Settings() {
   async function savePayment() {
     setConnBusy(true); setConnMsg('');
     try { await api('/api/connect/payment', { method: 'POST', body: JSON.stringify({ provider: payProvider, config: payFields }) }); setConnMsg(`Payment provider set to ${payProvider}.`); setPayFields({}); load(); }
+    catch (e: any) { setConnMsg(e.message); } finally { setConnBusy(false); }
+  }
+  async function saveEmailInbox() {
+    setConnBusy(true); setConnMsg('');
+    try { await api('/api/connect/email-inbox', { method: 'POST', body: JSON.stringify(emailCfg) }); setConnMsg('Email inbox connected — Remi will read & reply to booking emails.'); setEmailCfg({ ...emailCfg, pass: '' }); load(); }
+    catch (e: any) { setConnMsg(e.message); } finally { setConnBusy(false); }
+  }
+  async function disconnectEmailInbox() {
+    setConnBusy(true); setConnMsg('');
+    try { await api('/api/connect/email-inbox', { method: 'POST', body: JSON.stringify({ disconnect: true }) }); setConnMsg('Email inbox disconnected.'); load(); }
     catch (e: any) { setConnMsg(e.message); } finally { setConnBusy(false); }
   }
   async function testCalendar() {
@@ -215,6 +227,33 @@ export function Settings() {
               <span className={`badge ${conn.email_domain ? (conn.email_domain_status === 'verified' ? 'b-green' : 'b-amber') : 'b-grey'}`}>{conn.email_domain ? `${conn.email_domain} · ${conn.email_domain_status || 'pending'}` : 'Send-on-behalf'}</span>
             </div>
             <div className="conn-sub" style={{ marginTop: 10 }}>Branded email-domain setup is handled during onboarding. Until then, chases send on your behalf with your reply-to address above.</div>
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 20 }}>
+            <div className="conn-row">
+              <div><div className="conn-title">Email inbox</div><div className="conn-sub">Remi reads &amp; replies to booking emails on your own mailbox</div></div>
+              <span className={`badge ${conn.email_inbox ? 'b-green' : 'b-grey'}`}>{conn.email_inbox ?? 'Not connected'}</span>
+            </div>
+            {canEdit && (
+              <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="conn-sub">Use an <strong>app password</strong> (not your normal login). Gmail: imap.gmail.com / smtp.gmail.com. Remi only replies to genuine booking enquiries — newsletters and the rest are left untouched.</div>
+                <input className="conn-input" placeholder="Email address (e.g. bookings@yourclinic.co.za)" value={emailCfg.user} onChange={(e) => setEmailCfg({ ...emailCfg, user: e.target.value })} />
+                <input className="conn-input" type="password" placeholder="App password" value={emailCfg.pass} onChange={(e) => setEmailCfg({ ...emailCfg, pass: e.target.value })} />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input className="conn-input" placeholder="IMAP host" value={emailCfg.imap_host} onChange={(e) => setEmailCfg({ ...emailCfg, imap_host: e.target.value })} />
+                  <input className="conn-input" placeholder="993" style={{ maxWidth: 90 }} value={emailCfg.imap_port} onChange={(e) => setEmailCfg({ ...emailCfg, imap_port: e.target.value })} />
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input className="conn-input" placeholder="SMTP host" value={emailCfg.smtp_host} onChange={(e) => setEmailCfg({ ...emailCfg, smtp_host: e.target.value })} />
+                  <input className="conn-input" placeholder="465" style={{ maxWidth: 90 }} value={emailCfg.smtp_port} onChange={(e) => setEmailCfg({ ...emailCfg, smtp_port: e.target.value })} />
+                </div>
+                <input className="conn-input" placeholder="From name (e.g. your clinic name)" value={emailCfg.from_name} onChange={(e) => setEmailCfg({ ...emailCfg, from_name: e.target.value })} />
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  <button className="btn primary" disabled={connBusy} onClick={saveEmailInbox}>{conn.email_inbox ? 'Update inbox' : 'Connect inbox'}</button>
+                  {conn.email_inbox && <button className="btn" disabled={connBusy} onClick={disconnectEmailInbox}>Disconnect</button>}
+                </div>
+              </div>
+            )}
           </div>
 
         </div>

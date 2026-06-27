@@ -5,6 +5,10 @@
 import { config } from './config'; // also loads dotenv
 import { getDueReminders, markReminderSent, markReminderFailed, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getBookingsForDate, getClinicsWithSummaryPhone, getClinicIdsWithOverdueInvoices } from './db';
 import { sendProactiveWhatsApp } from './lib/twilio';
+import { getClinicsWithEmailInbox, getOrCreateClientByEmail, getOrCreateConversation, saveMessage, getHistory, markProcessedOnce } from './db';
+import { processInbox, sendEmailReply, replySubject } from './lib/emailInbox';
+import { triageEmail } from './lib/emailTriage';
+import { runAgent } from './brain/agent';
 import { runChaseForClinic } from './lib/chaseRunner';
 import { syncInvoicesForClinic } from './lib/invoiceSources';
 import { getClinicsWithInvoiceSource, getClinicsWithPendingEmailDomain, updateClinicEmailDomainStatus, getChaseableInvoices, getOpenEscalations } from './db';
@@ -56,8 +60,62 @@ async function processFollowups() {
   if (convos.length) console.log(`[scheduler] ${convos.length} enquiry follow-up(s) sent`);
 }
 
+// Inbound email is polled on a slower cadence than the 60s reminder tick —
+// opening IMAP per clinic every minute is wasteful and most clinics are low-volume.
+const EMAIL_POLL_MS = parseInt(process.env.EMAIL_POLL_MINUTES ?? '3', 10) * 60_000;
+let _lastEmailPoll = 0;
+
+/**
+ * Read each connected clinic's mailbox, triage every unseen email, and let the
+ * booking brain reply (threaded, from the clinic's own address) to genuine
+ * client enquiries. Non-booking mail is left untouched (only marked read).
+ */
+async function processClinicEmails(nowMs: number) {
+  if (nowMs - _lastEmailPoll < EMAIL_POLL_MS) return;
+  _lastEmailPoll = nowMs;
+
+  const clinics = await getClinicsWithEmailInbox();
+  for (const clinic of clinics as any[]) {
+    const cfg = clinic.email_inbox;
+    try {
+      const stats = await processInbox(cfg, async (email) => {
+        // Dedupe on Message-ID so a re-read (or overlapping run) can't double-reply.
+        if (email.messageId && !(await markProcessedOnce(`email:${email.messageId}`))) return 'skipped';
+
+        const triage = await triageEmail(email, cfg.user, clinic.name);
+        if (!triage.handle) {
+          console.log(`[email] skip ${clinic.name} <- ${email.fromAddress}: ${triage.reason}`);
+          return 'skipped';
+        }
+
+        const { client: customer, isNew } = await getOrCreateClientByEmail(clinic.id, email.fromAddress, email.fromName);
+        const convo = await getOrCreateConversation(clinic.id, customer.id);
+        await saveMessage(convo.id, 'in', `[email] ${email.subject}\n\n${email.text}`);
+
+        const history = await getHistory(convo.id);
+        const reply = await runAgent(clinic, customer, convo, history, isNew);
+
+        await sendEmailReply(cfg, {
+          to: email.fromAddress,
+          subject: replySubject(email.subject),
+          text: reply,
+          inReplyTo: email.messageId || undefined,
+          references: email.references,
+        });
+        await saveMessage(convo.id, 'out', reply);
+        console.log(`[email] replied ${clinic.name} -> ${email.fromAddress}`);
+        return 'replied';
+      });
+      if (stats.fetched) console.log(`[email] ${clinic.name}: ${JSON.stringify(stats)}`);
+    } catch (e) {
+      console.error(`[email] inbox poll failed for ${clinic.name}:`, (e as Error)?.message ?? e);
+    }
+  }
+}
+
 async function _tick() {
   await processFollowups().catch((e) => console.error('[followups]', e));
+  await processClinicEmails(Date.now()).catch((e) => console.error('[email]', e));
   const reminders = await getDueReminders();
   if (reminders.length) console.log(`[scheduler] ${reminders.length} due reminder(s)`);
 

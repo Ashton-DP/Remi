@@ -29,7 +29,7 @@ import {
   handleConversations, handleConversationDetail, handleInsights, handleAssistant,
   handleCustomers, handleSetChasing, handleInvoiceActionWrite, handleResolveEscalation,
   handleSettings, handleUpdateSettings, handleTestCalendar,
-  handleConnectStartAuthed, handleConnectSheetAuthed, handleConnectPayment,
+  handleConnectStartAuthed, handleConnectSheetAuthed, handleConnectPayment, handleConnectEmailInbox,
   handleTeam, handleTeamInvite, handleTeamRole, handleTeamRemove,
   handleCreateBooking, handleCancelBooking,
   handleWaitlist, handleAddWaitlist, handleMoveWaitlist, handleRemoveWaitlist, handleBookWaitlist,
@@ -151,6 +151,7 @@ app.get('/api/admin/clients', requirePlatformAdmin, handleAdminClients);
 app.get('/api/connect/:provider/start', requireApiAuth, handleConnectStartAuthed);
 app.post('/api/connect/gsheet', requireApiAuth, handleConnectSheetAuthed);
 app.post('/api/connect/payment', requireApiAuth, handleConnectPayment);
+app.post('/api/connect/email-inbox', requireApiAuth, handleConnectEmailInbox);
 app.get('/api/team', requireApiAuth, handleTeam);
 app.post('/api/team/invite', requireApiAuth, handleTeamInvite);
 app.post('/api/team/:userId/role', requireApiAuth, handleTeamRole);

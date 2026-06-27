@@ -12,7 +12,7 @@ import {
   listInvoices, getInvoiceForClinic, getInvoiceChases, listClinicBookings, listConversations,
   getConversationForClinic, getReportData, listClients,
   setChasingPaused, snoozeInvoice, markInvoicePaidById, disputeInvoice, resolveEscalation,
-  updateClinicSettings, setInvoiceSource, setPaymentConfig,
+  updateClinicSettings, setInvoiceSource, setPaymentConfig, setEmailInbox,
   linkUserToClinic, listClinicUsers, setClinicUserRole, removeClinicUser, countClinicOwners,
   getOrCreateClient, setClientName, createBookingRow, scheduleReminders, cancelClinicBooking,
   listWaitlist, addWaitlistAtEnd, setWaitlistOrder, removeWaitlistEntry, getWaitlistEntry,
@@ -214,6 +214,7 @@ export async function handleSettings(req: Request, res: Response) {
       payment_provider: c.payment_provider ?? null,
       email_domain: c.email_domain ?? null,
       email_domain_status: c.email_domain_status ?? null,
+      email_inbox: c.email_inbox?.user ?? null,
       chasing_paused: !!c.chasing_paused,
     },
     calendar: {
@@ -272,6 +273,28 @@ export async function handleConnectPayment(req: Request, res: Response) {
   if (!['payfast', 'paystack', 'stripe', 'paypal', 'link'].includes(provider)) return res.status(400).json({ error: 'Unknown provider' });
   await setPaymentConfig(auth.clinicId, provider, { [provider]: cfg });
   res.json({ ok: true });
+}
+
+/** Connect (or disconnect) the clinic's own email inbox — Remi reads + replies to
+ *  booking emails via IMAP/SMTP. The app-password is write-only (never returned). */
+export async function handleConnectEmailInbox(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const b = req.body ?? {};
+  if (b.disconnect) { await setEmailInbox(auth.clinicId, null); return res.json({ ok: true, connected: false }); }
+  const required = ['imap_host', 'smtp_host', 'user', 'pass'];
+  for (const f of required) if (!String(b[f] ?? '').trim()) return res.status(400).json({ error: `Missing ${f}` });
+  await setEmailInbox(auth.clinicId, {
+    imap_host: String(b.imap_host).trim(),
+    imap_port: b.imap_port ? parseInt(String(b.imap_port), 10) : 993,
+    smtp_host: String(b.smtp_host).trim(),
+    smtp_port: b.smtp_port ? parseInt(String(b.smtp_port), 10) : 465,
+    user: String(b.user).trim(),
+    pass: String(b.pass),
+    from_name: String(b.from_name ?? '').trim() || undefined,
+    enabled: true,
+  });
+  res.json({ ok: true, connected: true });
 }
 
 // ── Team / users (owner only for writes) ─────────────────────────────────────
