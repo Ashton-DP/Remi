@@ -1055,3 +1055,102 @@ export async function cancelClinicBooking(clinicId: string, bookingId: string): 
   await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId);
   return true;
 }
+
+// ---- Team Ops: staff, time entries, leave -----------------------------------
+
+/** Match an inbound phone to a staff member of this clinic (→ staff mode). */
+export async function getStaffByPhone(clinicId: string, phone: string) {
+  const p = (phone || '').replace(/^whatsapp:/, '');
+  const { data } = await supabase
+    .from('staff').select('*')
+    .eq('clinic_id', clinicId).eq('phone', p).eq('active', true).maybeSingle();
+  return data ?? null;
+}
+
+export async function listStaff(clinicId: string) {
+  const { data } = await supabase.from('staff').select('*').eq('clinic_id', clinicId).order('name');
+  return data ?? [];
+}
+
+export async function addStaff(clinicId: string, s: { name: string; phone?: string; role?: string; pay_rate?: number }) {
+  const { data } = await supabase.from('staff').insert({
+    clinic_id: clinicId, name: s.name, phone: s.phone ? s.phone.replace(/^whatsapp:/, '') : null,
+    role: s.role || 'practitioner', pay_rate: s.pay_rate ?? null,
+  }).select().single();
+  return data;
+}
+
+export async function removeStaff(clinicId: string, staffId: string) {
+  await supabase.from('staff').delete().eq('clinic_id', clinicId).eq('id', staffId);
+}
+
+export async function getOpenTimeEntry(staffId: string) {
+  const { data } = await supabase.from('time_entries').select('*').eq('staff_id', staffId).is('clock_out', null).maybeSingle();
+  return data ?? null;
+}
+
+/** Clock in. Returns {ok:false,already:true} if already clocked in (the partial
+ *  unique index also guards against races). */
+export async function clockIn(staffId: string, clinicId: string, source = 'whatsapp') {
+  if (await getOpenTimeEntry(staffId)) return { ok: false, already: true } as const;
+  const { data, error } = await supabase.from('time_entries')
+    .insert({ staff_id: staffId, clinic_id: clinicId, source }).select('clock_in').single();
+  if (error) return { ok: false, already: true } as const;
+  return { ok: true, clock_in: data!.clock_in } as const;
+}
+
+/** Clock out the open entry. Returns {ok:false} if not clocked in. */
+export async function clockOut(staffId: string) {
+  const open = await getOpenTimeEntry(staffId);
+  if (!open) return { ok: false } as const;
+  const out = new Date().toISOString();
+  await supabase.from('time_entries').update({ clock_out: out }).eq('id', open.id);
+  return { ok: true, clock_in: open.clock_in, clock_out: out } as const;
+}
+
+/** Time entries for a staff member since an ISO timestamp (for weekly hours). */
+export async function getStaffTimeEntries(staffId: string, sinceISO: string) {
+  const { data } = await supabase.from('time_entries').select('clock_in, clock_out')
+    .eq('staff_id', staffId).gte('clock_in', sinceISO).order('clock_in');
+  return data ?? [];
+}
+
+/** All staff currently clocked in at a clinic (for the dashboard live view). */
+export async function getClockedIn(clinicId: string) {
+  const { data } = await supabase.from('time_entries')
+    .select('clock_in, staff(name, id)').eq('clinic_id', clinicId).is('clock_out', null);
+  return data ?? [];
+}
+
+/** Timesheet rows: every entry at a clinic since ISO, with staff name. */
+export async function getTimesheet(clinicId: string, sinceISO: string) {
+  const { data } = await supabase.from('time_entries')
+    .select('clock_in, clock_out, staff(id, name)')
+    .eq('clinic_id', clinicId).gte('clock_in', sinceISO).order('clock_in', { ascending: false });
+  return data ?? [];
+}
+
+export async function createLeaveRequest(
+  staffId: string, clinicId: string,
+  r: { start_date: string; end_date: string; type?: string; reason?: string },
+) {
+  const { data } = await supabase.from('leave_requests').insert({
+    staff_id: staffId, clinic_id: clinicId, start_date: r.start_date, end_date: r.end_date,
+    type: r.type || 'annual', reason: r.reason ?? null, status: 'pending',
+  }).select().single();
+  return data;
+}
+
+export async function listLeaveRequests(clinicId: string, status?: string) {
+  let q = supabase.from('leave_requests').select('*, staff(name)').eq('clinic_id', clinicId);
+  if (status) q = q.eq('status', status);
+  const { data } = await q.order('created_at', { ascending: false });
+  return data ?? [];
+}
+
+export async function decideLeave(clinicId: string, id: string, status: 'approved' | 'declined', decidedBy: string) {
+  const { data } = await supabase.from('leave_requests')
+    .update({ status, decided_by: decidedBy, decided_at: new Date().toISOString() })
+    .eq('clinic_id', clinicId).eq('id', id).select('*, staff(name, phone)').single();
+  return data;
+}

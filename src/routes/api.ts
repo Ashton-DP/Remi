@@ -18,7 +18,9 @@ import {
   listWaitlist, addWaitlistAtEnd, setWaitlistOrder, removeWaitlistEntry, getWaitlistEntry,
   isPlatformAdmin, listClinicsForAdmin,
   completeOnboarding, submitWhatsAppNumber,
+  listStaff, addStaff, removeStaff, getClockedIn, getTimesheet, listLeaveRequests, decideLeave,
 } from '../db';
+import { sumHours, startOfWeek, formatHours } from '../lib/teamOps';
 import { sendProactiveWhatsApp } from '../lib/twilio';
 import { computeReportStats } from '../report';
 import { computeInsights } from '../dashboard';
@@ -295,6 +297,62 @@ export async function handleConnectEmailInbox(req: Request, res: Response) {
     enabled: true,
   });
   res.json({ ok: true, connected: true });
+}
+
+// ---- Team Ops ---------------------------------------------------------------
+
+/** Team Ops overview: who's clocked in, weekly hours per staff, leave inbox, roster. */
+export async function handleTeamOps(req: Request, res: Response) {
+  const auth = getAuth(req);
+  const sinceISO = new Date(startOfWeek()).toISOString();
+  const [staff, clockedIn, timesheet, leave] = await Promise.all([
+    listStaff(auth.clinicId), getClockedIn(auth.clinicId), getTimesheet(auth.clinicId, sinceISO), listLeaveRequests(auth.clinicId),
+  ]);
+  const byStaff: Record<string, { name: string; entries: { clock_in: string; clock_out: string | null }[] }> = {};
+  for (const e of timesheet as any[]) {
+    const s = e.staff; if (!s?.id) continue;
+    (byStaff[s.id] ??= { name: s.name, entries: [] }).entries.push({ clock_in: e.clock_in, clock_out: e.clock_out });
+  }
+  const hours = Object.entries(byStaff).map(([id, v]) => {
+    const h = sumHours(v.entries);
+    return { staff_id: id, name: v.name, hours: h, label: formatHours(h) };
+  }).sort((a, b) => b.hours - a.hours);
+  res.json({
+    role: auth.role,
+    clocked_in: (clockedIn as any[]).map((c) => ({ name: c.staff?.name, since: c.clock_in })),
+    hours,
+    leave: (leave as any[]).map((l) => ({ id: l.id, name: l.staff?.name, start: l.start_date, end: l.end_date, type: l.type, reason: l.reason, status: l.status })),
+    staff: (staff as any[]).map((s) => ({ id: s.id, name: s.name, phone: s.phone, role: s.role, active: s.active })),
+  });
+}
+
+export async function handleAddStaff(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const b = req.body ?? {};
+  if (!String(b.name ?? '').trim()) return res.status(400).json({ error: 'Name is required' });
+  const s = await addStaff(auth.clinicId, { name: String(b.name).trim(), phone: b.phone ? String(b.phone).trim() : undefined, role: b.role, pay_rate: b.pay_rate ? Number(b.pay_rate) : undefined });
+  res.json({ ok: true, staff: s });
+}
+
+export async function handleRemoveStaff(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  await removeStaff(auth.clinicId, String(req.params.id));
+  res.json({ ok: true });
+}
+
+export async function handleDecideLeave(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const status = req.body?.status === 'approved' ? 'approved' : 'declined';
+  const row: any = await decideLeave(auth.clinicId, String(req.params.id), status, auth.email ?? 'owner');
+  // Let the staff member know the outcome (best-effort).
+  try {
+    const phone = row?.staff?.phone;
+    if (phone) await sendProactiveWhatsApp(phone, { fallbackBody: `Your leave request (${row.start_date}${row.end_date !== row.start_date ? ` → ${row.end_date}` : ''}) was ${status}.` });
+  } catch { /* non-blocking */ }
+  res.json({ ok: true, status });
 }
 
 // ── Team / users (owner only for writes) ─────────────────────────────────────

@@ -3,6 +3,7 @@ import { config } from '../config';
 import {
   getClinic,
   getClinicByNumber,
+  getStaffByPhone,
   getOrCreateClient,
   getOrCreateConversation,
   saveMessage,
@@ -11,6 +12,7 @@ import {
   unmarkProcessed,
 } from '../db';
 import { runAgent } from '../brain/agent';
+import { runStaffAgent } from '../brain/staffAgent';
 import { twimlReply } from '../lib/twilio';
 import { captureError } from '../lib/monitoring';
 import { tryHandleInvoiceReply } from '../lib/chaseReply';
@@ -39,6 +41,17 @@ export async function handleInboundWhatsApp(req: Request, res: Response) {
     if (!clinic) {
       res.type('text/xml').send(twimlReply('Sorry, this number is not set up yet.'));
       return;
+    }
+
+    // Staff mode: if this phone belongs to a team member, route to the staff
+    // brain (clock in/out, hours, leave) — never the client booking brain.
+    if (body) {
+      const staff = await getStaffByPhone(clinic.id, from);
+      if (staff) {
+        const reply = await runStaffAgent(clinic, staff, [{ role: 'user', content: body }]);
+        res.type('text/xml').send(twimlReply(reply));
+        return;
+      }
     }
 
     const { client: customer, isNew } = await getOrCreateClient(clinic.id, from);
