@@ -145,18 +145,36 @@ matching env var below holds a Content SID, that proactive message is sent as th
 approved template; when blank, it falls back to free-form text (sandbox / 24h
 window). So going live is just **pasting the approved SIDs into env** — no code change.
 
+Status last checked **2026-06-27** via the Twilio Content API
+(`GET /v1/Content/{sid}/ApprovalRequests`). None are approved yet: 7 are pending
+Meta review, and 2 were rejected for ending on a variable (Meta error 2388299:
+"Variables can't be at the start or end of the template") and have been reworded +
+resubmitted as new templates (`*_v2`).
+
 | Template | Env var to set | Content SID | Status |
 |---|---|---|---|
-| appointment_reminder_48h | `WA_TEMPLATE_REMINDER_48H`  | `HX43001f0a31c1c9863db65c55df4ae5bb` | 🟡 submitted (Meta review) |
-| appointment_reminder_24h | `WA_TEMPLATE_REMINDER_24H`  | `HXf6f911684827eaa8e920f5ac63f2b66f` | 🟡 submitted (Meta review) |
-| appointment_reminder_2h  | `WA_TEMPLATE_REMINDER_2H`   | `HXdbf60657a72f12f04f12052fe08369e3` | 🟡 submitted (Meta review) |
-| waitlist_slot_offer      | `WA_TEMPLATE_WAITLIST_OFFER`| `HX9469a351b614c835750270cefd00b969` | 🟡 submitted (Meta review) |
-| missed_call_text_back    | `WA_TEMPLATE_MISSED_CALL`   | `HX52c52583073f84c30254060f458674ec` | 🟡 submitted (Meta review) |
-| aftercare_check_in       | `WA_TEMPLATE_AFTERCARE`     | `HXf3422c2e2edeff72f932fd0b7568a02d` | 🟡 submitted (Meta review) |
-| review_request           | `WA_TEMPLATE_REVIEW`        | `HX717758e35b53edee962e0676cbfa0fd8` | 🟡 submitted (Meta review) |
-| reactivation_winback     | `WA_TEMPLATE_REACTIVATION`  | `HX993c49331463e7946049cd5b2e35c56c` | 🟡 submitted (Meta review) |
-| deposit_request          | `WA_TEMPLATE_DEPOSIT`       | `HX7b05b5f0968d53782a94da142ecb6234` | 🟡 submitted (Meta review) |
+| appointment_reminder_48h | `WA_TEMPLATE_REMINDER_48H`  | `HX43001f0a31c1c9863db65c55df4ae5bb` | 🟡 pending (Meta review) |
+| appointment_reminder_24h | `WA_TEMPLATE_REMINDER_24H`  | `HXf6f911684827eaa8e920f5ac63f2b66f` | 🟡 pending (Meta review) |
+| appointment_reminder_2h  | `WA_TEMPLATE_REMINDER_2H`   | `HXdbf60657a72f12f04f12052fe08369e3` | 🟡 pending (Meta review) |
+| waitlist_slot_offer      | `WA_TEMPLATE_WAITLIST_OFFER`| `HX9469a351b614c835750270cefd00b969` | 🟡 pending (Meta review) |
+| missed_call_text_back    | `WA_TEMPLATE_MISSED_CALL`   | `HX52c52583073f84c30254060f458674ec` | 🟡 pending (Meta review) |
+| aftercare_check_in       | `WA_TEMPLATE_AFTERCARE`     | `HXf3422c2e2edeff72f932fd0b7568a02d` | 🟡 pending (Meta review) |
+| reactivation_winback     | `WA_TEMPLATE_REACTIVATION`  | `HX993c49331463e7946049cd5b2e35c56c` | 🟡 pending (Meta review) |
+| ~~review_request~~       | —                           | ~~`HX717758e35b53edee962e0676cbfa0fd8`~~ | 🔴 rejected (var at end) → replaced |
+| review_request_v2        | `WA_TEMPLATE_REVIEW`        | `HX5c26c95050812859b02b44be0a363ed8` | 🟡 resubmitted (Meta review) |
+| ~~deposit_request~~      | —                           | ~~`HX7b05b5f0968d53782a94da142ecb6234`~~ | 🔴 rejected (var at end) → replaced |
+| deposit_request_v2       | `WA_TEMPLATE_DEPOSIT`       | `HX1ef2062e9bccaece480d32711ebe075c` | 🟡 resubmitted (Meta review) |
+
+Reworded bodies for the two resubmitted templates (moved the trailing variable so
+no `{{n}}` sits at the start or end):
+- **review_request_v2:** `Hi {{1}} 🌟 Thanks so much for visiting {{2}}! A quick Google review at {{3}} would really help us. Thank you!`
+- **deposit_request_v2:** `To secure your {{1}} on {{2}}, pay your R{{3}} deposit at {{4}} — your slot is held until payment is received.`
 
 After Meta approves each template in Twilio, copy its Content SID into the env var
 (locally in `.env` and in Railway's Variables), redeploy, and proactive sends
-switch to templates automatically.
+switch to templates automatically. Until then, proactive messages fall back to
+free-form text (only deliverable inside the 24h window) — use the SMS fallback
+(`MESSAGING_CHANNEL=sms`) for reliable proactive sends at launch.
+
+To re-check status anytime: `GET https://content.twilio.com/v1/Content/{sid}/ApprovalRequests`
+(basic auth with the Twilio SID/token).
