@@ -89,4 +89,18 @@ export const tools: Anthropic.Tool[] = [
       required: ['reason'],
     },
   },
+  {
+    name: 'take_message',
+    description:
+      "Take a message for the clinic team when the caller wants to pass something on or be called back, and it's not a booking you can handle yourself (e.g. 'ask Dr Smith to call me about my results', 'let reception know I'll be late'). It goes on the team's task list for a human to action.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        for_whom: { type: 'string', description: 'Who the message is for (a person or "reception"), if stated' },
+        message: { type: 'string', description: "The message to pass on, in the caller's words" },
+        callback_wanted: { type: 'boolean', description: 'True if they want someone to call/message them back' },
+      },
+      required: ['message'],
+    },
+  },
 ];

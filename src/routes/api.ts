@@ -19,6 +19,7 @@ import {
   isPlatformAdmin, listClinicsForAdmin,
   completeOnboarding, submitWhatsAppNumber,
   listStaff, addStaff, removeStaff, getClockedIn, getTimesheet, listLeaveRequests, decideLeave,
+  addTask, listTasks, completeTask, deleteTask, addExpense, listExpenses,
 } from '../db';
 import { sumHours, startOfWeek, formatHours } from '../lib/teamOps';
 import { sendProactiveWhatsApp } from '../lib/twilio';
@@ -353,6 +354,48 @@ export async function handleDecideLeave(req: Request, res: Response) {
     if (phone) await sendProactiveWhatsApp(phone, { fallbackBody: `Your leave request (${row.start_date}${row.end_date !== row.start_date ? ` → ${row.end_date}` : ''}) was ${status}.` });
   } catch { /* non-blocking */ }
   res.json({ ok: true, status });
+}
+
+// ---- Tasks & expenses (quick wins) ------------------------------------------
+
+export async function handleTasks(req: Request, res: Response) {
+  const auth = getAuth(req);
+  const sinceISO = new Date(startOfWeek()).toISOString();
+  const [tasks, expenses] = await Promise.all([listTasks(auth.clinicId), listExpenses(auth.clinicId, sinceISO)]);
+  const weekTotal = (expenses as any[]).reduce((s, e) => s + Number(e.amount_zar || 0), 0);
+  res.json({ role: auth.role, tasks, expenses, expenses_week_total: weekTotal });
+}
+
+export async function handleAddTask(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const b = req.body ?? {};
+  if (!String(b.title ?? '').trim()) return res.status(400).json({ error: 'Title is required' });
+  const t = await addTask(auth.clinicId, { title: String(b.title).trim(), note: b.note, assignee: b.assignee, due_at: b.due_at, source: 'dashboard' });
+  res.json({ ok: true, task: t });
+}
+
+export async function handleCompleteTask(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  await completeTask(auth.clinicId, String(req.params.id));
+  res.json({ ok: true });
+}
+
+export async function handleDeleteTask(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  await deleteTask(auth.clinicId, String(req.params.id));
+  res.json({ ok: true });
+}
+
+export async function handleAddExpense(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
+  const amount = Number(req.body?.amount_zar);
+  if (!amount || amount <= 0) return res.status(400).json({ error: 'A positive amount is required' });
+  const e = await addExpense(auth.clinicId, { amount_zar: amount, description: req.body?.description, category: req.body?.category, logged_by: auth.email ?? 'dashboard' });
+  res.json({ ok: true, expense: e });
 }
 
 // ── Team / users (owner only for writes) ─────────────────────────────────────

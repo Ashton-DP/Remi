@@ -31,6 +31,7 @@ import {
   handleSettings, handleUpdateSettings, handleTestCalendar,
   handleConnectStartAuthed, handleConnectSheetAuthed, handleConnectPayment, handleConnectEmailInbox,
   handleTeamOps, handleAddStaff, handleRemoveStaff, handleDecideLeave,
+  handleTasks, handleAddTask, handleCompleteTask, handleDeleteTask, handleAddExpense,
   handleTeam, handleTeamInvite, handleTeamRole, handleTeamRemove,
   handleCreateBooking, handleCancelBooking,
   handleWaitlist, handleAddWaitlist, handleMoveWaitlist, handleRemoveWaitlist, handleBookWaitlist,
@@ -157,6 +158,11 @@ app.get('/api/team-ops', requireApiAuth, handleTeamOps);
 app.post('/api/team-ops/staff', requireApiAuth, handleAddStaff);
 app.delete('/api/team-ops/staff/:id', requireApiAuth, handleRemoveStaff);
 app.post('/api/team-ops/leave/:id', requireApiAuth, handleDecideLeave);
+app.get('/api/tasks', requireApiAuth, handleTasks);
+app.post('/api/tasks', requireApiAuth, handleAddTask);
+app.post('/api/tasks/:id/complete', requireApiAuth, handleCompleteTask);
+app.delete('/api/tasks/:id', requireApiAuth, handleDeleteTask);
+app.post('/api/expenses', requireApiAuth, handleAddExpense);
 app.get('/api/team', requireApiAuth, handleTeam);
 app.post('/api/team/invite', requireApiAuth, handleTeamInvite);
 app.post('/api/team/:userId/role', requireApiAuth, handleTeamRole);

@@ -11,6 +11,7 @@ import { Insights } from '../screens/Insights';
 import { Customers } from '../screens/Customers';
 import { Team } from '../screens/Team';
 import { TeamOps } from '../screens/TeamOps';
+import { Tasks } from '../screens/Tasks';
 import { Settings } from '../screens/Settings';
 import { Operator } from '../screens/Operator';
 
@@ -28,6 +29,7 @@ const NAV = [
   { key: 'getpaid', label: 'Get Paid', icon: 'getpaid', title: 'Get Paid', sub: 'Invoices Remi is chasing', ready: true },
   { key: 'insights', label: 'Insights', icon: 'insights', title: 'Insights', sub: 'Last 30 days', ready: true },
   { key: 'customers', label: 'Customers', icon: 'customers', title: 'Customers', sub: 'Everyone Remi has spoken to', ready: true },
+  { key: 'tasks', label: 'Tasks', icon: 'today', title: 'Tasks & Messages', sub: 'The team to-do list & messages taken', ready: true },
   { key: 'teamops', label: 'Team Ops', icon: 'team', title: 'Team Ops', sub: 'Staff hours, clock-in & leave', ready: true },
   { key: 'team', label: 'Team', icon: 'team', title: 'Team', sub: 'Who can access this dashboard', ready: true },
   { key: 'settings', label: 'Settings', icon: 'settings', title: 'Settings', sub: 'Your business & how Remi runs', ready: true },
@@ -37,7 +39,7 @@ const NAV = [
 const PLAN_NAV: Record<string, string[]> = {
   paidup: ['getpaid', 'team', 'settings'],
   basic: ['bookings', 'inbox', 'team', 'settings'],
-  standard: ['assistant', 'today', 'inbox', 'bookings', 'customers', 'teamops', 'team', 'settings'],
+  standard: ['assistant', 'today', 'inbox', 'bookings', 'customers', 'tasks', 'teamops', 'team', 'settings'],
   complete: NAV.map((n) => n.key),
 };
 
@@ -115,6 +117,7 @@ export function Shell({ onSignOut }: { onSignOut: () => void }) {
           {view === 'insights' && <Insights />}
           {view === 'operator' && <Operator />}
           {view === 'customers' && <Customers />}
+          {view === 'tasks' && <Tasks />}
           {view === 'teamops' && <TeamOps />}
           {view === 'team' && <Team />}
           {view === 'settings' && <Settings />}

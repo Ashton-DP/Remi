@@ -10,6 +10,7 @@ import {
   addWaitlist, getNextWaitlist, setBookingDepositStatus, setClientName,
   findConfirmedBooking, setConversationStatus,
   getTodaysBookings, listWaitlist, getOverdueChasedInvoices,
+  addTask,
 } from '../db';
 
 /** Executes a tool call and performs all side effects. Returns a JSON-able result. */
@@ -263,6 +264,17 @@ export async function executeTool(
         }
       }
       return { ok: true, message: 'A team member has been flagged and will follow up.' };
+    }
+
+    case 'take_message': {
+      const who = String(input.for_whom ?? '').trim();
+      const body = String(input.message ?? '').trim();
+      if (!body) return { error: 'Nothing to pass on yet — what is the message?' };
+      const from = customer.name ?? customer.phone ?? 'a caller';
+      const title = who ? `Message for ${who} — from ${from}` : `Message from ${from}`;
+      const note = `${body}${input.callback_wanted ? `\n\nWants a callback on ${customer.phone ?? '(no number)'}.` : ''}`;
+      await addTask(clinic.id, { title, note, assignee: who || undefined, source: 'whatsapp-client' });
+      return { ok: true, message: "Got it — I've passed that on to the team." };
     }
 
     default:

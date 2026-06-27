@@ -5,6 +5,7 @@
  */
 import {
   clockIn, clockOut, getOpenTimeEntry, getStaffTimeEntries, createLeaveRequest,
+  addTask, addExpense,
 } from '../db';
 import { sumHours, startOfWeek, formatHours, leaveDays } from '../lib/teamOps';
 import { sendProactiveWhatsApp } from '../lib/twilio';
@@ -53,6 +54,18 @@ export async function executeStaffTool(
         }
       } catch { /* non-blocking */ }
       return { ok: true, days, status: 'pending', message: 'Leave request submitted for approval.' };
+    }
+    case 'add_task': {
+      const title = String(input?.title ?? '').trim();
+      if (!title) return { error: 'no_title', message: 'What should the task say?' };
+      await addTask(clinic.id, { title, due_at: input?.due_at, source: 'whatsapp-staff', assignee: staff.name });
+      return { ok: true, message: 'Added to the task list.' };
+    }
+    case 'log_expense': {
+      const amount = Number(input?.amount_zar);
+      if (!amount || amount <= 0) return { error: 'bad_amount', message: 'How much was the expense?' };
+      await addExpense(clinic.id, { amount_zar: amount, description: input?.description, category: input?.category, logged_by: staff.name });
+      return { ok: true, amount_zar: amount, message: `Logged R${amount}.` };
     }
     default:
       return { error: 'unknown_tool' };

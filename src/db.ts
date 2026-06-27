@@ -1154,3 +1154,56 @@ export async function decideLeave(clinicId: string, id: string, status: 'approve
     .eq('clinic_id', clinicId).eq('id', id).select('*, staff(name, phone)').single();
   return data;
 }
+
+// ---- Tasks & expenses (quick wins) ------------------------------------------
+
+export async function addTask(
+  clinicId: string,
+  t: { title: string; note?: string; assignee?: string; due_at?: string; source?: string },
+) {
+  const { data } = await supabase.from('tasks').insert({
+    clinic_id: clinicId, title: t.title, note: t.note ?? null, assignee: t.assignee ?? null,
+    due_at: t.due_at ?? null, source: t.source ?? 'dashboard', status: 'open',
+  }).select().single();
+  return data;
+}
+
+export async function listTasks(clinicId: string, status?: 'open' | 'done') {
+  let q = supabase.from('tasks').select('*').eq('clinic_id', clinicId);
+  if (status) q = q.eq('status', status);
+  const { data } = await q.order('created_at', { ascending: false }).limit(200);
+  return data ?? [];
+}
+
+export async function countOpenTasks(clinicId: string): Promise<number> {
+  const { count } = await supabase.from('tasks').select('*', { count: 'exact', head: true })
+    .eq('clinic_id', clinicId).eq('status', 'open');
+  return count ?? 0;
+}
+
+export async function completeTask(clinicId: string, id: string) {
+  await supabase.from('tasks').update({ status: 'done', done_at: new Date().toISOString() })
+    .eq('clinic_id', clinicId).eq('id', id);
+}
+
+export async function deleteTask(clinicId: string, id: string) {
+  await supabase.from('tasks').delete().eq('clinic_id', clinicId).eq('id', id);
+}
+
+export async function addExpense(
+  clinicId: string,
+  e: { amount_zar: number; description?: string; category?: string; logged_by?: string },
+) {
+  const { data } = await supabase.from('expenses').insert({
+    clinic_id: clinicId, amount_zar: e.amount_zar, description: e.description ?? null,
+    category: e.category ?? null, logged_by: e.logged_by ?? null,
+  }).select().single();
+  return data;
+}
+
+export async function listExpenses(clinicId: string, sinceISO?: string) {
+  let q = supabase.from('expenses').select('*').eq('clinic_id', clinicId);
+  if (sinceISO) q = q.gte('created_at', sinceISO);
+  const { data } = await q.order('created_at', { ascending: false }).limit(200);
+  return data ?? [];
+}
