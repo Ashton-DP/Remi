@@ -80,3 +80,5 @@ after review.
   model (channel noted in meta) so the dashboard inbox stays unified.
 - Pure logic (hours math, package decrement, cash-up totals) lives in testable
   helpers, never only in a brain tool.
+- **Languages:** text channels serve all 11 official SA languages; voice serves 3
+  (English, Afrikaans, isiZulu) — provider-limited. See `docs/languages.md`.
