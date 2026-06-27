@@ -147,15 +147,15 @@ window). So going live is just **pasting the approved SIDs into env** — no cod
 
 | Template | Env var to set | Content SID | Status |
 |---|---|---|---|
-| appointment_reminder_48h | `WA_TEMPLATE_REMINDER_48H`  | `HX…` | ⬜ pending |
-| appointment_reminder_24h | `WA_TEMPLATE_REMINDER_24H`  | `HX…` | ⬜ pending |
-| appointment_reminder_2h  | `WA_TEMPLATE_REMINDER_2H`   | `HX…` | ⬜ pending |
-| waitlist_slot_offer      | `WA_TEMPLATE_WAITLIST_OFFER`| `HX…` | ⬜ pending |
-| missed_call_text_back    | `WA_TEMPLATE_MISSED_CALL`   | `HX…` | ⬜ pending |
-| aftercare_check_in       | `WA_TEMPLATE_AFTERCARE`     | `HX…` | ⬜ pending |
-| review_request           | `WA_TEMPLATE_REVIEW`        | `HX…` | ⬜ pending |
-| reactivation_winback     | `WA_TEMPLATE_REACTIVATION`  | `HX…` | ⬜ pending |
-| deposit_request          | `WA_TEMPLATE_DEPOSIT`       | `HX…` | ⬜ pending |
+| appointment_reminder_48h | `WA_TEMPLATE_REMINDER_48H`  | `HX43001f0a31c1c9863db65c55df4ae5bb` | 🟡 submitted (Meta review) |
+| appointment_reminder_24h | `WA_TEMPLATE_REMINDER_24H`  | `HXf6f911684827eaa8e920f5ac63f2b66f` | 🟡 submitted (Meta review) |
+| appointment_reminder_2h  | `WA_TEMPLATE_REMINDER_2H`   | `HXdbf60657a72f12f04f12052fe08369e3` | 🟡 submitted (Meta review) |
+| waitlist_slot_offer      | `WA_TEMPLATE_WAITLIST_OFFER`| `HX9469a351b614c835750270cefd00b969` | 🟡 submitted (Meta review) |
+| missed_call_text_back    | `WA_TEMPLATE_MISSED_CALL`   | `HX52c52583073f84c30254060f458674ec` | 🟡 submitted (Meta review) |
+| aftercare_check_in       | `WA_TEMPLATE_AFTERCARE`     | `HXf3422c2e2edeff72f932fd0b7568a02d` | 🟡 submitted (Meta review) |
+| review_request           | `WA_TEMPLATE_REVIEW`        | `HX717758e35b53edee962e0676cbfa0fd8` | 🟡 submitted (Meta review) |
+| reactivation_winback     | `WA_TEMPLATE_REACTIVATION`  | `HX993c49331463e7946049cd5b2e35c56c` | 🟡 submitted (Meta review) |
+| deposit_request          | `WA_TEMPLATE_DEPOSIT`       | `HX7b05b5f0968d53782a94da142ecb6234` | 🟡 submitted (Meta review) |
 
 After Meta approves each template in Twilio, copy its Content SID into the env var
 (locally in `.env` and in Railway's Variables), redeploy, and proactive sends
