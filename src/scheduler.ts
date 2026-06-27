@@ -3,7 +3,8 @@
  * Polls every 60 seconds for due reminders and sends WhatsApp messages.
  */
 import { config } from './config'; // also loads dotenv
-import { getDueReminders, markReminderSent, markReminderFailed, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getBookingsForDate, getClinicsWithSummaryPhone, getClinicIdsWithOverdueInvoices } from './db';
+import { getDueReminders, markReminderSent, markReminderFailed, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getBookingsForDate, getClinicsWithSummaryPhone, getClinicIdsWithOverdueInvoices, getClientsWithBirthdayToday, getClientsWithAnniversaryToday, getClientsWithLowPackage, getMembershipsToSync, setMembershipStatus } from './db';
+import { syncMembershipStatus } from './lib/subscriptions';
 import { sendProactiveWhatsApp } from './lib/twilio';
 import { getClinicsWithEmailInbox, getOrCreateClientByEmail, getOrCreateConversation, saveMessage, getHistory, markProcessedOnce } from './db';
 import { processInbox, sendEmailReply, replySubject } from './lib/emailInbox';
@@ -385,6 +386,83 @@ async function verifyPendingEmailDomains() {
   }
 }
 
+/** Send birthday greetings to consented clients whose birthday is today. */
+async function birthdayTouches(clinicId: string) {
+  const clinic = await getClinic(clinicId);
+  if (!clinic) return;
+  const clients = await getClientsWithBirthdayToday(clinicId);
+  for (const c of clients as any[]) {
+    if (!c.phone) continue;
+    try {
+      await sendProactiveWhatsApp(c.phone, {
+        fallbackBody: `Happy birthday${c.name ? `, ${c.name}` : ''}! 🎂 Treat yourself today — we'd love to see you soon. Book anytime right here.`,
+      });
+      console.log(`[scheduler] birthday touch → ${c.name ?? c.phone}`);
+    } catch (e: any) {
+      console.error('[scheduler] birthday touch error', e?.message ?? e);
+    }
+  }
+}
+
+/** Send anniversary greetings to consented clients whose anniversary is today. */
+async function anniversaryTouches(clinicId: string) {
+  const clinic = await getClinic(clinicId);
+  if (!clinic) return;
+  const clients = await getClientsWithAnniversaryToday(clinicId);
+  for (const c of clients as any[]) {
+    if (!c.phone) continue;
+    try {
+      await sendProactiveWhatsApp(c.phone, {
+        fallbackBody: `Happy anniversary${c.name ? `, ${c.name}` : ''}! 🎉 Wishing you a wonderful day. Remember, we're always here when you need a little pampering.`,
+      });
+      console.log(`[scheduler] anniversary touch → ${c.name ?? c.phone}`);
+    } catch (e: any) {
+      console.error('[scheduler] anniversary touch error', e?.message ?? e);
+    }
+  }
+}
+
+/** Nudge clients with 2 or fewer sessions remaining on their prepaid package. */
+async function lowPackageNudges(clinicId: string) {
+  const threshold = parseInt(process.env.LOW_PACKAGE_THRESHOLD ?? '2', 10);
+  const packages = await getClientsWithLowPackage(clinicId, threshold);
+  for (const pkg of packages as any[]) {
+    const client = pkg.clients;
+    if (!client?.phone || !client.consent_at) continue;
+    const remaining = pkg.sessions_total - pkg.sessions_used;
+    try {
+      await sendProactiveWhatsApp(client.phone, {
+        fallbackBody: `Hi${client.name ? ` ${client.name}` : ''}! Just a heads up — you have ${remaining} session${remaining !== 1 ? 's' : ''} left on your "${pkg.name}" package. Book now to lock in your next appointment.`,
+      });
+      console.log(`[scheduler] low-package nudge → ${client.name ?? client.phone} (${remaining} left)`);
+    } catch (e: any) {
+      console.error('[scheduler] low-package nudge error', e?.message ?? e);
+    }
+  }
+}
+
+/** Reconcile membership status + renewal dates from the clinic's own provider
+ *  (Stripe/PayFast/Paystack). We can't rely on clinics configuring webhooks, so
+ *  we poll subscriptions daily and flip rows to past_due/cancelled as reported. */
+async function syncMemberships(clinicId: string) {
+  const clinic = await getClinic(clinicId);
+  if (!clinic) return;
+  const rows = await getMembershipsToSync(clinicId);
+  for (const m of rows as any[]) {
+    try {
+      const synced = await syncMembershipStatus(clinic, m);
+      if (!synced) continue;
+      const renews = synced.renewsAt ?? m.renews_at;
+      if (synced.status !== m.status || (synced.renewsAt && synced.renewsAt !== m.renews_at)) {
+        await setMembershipStatus(m.id, synced.status, renews);
+        console.log(`[scheduler] membership ${m.id} → ${synced.status}`);
+      }
+    } catch (e: any) {
+      console.error('[scheduler] membership sync error', m.id, e?.message ?? e);
+    }
+  }
+}
+
 async function maybeRunDailyJobs() {
   const { dateStr, hour } = clinicNow();
   if (dateStr === _lastDailyDate || hour < DAILY_HOUR) return;
@@ -398,6 +476,10 @@ async function maybeRunDailyJobs() {
   if (config.defaultClinicId) {
     await ownerSummary(config.defaultClinicId).catch((e) => console.error('[ownerSummary]', e));
     await reactivation(config.defaultClinicId).catch((e) => console.error('[reactivation]', e));
+    await birthdayTouches(config.defaultClinicId).catch((e) => console.error('[birthday]', e));
+    await anniversaryTouches(config.defaultClinicId).catch((e) => console.error('[anniversary]', e));
+    await lowPackageNudges(config.defaultClinicId).catch((e) => console.error('[low-package]', e));
+    await syncMemberships(config.defaultClinicId).catch((e) => console.error('[membership-sync]', e));
     // Monthly report — once per calendar month, on/after MONTHLY_REPORT_DAY.
     const monthKey = dateStr.slice(0, 7);
     const day = parseInt(dateStr.slice(8, 10), 10);

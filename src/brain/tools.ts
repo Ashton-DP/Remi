@@ -103,4 +103,16 @@ export const tools: Anthropic.Tool[] = [
       required: ['message'],
     },
   },
+  {
+    name: 'check_package',
+    description:
+      "Check how many prepaid sessions the client has left on their active package. Call when they ask 'how many sessions do I have left?', 'what's left on my package?', or similar.",
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'check_membership',
+    description:
+      "Check the client's membership/subscription status and next renewal date. Call when they ask 'am I a member?', 'when does my plan renew?', or about their subscription.",
+    input_schema: { type: 'object', properties: {} },
+  },
 ];

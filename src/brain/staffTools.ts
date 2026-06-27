@@ -45,6 +45,24 @@ export const staffTools = [
     },
   },
   {
+    name: 'update_client_profile',
+    description:
+      "Update a client's profile notes, preferences, allergies, or tags. Use when a practitioner says things like 'add a note for Jane: allergic to latex', 'tag Maria as VIP', 'note that John prefers morning slots'. Provide the client's name or phone so we can match them.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        client_identifier: { type: 'string', description: "Client name or phone number to look up" },
+        notes: { type: 'string', description: 'Clinical / general notes to set (replaces existing)' },
+        preferences: { type: 'string', description: 'Scheduling or treatment preferences' },
+        allergies: { type: 'string', description: 'Known allergies or contraindications' },
+        tags: { type: 'array', items: { type: 'string' }, description: "Labels like 'vip', 'referred', 'new'" },
+        birthday: { type: 'string', description: 'ISO date YYYY-MM-DD' },
+        anniversary: { type: 'string', description: 'ISO date YYYY-MM-DD' },
+      },
+      required: ['client_identifier'],
+    },
+  },
+  {
     name: 'request_leave',
     description: "Submit a time-off / leave request for owner approval. Parse the dates the staff member gives. If they only give one day, set start and end to that same date.",
     input_schema: {

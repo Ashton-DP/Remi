@@ -5,8 +5,9 @@
  */
 import {
   clockIn, clockOut, getOpenTimeEntry, getStaffTimeEntries, createLeaveRequest,
-  addTask, addExpense,
+  addTask, addExpense, updateClientProfile,
 } from '../db';
+import { supabase } from '../lib/supabase';
 import { sumHours, startOfWeek, formatHours, leaveDays } from '../lib/teamOps';
 import { sendProactiveWhatsApp } from '../lib/twilio';
 
@@ -54,6 +55,32 @@ export async function executeStaffTool(
         }
       } catch { /* non-blocking */ }
       return { ok: true, days, status: 'pending', message: 'Leave request submitted for approval.' };
+    }
+    case 'update_client_profile': {
+      const ident = String(input?.client_identifier ?? '').trim();
+      if (!ident) return { error: 'no_client', message: 'Which client should I update?' };
+      // Match by name (ilike) or phone
+      const { data: matches } = await supabase
+        .from('clients')
+        .select('id, name, phone')
+        .eq('clinic_id', clinic.id)
+        .or(`name.ilike.%${ident}%,phone.eq.${ident}`)
+        .limit(5);
+      if (!matches?.length) return { error: 'not_found', message: `No client matching "${ident}" found.` };
+      if (matches.length > 1) {
+        return { error: 'ambiguous', message: `Multiple clients match "${ident}": ${matches.map((c: any) => c.name ?? c.phone).join(', ')}. Please be more specific.` };
+      }
+      const client = matches[0];
+      const updates: Record<string, any> = {};
+      if (input?.notes      !== undefined) updates.notes       = input.notes;
+      if (input?.preferences !== undefined) updates.preferences = input.preferences;
+      if (input?.allergies  !== undefined) updates.allergies   = input.allergies;
+      if (input?.tags       !== undefined) updates.tags        = input.tags;
+      if (input?.birthday   !== undefined) updates.birthday    = input.birthday;
+      if (input?.anniversary !== undefined) updates.anniversary = input.anniversary;
+      if (!Object.keys(updates).length) return { error: 'nothing_to_update', message: 'No fields to update were provided.' };
+      await updateClientProfile(client.id, updates);
+      return { ok: true, client: client.name ?? client.phone, updated: Object.keys(updates) };
     }
     case 'add_task': {
       const title = String(input?.title ?? '').trim();

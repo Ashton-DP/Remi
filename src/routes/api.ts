@@ -20,6 +20,8 @@ import {
   completeOnboarding, submitWhatsAppNumber,
   listStaff, addStaff, removeStaff, getClockedIn, getTimesheet, listLeaveRequests, decideLeave,
   addTask, listTasks, completeTask, deleteTask, addExpense, listExpenses,
+  getClientProfile, updateClientProfile, listPackages, upsertPackage, listMemberships,
+  createPendingMembership, getMembershipById, setMembershipStatus,
 } from '../db';
 import { sumHours, startOfWeek, formatHours } from '../lib/teamOps';
 import { sendProactiveWhatsApp } from '../lib/twilio';
@@ -30,6 +32,7 @@ import { getInvoiceSource } from '../lib/invoiceSources';
 import { serviceAccountEmail, testCalendar } from '../lib/googleCalendar';
 import { signState } from './connect';
 import { config } from '../config';
+import { membershipProvider, cancelMembershipSubscription } from '../lib/subscriptions';
 
 /** GET /api/me — who am I + which clinic/role. */
 export async function handleMe(req: Request, res: Response) {
@@ -159,6 +162,99 @@ export async function handleAssistant(req: Request, res: Response) {
 export async function handleCustomers(req: Request, res: Response) {
   const auth = getAuth(req);
   res.json({ customers: await listClients(auth.clinicId) });
+}
+
+/** GET /api/customers/:id — full client profile. */
+export async function handleCustomerProfile(req: Request, res: Response) {
+  const auth = getAuth(req);
+  const profile = await getClientProfile(String(req.params.id));
+  if (!profile || profile.clinic_id !== auth.clinicId) return res.status(404).json({ error: 'Not found' });
+  res.json({ customer: profile });
+}
+
+/** PATCH /api/customers/:id — update profile fields. Admin/owner only. */
+export async function handleUpdateCustomer(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'Read-only access.' });
+  const profile = await getClientProfile(String(req.params.id));
+  if (!profile || profile.clinic_id !== auth.clinicId) return res.status(404).json({ error: 'Not found' });
+  const allowed = ['notes', 'preferences', 'allergies', 'tags', 'birthday', 'anniversary', 'name', 'email'] as const;
+  const updates: Record<string, any> = {};
+  for (const k of allowed) { if (req.body?.[k] !== undefined) updates[k] = req.body[k]; }
+  const updated = await updateClientProfile(profile.id, updates);
+  res.json({ customer: updated });
+}
+
+/** GET /api/packages — all packages for this clinic. */
+export async function handleListPackages(req: Request, res: Response) {
+  const auth = getAuth(req);
+  res.json({ packages: await listPackages(auth.clinicId) });
+}
+
+/** POST /api/packages — create a new package for a client. Admin/owner only. */
+export async function handleCreatePackage(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'Read-only access.' });
+  const { client_id, name, sessions_total, expires_at } = req.body ?? {};
+  if (!client_id || !name || !sessions_total) return res.status(400).json({ error: 'client_id, name, sessions_total are required.' });
+  const pkg = await upsertPackage(auth.clinicId, String(client_id), {
+    name: String(name),
+    sessions_total: Number(sessions_total),
+    expires_at: expires_at ?? undefined,
+  });
+  res.status(201).json({ package: pkg });
+}
+
+/** GET /api/memberships — all memberships for this clinic. */
+export async function handleListMemberships(req: Request, res: Response) {
+  const auth = getAuth(req);
+  res.json({ memberships: await listMemberships(auth.clinicId) });
+}
+
+/** POST /api/memberships — create a pending membership + return the signup link.
+ *  The client opens the link, pays via the clinic's own recurring provider
+ *  (Stripe/PayFast/Paystack), and it activates. Admin/owner only. */
+export async function handleCreateMembership(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'Read-only access.' });
+  const clinic = await getClinic(auth.clinicId);
+  const provider = membershipProvider(clinic);
+  if (!provider) {
+    return res.status(400).json({ error: 'Memberships require Stripe, PayFast or Paystack. Connect one under Get Paid first.' });
+  }
+  const { client_id, plan_name, amount_zar, interval } = req.body ?? {};
+  const amount = Number(amount_zar);
+  if (!client_id || !plan_name || !(amount > 0)) {
+    return res.status(400).json({ error: 'client_id, plan_name and a positive amount_zar are required.' });
+  }
+  const ivl = interval === 'year' ? 'year' : 'month';
+  // Guard: the client must belong to this clinic.
+  const client = await getClientProfile(String(client_id));
+  if (!client || client.clinic_id !== auth.clinicId) return res.status(404).json({ error: 'Client not found.' });
+
+  const membership = await createPendingMembership(auth.clinicId, String(client_id), {
+    plan_name: String(plan_name), amount_zar: amount, interval: ivl, provider,
+  });
+  const signup_url = `${config.payments.publicBase}/membership/${membership.id}/start`;
+  res.status(201).json({ membership, signup_url });
+}
+
+/** POST /api/memberships/:id/cancel — cancel future billing at the provider, then
+ *  mark cancelled. We only mark cancelled if the provider cancel succeeds, so a
+ *  client can't be marked cancelled while still being billed. Admin/owner only. */
+export async function handleCancelMembership(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'Read-only access.' });
+  const membership = await getMembershipById(String(req.params.id));
+  if (!membership || membership.clinic_id !== auth.clinicId) return res.status(404).json({ error: 'Not found.' });
+  const clinic = await getClinic(auth.clinicId);
+  try {
+    await cancelMembershipSubscription(clinic, membership);
+  } catch (e: any) {
+    return res.status(502).json({ error: `Could not cancel at provider: ${e?.message ?? 'failed'}` });
+  }
+  const updated = await setMembershipStatus(membership.id, 'cancelled');
+  res.json({ membership: updated });
 }
 
 /** POST /api/chasing { paused:boolean } — global kill switch. Admin/owner only. */

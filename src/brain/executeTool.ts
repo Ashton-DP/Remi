@@ -10,8 +10,9 @@ import {
   addWaitlist, getNextWaitlist, setBookingDepositStatus, setClientName,
   findConfirmedBooking, setConversationStatus,
   getTodaysBookings, listWaitlist, getOverdueChasedInvoices,
-  addTask,
+  addTask, getActivePackage, decrementPackage, getClientMembership,
 } from '../db';
+import { sessionsRemaining } from '../lib/clientOs';
 
 /** Executes a tool call and performs all side effects. Returns a JSON-able result. */
 export async function executeTool(
@@ -139,7 +140,19 @@ export async function executeTool(
       // Mark the conversation booked so the follow-up job won't chase them.
       if (convo?.id) await setConversationStatus(convo.id, 'booked').catch(() => {});
 
-      return { ok: true, booking_id: booking?.id, when: start.toISOString(), deposit_link };
+      // Decrement active prepaid package session if one exists.
+      let package_sessions_remaining: number | undefined;
+      try {
+        const pkg = await getActivePackage(clinic.id, customer.id);
+        if (pkg) {
+          await decrementPackage(pkg.id);
+          package_sessions_remaining = pkg.sessions_total - pkg.sessions_used - 1;
+        }
+      } catch (e) {
+        console.error('[package] decrement error', e);
+      }
+
+      return { ok: true, booking_id: booking?.id, when: start.toISOString(), deposit_link, package_sessions_remaining };
     }
 
     case 'reschedule_booking': {
@@ -275,6 +288,25 @@ export async function executeTool(
       const note = `${body}${input.callback_wanted ? `\n\nWants a callback on ${customer.phone ?? '(no number)'}.` : ''}`;
       await addTask(clinic.id, { title, note, assignee: who || undefined, source: 'whatsapp-client' });
       return { ok: true, message: "Got it — I've passed that on to the team." };
+    }
+
+    case 'check_package': {
+      const pkg = await getActivePackage(clinic.id, customer.id);
+      if (!pkg) return { has_package: false, message: 'No active prepaid package found on your account.' };
+      const remaining = sessionsRemaining(pkg);
+      const expiry = pkg.expires_at
+        ? new Date(pkg.expires_at).toLocaleDateString('en-ZA', { dateStyle: 'medium' })
+        : null;
+      return { has_package: true, name: pkg.name, sessions_remaining: remaining, sessions_total: pkg.sessions_total, expires: expiry };
+    }
+
+    case 'check_membership': {
+      const m = await getClientMembership(clinic.id, customer.id);
+      if (!m) return { is_member: false, message: 'No active membership found on your account.' };
+      const renews = m.renews_at
+        ? new Date(m.renews_at).toLocaleDateString('en-ZA', { dateStyle: 'medium' })
+        : null;
+      return { is_member: true, plan: m.plan_name, status: m.status, renews_on: renews };
     }
 
     default:

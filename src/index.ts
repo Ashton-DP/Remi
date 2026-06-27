@@ -27,7 +27,8 @@ import { requireApiAuth, requirePlatformAdmin } from './lib/apiAuth';
 import {
   handleMe, handleToday, handleInvoices, handleInvoiceDetail, handleBookings,
   handleConversations, handleConversationDetail, handleInsights, handleAssistant,
-  handleCustomers, handleSetChasing, handleInvoiceActionWrite, handleResolveEscalation,
+  handleCustomers, handleCustomerProfile, handleUpdateCustomer,
+  handleSetChasing, handleInvoiceActionWrite, handleResolveEscalation,
   handleSettings, handleUpdateSettings, handleTestCalendar,
   handleConnectStartAuthed, handleConnectSheetAuthed, handleConnectPayment, handleConnectEmailInbox,
   handleTeamOps, handleAddStaff, handleRemoveStaff, handleDecideLeave,
@@ -37,7 +38,10 @@ import {
   handleWaitlist, handleAddWaitlist, handleMoveWaitlist, handleRemoveWaitlist, handleBookWaitlist,
   handleAdminClients,
   handleCompleteOnboarding, handleSubmitWhatsApp,
+  handleListPackages, handleCreatePackage, handleListMemberships,
+  handleCreateMembership, handleCancelMembership,
 } from './routes/api';
+import { handleMembershipStart, handleMembershipReturn } from './routes/membership';
 
 const app = express();
 // Render/Railway terminate TLS and forward — trust the proxy so forwarded
@@ -145,6 +149,13 @@ app.get('/api/conversations', requireApiAuth, handleConversations);
 app.get('/api/conversations/:id', requireApiAuth, handleConversationDetail);
 app.get('/api/insights', requireApiAuth, handleInsights);
 app.get('/api/customers', requireApiAuth, handleCustomers);
+app.get('/api/customers/:id', requireApiAuth, handleCustomerProfile);
+app.patch('/api/customers/:id', requireApiAuth, handleUpdateCustomer);
+app.get('/api/packages', requireApiAuth, handleListPackages);
+app.post('/api/packages', requireApiAuth, handleCreatePackage);
+app.get('/api/memberships', requireApiAuth, handleListMemberships);
+app.post('/api/memberships', requireApiAuth, handleCreateMembership);
+app.post('/api/memberships/:id/cancel', requireApiAuth, handleCancelMembership);
 app.get('/api/settings', requireApiAuth, handleSettings);
 app.post('/api/settings', requireApiAuth, handleUpdateSettings);
 app.get('/api/calendar/test', requireApiAuth, handleTestCalendar);
@@ -180,6 +191,8 @@ app.get('/pay/success', handlePaySuccess);
 app.get('/pay/cancel', handlePayCancel);
 app.get('/pay/stripe/return', handleStripeReturn);
 app.get('/pay/paypal/return', handlePaypalReturn);
+app.get('/membership/:id/start', handleMembershipStart);
+app.get('/membership/:id/return', handleMembershipReturn);
 app.get('/pay/:invoiceId', handlePay);
 app.post('/webhooks/payfast', webhookLimiter, handlePayfastNotify);
 

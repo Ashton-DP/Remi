@@ -1,5 +1,6 @@
 import { supabase } from './lib/supabase';
 import { buildReminderRows } from './lib/reminders';
+import { isPackageActive, isLowPackage } from './lib/clientOs';
 
 export async function getClinic(id: string) {
   const { data } = await supabase.from('clinics').select('*').eq('id', id).single();
@@ -1206,4 +1207,202 @@ export async function listExpenses(clinicId: string, sinceISO?: string) {
   if (sinceISO) q = q.gte('created_at', sinceISO);
   const { data } = await q.order('created_at', { ascending: false }).limit(200);
   return data ?? [];
+}
+
+// ---- Client OS: profiles, packages, memberships -----------------------------
+
+export async function getClientProfile(clientId: string) {
+  const { data } = await supabase.from('clients').select('*').eq('id', clientId).maybeSingle();
+  return data;
+}
+
+export async function updateClientProfile(
+  clientId: string,
+  fields: {
+    notes?: string; preferences?: string; allergies?: string;
+    tags?: string[]; birthday?: string; anniversary?: string;
+    name?: string; email?: string;
+  },
+) {
+  const { data } = await supabase.from('clients').update(fields).eq('id', clientId).select().single();
+  return data;
+}
+
+// ── Packages ──────────────────────────────────────────────────────────────────
+
+export async function listPackages(clinicId: string) {
+  const { data } = await supabase
+    .from('packages')
+    .select('*, clients(name, phone)')
+    .eq('clinic_id', clinicId)
+    .order('created_at', { ascending: false });
+  return data ?? [];
+}
+
+export async function getClientPackages(clinicId: string, clientId: string) {
+  const { data } = await supabase
+    .from('packages')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false });
+  return data ?? [];
+}
+
+/** Returns the first active (non-expired, sessions remaining) package for a client. */
+export async function getActivePackage(clinicId: string, clientId: string) {
+  const now = new Date().toISOString();
+  const { data } = await supabase
+    .from('packages')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .eq('client_id', clientId)
+    .or(`expires_at.is.null,expires_at.gt.${now}`)
+    .order('created_at', { ascending: true })
+    .limit(20);
+  return (data ?? []).find((p: any) => isPackageActive(p)) ?? null;
+}
+
+export async function decrementPackage(packageId: string) {
+  // Atomic increment using RPC so two concurrent requests can't both see sessions_used < sessions_total.
+  await supabase.rpc('increment_package_sessions_used', { pkg_id: packageId });
+}
+
+export async function upsertPackage(
+  clinicId: string,
+  clientId: string,
+  pkg: { name: string; sessions_total: number; expires_at?: string },
+) {
+  const { data } = await supabase
+    .from('packages')
+    .insert({ clinic_id: clinicId, client_id: clientId, ...pkg })
+    .select()
+    .single();
+  return data;
+}
+
+/** Clients whose active package has <= threshold sessions remaining. */
+export async function getClientsWithLowPackage(clinicId: string, threshold = 2) {
+  const now = new Date().toISOString();
+  const { data } = await supabase
+    .from('packages')
+    .select('*, clients(name, phone, consent_at)')
+    .eq('clinic_id', clinicId)
+    .or(`expires_at.is.null,expires_at.gt.${now}`)
+    .order('sessions_used', { ascending: false });
+  return (data ?? []).filter((p: any) => isLowPackage(p, threshold));
+}
+
+// ── Memberships ───────────────────────────────────────────────────────────────
+
+export async function listMemberships(clinicId: string) {
+  const { data } = await supabase
+    .from('memberships')
+    .select('*, clients(name, phone)')
+    .eq('clinic_id', clinicId)
+    .order('created_at', { ascending: false });
+  return data ?? [];
+}
+
+export async function getClientMembership(clinicId: string, clientId: string) {
+  const { data } = await supabase
+    .from('memberships')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .eq('client_id', clientId)
+    .eq('status', 'active')
+    .maybeSingle();
+  return data;
+}
+
+export async function getMembershipById(id: string) {
+  const { data } = await supabase
+    .from('memberships')
+    .select('*, clients(name, phone, email)')
+    .eq('id', id)
+    .maybeSingle();
+  return data;
+}
+
+/** Create a not-yet-paid membership the client activates via a provider signup link. */
+export async function createPendingMembership(
+  clinicId: string,
+  clientId: string,
+  m: { plan_name: string; amount_zar: number; interval: 'month' | 'year'; provider: 'stripe' | 'payfast' | 'paystack' },
+) {
+  const { data } = await supabase
+    .from('memberships')
+    .insert({
+      clinic_id: clinicId, client_id: clientId, status: 'pending',
+      plan_name: m.plan_name, amount_zar: m.amount_zar, billing_interval: m.interval, provider: m.provider,
+    })
+    .select()
+    .single();
+  return data;
+}
+
+/** Mark a pending membership active once the provider confirms the subscription. */
+export async function activateMembership(id: string, externalSubscriptionId: string, renewsAt: string | null) {
+  const { data } = await supabase
+    .from('memberships')
+    .update({ status: 'active', external_subscription_id: externalSubscriptionId, renews_at: renewsAt })
+    .eq('id', id)
+    .select()
+    .single();
+  return data;
+}
+
+/** Active memberships that carry a provider subscription id — for the periodic sync. */
+export async function getMembershipsToSync(clinicId: string) {
+  const { data } = await supabase
+    .from('memberships')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .not('external_subscription_id', 'is', null)
+    .in('status', ['active', 'past_due', 'paused']);
+  return data ?? [];
+}
+
+/** Sync a membership's status + renewal date from the provider. */
+export async function setMembershipStatus(id: string, status: string, renewsAt?: string | null) {
+  const updates: Record<string, any> = { status };
+  if (renewsAt !== undefined) updates.renews_at = renewsAt;
+  const { data } = await supabase.from('memberships').update(updates).eq('id', id).select().single();
+  return data;
+}
+
+// ── Birthday / anniversary helpers ────────────────────────────────────────────
+
+/** Clients with birthday today (MM-DD match), consent_at set. */
+export async function getClientsWithBirthdayToday(clinicId: string) {
+  const today = new Date();
+  const mmdd = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const { data } = await supabase
+    .from('clients')
+    .select('id, name, phone, birthday')
+    .eq('clinic_id', clinicId)
+    .not('birthday', 'is', null)
+    .not('consent_at', 'is', null)
+    .not('phone', 'is', null);
+  return (data ?? []).filter((c: any) => {
+    const b: string = c.birthday ?? '';
+    return b.slice(5) === mmdd; // 'YYYY-MM-DD' → 'MM-DD'
+  });
+}
+
+/** Clients with anniversary today (MM-DD match), consent_at set. */
+export async function getClientsWithAnniversaryToday(clinicId: string) {
+  const today = new Date();
+  const mmdd = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const { data } = await supabase
+    .from('clients')
+    .select('id, name, phone, anniversary')
+    .eq('clinic_id', clinicId)
+    .not('anniversary', 'is', null)
+    .not('consent_at', 'is', null)
+    .not('phone', 'is', null);
+  return (data ?? []).filter((c: any) => {
+    const a: string = c.anniversary ?? '';
+    return a.slice(5) === mmdd;
+  });
 }

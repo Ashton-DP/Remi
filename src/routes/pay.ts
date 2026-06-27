@@ -1,9 +1,10 @@
 import type { Request, Response } from 'express';
 import { config } from '../config';
 import { qp } from '../lib/dashboardAuth';
-import { getInvoiceById, getClinic, markInvoicePaidById } from '../db';
+import { getInvoiceById, getClinic, markInvoicePaidById, getMembershipById, activateMembership, setMembershipStatus } from '../db';
 import { getPaymentProvider } from '../lib/payments';
 import { payfastProcessUrl, buildPayfastParams, validatePayfastNotify } from '../lib/payments/payfast';
+import { isMembershipPaymentId, membershipIdFromPaymentId } from '../lib/payments/payfastSubscriptions';
 import { initPaystackPayment } from '../lib/payments/paystack';
 import { createStripeCheckout, retrieveStripeSession } from '../lib/payments/stripe';
 import { createPaypalOrder, capturePaypalOrder } from '../lib/payments/paypal';
@@ -118,8 +119,34 @@ export async function handlePayfastNotify(req: Request, res: Response) {
   res.status(200).end(); // acknowledge immediately; PayFast doesn't read a body
   try {
     const body = req.body || {};
-    const invoiceId = body.m_payment_id;
-    if (!invoiceId) return;
+    const mPaymentId = body.m_payment_id;
+    if (!mPaymentId) return;
+
+    // Membership subscription ITNs carry a `mem_` prefix + a subscription token.
+    if (isMembershipPaymentId(mPaymentId)) {
+      const membershipId = membershipIdFromPaymentId(mPaymentId);
+      const membership = await getMembershipById(membershipId);
+      if (!membership) return;
+      const clinic = await getClinic(membership.clinic_id);
+      const passphrase = clinic?.payment_config?.payfast?.passphrase;
+      if (!validatePayfastNotify(body, passphrase)) { console.warn('[payfast] bad signature for membership', membershipId); return; }
+      const token = body.token || body.subscription_token;
+      if (body.payment_status === 'COMPLETE' && token) {
+        // First payment activates; each recurring payment refreshes the renewal date.
+        if (membership.status !== 'active' || !membership.external_subscription_id) {
+          await activateMembership(membership.id, token, body.billing_date || null);
+          console.log(`[payfast] membership ${membershipId} activated`);
+        } else if (body.billing_date) {
+          await setMembershipStatus(membership.id, 'active', body.billing_date);
+        }
+      } else if (body.payment_status === 'CANCELLED') {
+        await setMembershipStatus(membership.id, 'cancelled');
+        console.log(`[payfast] membership ${membershipId} cancelled via ITN`);
+      }
+      return;
+    }
+
+    const invoiceId = mPaymentId;
     const invoice = await getInvoiceById(invoiceId);
     if (!invoice) return;
     const clinic = await getClinic(invoice.clinic_id);

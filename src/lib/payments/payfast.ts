@@ -12,13 +12,17 @@ export function payfastProcessUrl(): string {
     : 'https://www.payfast.co.za/eng/process';
 }
 
-/** PayFast signature = md5 of url-encoded key=value pairs (+ optional passphrase). Pure. */
+/** PayFast signature = md5 of url-encoded key=value pairs (+ optional passphrase).
+ *  PayFast signs PHP-style (urlencode), where a SPACE is '+', not '%20' — values
+ *  like item_name ("Invoice INV-1") and names contain spaces, so we must match
+ *  that or PayFast rejects the signature. Verified against the live sandbox. Pure. */
 export function buildPayfastSignature(params: Record<string, any>, passphrase?: string): string {
+  const enc = (v: any) => encodeURIComponent(String(v ?? '').trim()).replace(/%20/g, '+');
   const str = Object.entries(params)
     .filter(([k]) => k !== 'signature')
-    .map(([k, v]) => `${k}=${encodeURIComponent(String(v ?? '').trim())}`)
+    .map(([k, v]) => `${k}=${enc(v)}`)
     .join('&');
-  const withPass = passphrase ? `${str}&passphrase=${encodeURIComponent(passphrase.trim())}` : str;
+  const withPass = passphrase ? `${str}&passphrase=${enc(passphrase)}` : str;
   return crypto.createHash('md5').update(withPass).digest('hex');
 }
 
