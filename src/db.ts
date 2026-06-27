@@ -82,13 +82,19 @@ export async function saveMessage(conversationId: string, direction: 'in' | 'out
 
 /** Recent history mapped to Anthropic message format (in→user, out→assistant). */
 export async function getHistory(conversationId: string, limit = 20) {
+  // Fetch the MOST RECENT `limit` messages (descending), then restore
+  // chronological order. Ordering ascending + limit returns the OLDEST messages,
+  // which — once a conversation passes `limit` turns — drops the current user
+  // message and leaves the history ending on an assistant turn. Gemini then has
+  // nothing to reply to and returns empty ("Sorry, could you rephrase that?"),
+  // permanently breaking every long conversation.
   const { data } = await supabase
     .from('messages')
     .select('direction,body')
     .eq('conversation_id', conversationId)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(limit);
-  return (data ?? []).map((m: any) => ({
+  return (data ?? []).reverse().map((m: any) => ({
     role: m.direction === 'in' ? 'user' : 'assistant',
     content: m.body,
   }));
