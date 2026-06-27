@@ -8,8 +8,9 @@ import { config } from '../config';
  * we decode μ-law → PCM16 on the way in; Azure TTS can emit μ-law directly, so
  * the way out needs no transcoding.
  *
- * STT auto-detects across config.voice.azureSttLanguages (e.g. af-ZA + en-ZA) to
- * handle Afrikaans/English code-switching. TTS voice is chosen per reply language.
+ * STT auto-detects across config.voice.azureSttLanguages (en-ZA + af-ZA + zu-ZA)
+ * to handle code-switching. TTS voice is chosen per reply language (English via
+ * ElevenLabs; Afrikaans + isiZulu via Azure neural voices).
  */
 
 // ── μ-law (G.711) → PCM16 ─────────────────────────────────────────────────────
@@ -48,9 +49,36 @@ export function detectAfrikaans(text: string): boolean {
   return hits >= 2 || hits / words.length >= 0.25;
 }
 
+// Distinctive isiZulu tokens + agglutinative prefixes. Used on the REPLY text so
+// the spoken voice matches what the brain actually said (it mirrors the caller).
+const ZU_TOKENS = [
+  'sawubona', 'sanibonani', 'yebo', 'cha', 'ngicela', 'ngiyabonga', 'ngiyafuna',
+  'ngifuna', 'unjani', 'ngingakwazi', 'ukubhuka', 'usuku', 'kahle', 'kodwa',
+  'futhi', 'ngoba', 'malini', 'isikhathi', 'namhlanje', 'kusasa', 'siza', 'uma',
+  'wena', 'mina', 'khona', 'lapha', 'manje', 'ngi', 'uku', 'nje', 'ngokushesha',
+];
+const ZU_PREFIXES = ['ngi', 'uku', 'isi', 'aba', 'umu', 'izi', 'ama', 'esi', 'nga'];
+export function detectZulu(text: string): boolean {
+  const words = (text || '').toLowerCase().match(/[a-z']+/g) ?? [];
+  if (!words.length) return false;
+  let hits = 0;
+  for (const w of words) {
+    if (ZU_TOKENS.includes(w)) { hits += 1.5; continue; }
+    // Bantu digraphs / agglutinative prefixes that are vanishingly rare in en/af.
+    if (w.length >= 4 && ZU_PREFIXES.some((p) => w.startsWith(p))) hits++;
+    if (/(hl|ngc|dl|hh|nj|zw|ntsh)/.test(w)) hits += 0.5;
+  }
+  return hits >= 2 || hits / words.length >= 0.3;
+}
+
 /** Azure TTS voice for Afrikaans replies. English goes through ElevenLabs. */
 export function afrikaaansTtsVoice(): string {
   return config.voice.azureVoiceAf;
+}
+
+/** Azure TTS voice for isiZulu replies. */
+export function zuluTtsVoice(): string {
+  return config.voice.azureVoiceZu;
 }
 
 // ── STT: continuous recognition with language auto-detect ─────────────────────

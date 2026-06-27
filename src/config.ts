@@ -57,7 +57,7 @@ export const config = {
     deepgramApiKey: opt('DEEPGRAM_API_KEY'),
     deepgramModel: opt('DEEPGRAM_MODEL', 'nova-2-phonecall'),
     mediaWsUrl: opt('PUBLIC_MEDIA_WS_URL', 'wss://www.remireception.com/ws/media'),
-    // --- Azure Speech (STT only — Afrikaans/English auto-detect) ---
+    // --- Azure Speech (English/Afrikaans/isiZulu STT auto-detect + zu/af TTS) ---
     // Azure is used ONLY for STT (understanding the caller). TTS uses ElevenLabs
     // for English and Azure af-ZA-AdriNeural for Afrikaans replies.
     azureSpeechKey: opt('AZURE_SPEECH_KEY'),
@@ -66,10 +66,12 @@ export const config = {
     azureSttRegion: opt('AZURE_STT_REGION', 'westeurope'),
     // TTS region: southafricanorth is fine for af-ZA TTS (just voice synthesis, no LID).
     azureSpeechRegion: opt('AZURE_SPEECH_REGION', 'southafricanorth'),
-    // Candidate languages for auto-detection (handles Afrikaans/English code-switching).
-    azureSttLanguages: opt('AZURE_STT_LANGUAGES', 'af-ZA,en-ZA').split(',').map((s) => s.trim()).filter(Boolean),
-    // Azure TTS voice for Afrikaans replies only (English goes through ElevenLabs).
+    // Candidate languages for auto-detection (English + Afrikaans + isiZulu — the
+    // three most-spoken; handles code-switching). Azure caps continuous LID at 4.
+    azureSttLanguages: opt('AZURE_STT_LANGUAGES', 'en-ZA,af-ZA,zu-ZA').split(',').map((s) => s.trim()).filter(Boolean),
+    // Azure TTS voices for non-English replies (English goes through ElevenLabs).
     azureVoiceAf: opt('AZURE_VOICE_AF', 'af-ZA-AdriNeural'),
+    azureVoiceZu: opt('AZURE_VOICE_ZU', 'zu-ZA-ThandoNeural'),
     // How long Azure waits for silence before finalising a caller's utterance.
     azureSttSilenceMs: parseInt(opt('AZURE_STT_SILENCE_MS', '500'), 10),
   },

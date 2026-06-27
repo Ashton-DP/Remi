@@ -13,12 +13,12 @@ import { speechNormalize, xmlEscape } from './voiceRelay';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 import {
-  azureSpeechEnabled, createAzureRecognizer, azureSynthesize, detectAfrikaans,
+  azureSpeechEnabled, createAzureRecognizer, azureSynthesize, detectAfrikaans, detectZulu,
   type AzureRecognizer, type AzureSynthesis,
 } from '../voice/azureSpeech';
 
-// Prefer Azure (bilingual af-ZA/en-ZA STT + natural neural voices) when configured;
-// otherwise fall back to the Deepgram + ElevenLabs pipeline.
+// Prefer Azure (en-ZA/af-ZA/zu-ZA STT auto-detect + natural neural voices) when
+// configured; otherwise fall back to the Deepgram + ElevenLabs pipeline.
 const USE_AZURE = azureSpeechEnabled();
 
 /**
@@ -90,13 +90,13 @@ function openDeepgram(
   return dg;
 }
 
-/** Stream Azure TTS μ-law 8k to Twilio — used only for Afrikaans replies. */
-function azureSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string): Promise<void> {
+/** Stream Azure TTS μ-law 8k to Twilio — used for Afrikaans + isiZulu replies. */
+function azureSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string, voice: string): Promise<void> {
   ctx.botSpeaking = true;
   return new Promise<void>((resolve) => {
     const tts = azureSynthesize({
       text,
-      voice: config.voice.azureVoiceAf,
+      voice,
       onChunk: (mulaw) => {
         if (ctx.closed) return;
         twilioWs.send(JSON.stringify({ event: 'media', streamSid: ctx.streamSid, media: { payload: mulaw.toString('base64') } }));
@@ -142,12 +142,17 @@ async function elevenLabsSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string) 
 }
 
 /**
- * Route TTS: Afrikaans reply → Azure af-ZA-AdriNeural (natural Afrikaans voice).
- *            English reply  → ElevenLabs (warm, conversational English voice).
+ * Route TTS by reply language:
+ *   isiZulu reply   → Azure zu-ZA neural voice
+ *   Afrikaans reply → Azure af-ZA neural voice
+ *   English reply   → ElevenLabs (warm, conversational English voice)
  */
 async function speak(ctx: CallCtx, twilioWs: WebSocket, text: string) {
   const clean = speechNormalize(text);
-  if (USE_AZURE && detectAfrikaans(clean)) return azureSpeak(ctx, twilioWs, clean);
+  if (USE_AZURE) {
+    if (detectZulu(clean)) return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceZu);
+    if (detectAfrikaans(clean)) return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceAf);
+  }
   return elevenLabsSpeak(ctx, twilioWs, clean);
 }
 
@@ -246,15 +251,15 @@ export function attachMediaStream(server: Server) {
           }
           const greeting = `Thanks for calling ${ctx.clinic?.name ?? 'the clinic'}. I'm Remi, the virtual assistant. How can I help you today?`;
           if (USE_AZURE) {
-            // Azure STT auto-detects af-ZA/en-ZA; barge-in on interim, turn on final.
-            // Pass detected language through so the brain knows to reply in Afrikaans.
+            // Azure STT auto-detects en-ZA/af-ZA/zu-ZA; barge-in on interim, turn on final.
+            // Prefix the detected language so the brain knows which to mirror.
             ctx.azureStt = createAzureRecognizer({
               onInterim: () => bargeIn(ctx, twilioWs),
               onFinal: (utterance, lang) => {
-                // Prefix Afrikaans utterances so Gemini knows to mirror the language.
-                const isAf = lang.startsWith('af') || detectAfrikaans(utterance);
-                const text = isAf ? `[Caller is speaking Afrikaans] ${utterance}` : utterance;
-                handleUtterance(text);
+                const isZu = lang.startsWith('zu') || detectZulu(utterance);
+                const isAf = !isZu && (lang.startsWith('af') || detectAfrikaans(utterance));
+                const tag = isZu ? '[Caller is speaking isiZulu] ' : isAf ? '[Caller is speaking Afrikaans] ' : '';
+                handleUtterance(`${tag}${utterance}`);
               },
             });
             speak(ctx, twilioWs, greeting);
