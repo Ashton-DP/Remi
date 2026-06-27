@@ -36,8 +36,13 @@ export function membershipProvider(clinic: any): SubProvider | null {
   return p === 'stripe' || p === 'payfast' || p === 'paystack' ? p : null;
 }
 
-/** Begin the signup checkout for a pending membership. */
-export async function startMembershipCheckout(clinic: any, membership: any): Promise<StartResult> {
+/** Begin the signup checkout for a pending membership. `checkoutRef` (Stripe
+ *  session id / Paystack reference) is returned so the caller can store it and the
+ *  daily job can later reconcile a payment the client made but never returned to
+ *  confirm. PayFast has no ref — its ITN activates regardless of the return. */
+export async function startMembershipCheckout(
+  clinic: any, membership: any,
+): Promise<StartResult & { checkoutRef?: string }> {
   const base = config.payments.publicBase;
   const cfg = clinic.payment_config ?? {};
   const amount = Number(membership.amount_zar);
@@ -52,7 +57,7 @@ export async function startMembershipCheckout(clinic: any, membership: any): Pro
         successUrl: `${base}/membership/${membership.id}/return?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${base}/pay/cancel`,
       });
-      return { kind: 'redirect', url: out.url };
+      return { kind: 'redirect', url: out.url, checkoutRef: out.id };
     }
     case 'payfast': {
       const fields = buildPayfastSubscriptionParams(membership, client, cfg.payfast, base);
@@ -68,10 +73,39 @@ export async function startMembershipCheckout(clinic: any, membership: any): Pro
         reference,
         callbackUrl: `${base}/membership/${membership.id}/return`,
       });
-      return { kind: 'redirect', url: out.authorization_url };
+      return { kind: 'redirect', url: out.authorization_url, checkoutRef: reference };
     }
     default:
       throw new Error(`Unsupported membership provider: ${membership.provider}`);
+  }
+}
+
+/** Reconcile a still-pending membership against the provider using the stored
+ *  checkout ref — for clients who paid but never returned to the confirm URL.
+ *  Returns activation details if the payment went through, else null. */
+export async function reconcilePendingMembership(
+  clinic: any, membership: any,
+): Promise<{ externalId: string; renewsAt: string | null } | null> {
+  const cfg = clinic.payment_config ?? {};
+  const ref = membership.checkout_ref;
+  if (!ref) return null;
+  switch (membership.provider) {
+    case 'stripe': {
+      const { subscriptionId, active } = await retrieveStripeSubscriptionFromSession(cfg.stripe.secret_key, ref);
+      if (!subscriptionId || !active) return null;
+      let renewsAt: string | null = null;
+      try { renewsAt = (await retrieveStripeSubscription(cfg.stripe.secret_key, subscriptionId)).currentPeriodEnd; } catch { /* best-effort */ }
+      return { externalId: subscriptionId, renewsAt };
+    }
+    case 'paystack': {
+      const out = await confirmPaystackSubscription(cfg.paystack.secret_key, ref);
+      if (!out) return null;
+      return { externalId: out.subscriptionCode, renewsAt: out.renewsAt };
+    }
+    case 'payfast':
+      return null; // PayFast activates via ITN; a pending PayFast row means no payment landed.
+    default:
+      return null;
   }
 }
 

@@ -24,6 +24,16 @@ export async function initPaystackPayment(secretKey: string, o: {
   return data.data;
 }
 
+/** Verify a transaction by reference (server-side). Returns whether it's paid. */
+export async function verifyPaystackTransaction(secretKey: string, reference: string): Promise<{ paid: boolean }> {
+  const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+    headers: { Authorization: `Bearer ${secretKey}` },
+  });
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || data?.status === false) throw new Error(data?.message || `Paystack ${res.status}`);
+  return { paid: data?.data?.status === 'success' };
+}
+
 /** Webhook signature = HMAC SHA512 of the raw body, keyed by the secret key. Pure. */
 export function verifyPaystackWebhook(rawBody: string, signature: string, secretKey: string): boolean {
   if (!secretKey || !signature) return false;

@@ -495,6 +495,17 @@ export async function getClinicsWithSummaryPhone() {
   return data ?? [];
 }
 
+/** All onboarded clinics — the per-tenant set the scheduler's daily jobs loop over.
+ *  Filters to clinics that finished onboarding so we don't message half-set-up
+ *  tenants. Each daily job still self-guards (owner phone, consent, etc.). */
+export async function getActiveClinics() {
+  const { data } = await supabase
+    .from('clinics')
+    .select('id,name,timezone')
+    .not('onboarding_completed_at', 'is', null);
+  return data ?? [];
+}
+
 /** Fetch a single client by id (for the intake form). */
 export async function getClientById(clientId: string) {
   const { data } = await supabase.from('clients').select('*').eq('id', clientId).maybeSingle();
@@ -1369,6 +1380,27 @@ export async function setMembershipStatus(id: string, status: string, renewsAt?:
   if (renewsAt !== undefined) updates.renews_at = renewsAt;
   const { data } = await supabase.from('memberships').update(updates).eq('id', id).select().single();
   return data;
+}
+
+/** Store the provider checkout reference (Stripe session / Paystack ref) at signup,
+ *  so a paid-but-not-returned membership can be reconciled later. */
+export async function setMembershipCheckoutRef(id: string, ref: string) {
+  await supabase.from('memberships').update({ checkout_ref: ref }).eq('id', id);
+}
+
+/** Pending memberships with a checkout ref, created within the last `days` — these
+ *  may have been paid but never confirmed (client closed the tab). Older ones are
+ *  treated as abandoned and left alone. */
+export async function getPendingMembershipsToReconcile(clinicId: string, days = 7) {
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const { data } = await supabase
+    .from('memberships')
+    .select('*, clients(name, phone, email)')
+    .eq('clinic_id', clinicId)
+    .eq('status', 'pending')
+    .not('checkout_ref', 'is', null)
+    .gte('created_at', since);
+  return data ?? [];
 }
 
 // ── Birthday / anniversary helpers ────────────────────────────────────────────

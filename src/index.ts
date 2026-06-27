@@ -22,7 +22,7 @@ import { handleStripeWebhook } from './routes/stripeWebhook';
 import { handleInvoiceImport, handleInvoiceList, handleSourcePreview } from './routes/invoices';
 import { handleConnectStart, handleConnectCallback, handleConnectSheet } from './routes/connect';
 import { handleEmailDomainSetup, handleEmailDomainVerify, handleEmailDomainStatus } from './routes/emailDomain';
-import { handlePay, handlePaySuccess, handlePayCancel, handlePayfastNotify, handleStripeReturn, handlePaypalReturn } from './routes/pay';
+import { handlePay, handlePaySuccess, handlePayCancel, handlePayfastNotify, handleStripeReturn, handlePaypalReturn, handlePaystackReturn } from './routes/pay';
 import { requireApiAuth, requirePlatformAdmin } from './lib/apiAuth';
 import {
   handleMe, handleToday, handleInvoices, handleInvoiceDetail, handleBookings,
@@ -190,6 +190,7 @@ app.post('/api/escalations/:id/resolve', requireApiAuth, handleResolveEscalation
 app.get('/pay/success', handlePaySuccess);
 app.get('/pay/cancel', handlePayCancel);
 app.get('/pay/stripe/return', handleStripeReturn);
+app.get('/pay/paystack/return', handlePaystackReturn);
 app.get('/pay/paypal/return', handlePaypalReturn);
 app.get('/membership/:id/start', handleMembershipStart);
 app.get('/membership/:id/return', handleMembershipReturn);

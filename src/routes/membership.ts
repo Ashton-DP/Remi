@@ -7,7 +7,7 @@
  */
 import type { Request, Response } from 'express';
 import { qp } from '../lib/dashboardAuth';
-import { getMembershipById, getClinic, activateMembership } from '../db';
+import { getMembershipById, getClinic, activateMembership, setMembershipCheckoutRef } from '../db';
 import { membershipProvider, startMembershipCheckout, confirmMembershipReturn } from '../lib/subscriptions';
 
 const esc = (s: any) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -33,6 +33,9 @@ export async function handleMembershipStart(req: Request, res: Response) {
 
   try {
     const start = await startMembershipCheckout(clinic, membership);
+    // Persist the checkout ref so the daily job can reconcile this payment even
+    // if the client never makes it back to the confirm URL.
+    if (start.checkoutRef) await setMembershipCheckoutRef(membership.id, start.checkoutRef).catch(() => {});
     if (start.kind === 'redirect') return res.redirect(start.url);
     // PayFast: auto-submit the signed subscription form.
     const fields = Object.entries(start.fields)

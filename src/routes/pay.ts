@@ -5,7 +5,7 @@ import { getInvoiceById, getClinic, markInvoicePaidById, getMembershipById, acti
 import { getPaymentProvider } from '../lib/payments';
 import { payfastProcessUrl, buildPayfastParams, validatePayfastNotify } from '../lib/payments/payfast';
 import { isMembershipPaymentId, membershipIdFromPaymentId } from '../lib/payments/payfastSubscriptions';
-import { initPaystackPayment } from '../lib/payments/paystack';
+import { initPaystackPayment, verifyPaystackTransaction } from '../lib/payments/paystack';
 import { createStripeCheckout, retrieveStripeSession } from '../lib/payments/stripe';
 import { createPaypalOrder, capturePaypalOrder } from '../lib/payments/paypal';
 
@@ -41,7 +41,9 @@ export async function handlePay(req: Request, res: Response) {
         amountZar: Number(invoice.amount_due),
         reference: `remi_${invoice.id}`,
         metadata: { invoice_id: invoice.id, clinic_id: invoice.clinic_id },
-        callbackUrl: `${config.payments.publicBase}/pay/success`,
+        // Route back through a handler that verifies the txn + marks the invoice
+        // paid — /pay/success alone is a static page that never settles it.
+        callbackUrl: `${config.payments.publicBase}/pay/paystack/return?inv=${invoice.id}`,
       });
       return res.redirect(out.authorization_url);
     }
@@ -93,6 +95,23 @@ export async function handleStripeReturn(req: Request, res: Response) {
     return res.type('text/html').send(note('Thank you 💛', 'Your payment is being processed.'));
   } catch (e: any) {
     console.error('[pay/stripe]', e?.message ?? e);
+    return res.type('text/html').send(note('Thank you 💛', 'Your payment is being processed.'));
+  }
+}
+
+/** GET /pay/paystack/return?inv=&reference= — verify the txn + mark the invoice paid. */
+export async function handlePaystackReturn(req: Request, res: Response) {
+  try {
+    const invoiceId = qp(req.query.inv) ?? '';
+    const reference = qp(req.query.reference) ?? qp(req.query.trxref) ?? `remi_${invoiceId}`;
+    const invoice = await getInvoiceById(invoiceId);
+    if (!invoice) return res.type('text/html').send(note('Thank you', 'Payment received.'));
+    const clinic = await getClinic(invoice.clinic_id);
+    const { paid } = await verifyPaystackTransaction(clinic.payment_config.paystack.secret_key, reference);
+    if (paid) { await markInvoicePaidById(invoiceId); return res.type('text/html').send(note('Paid ✅', 'Thank you! Your payment was successful.')); }
+    return res.type('text/html').send(note('Thank you 💛', 'Your payment is being processed.'));
+  } catch (e: any) {
+    console.error('[pay/paystack]', e?.message ?? e);
     return res.type('text/html').send(note('Thank you 💛', 'Your payment is being processed.'));
   }
 }

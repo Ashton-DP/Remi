@@ -41,6 +41,11 @@ create table if not exists memberships (
   created_at              timestamptz not null default now()
 );
 
+-- Provider checkout reference (Stripe session id / Paystack reference), stored at
+-- signup so the daily job can reconcile a membership the client paid for but never
+-- returned to confirm. (alter, since the table may already exist.)
+alter table memberships add column if not exists checkout_ref text;
+
 create index if not exists memberships_clinic_client_idx on memberships (clinic_id, client_id);
 create index if not exists memberships_external_sub_idx  on memberships (external_subscription_id)
   where external_subscription_id is not null;

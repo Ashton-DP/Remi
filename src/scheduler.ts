@@ -3,8 +3,8 @@
  * Polls every 60 seconds for due reminders and sends WhatsApp messages.
  */
 import { config } from './config'; // also loads dotenv
-import { getDueReminders, markReminderSent, markReminderFailed, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getBookingsForDate, getClinicsWithSummaryPhone, getClinicIdsWithOverdueInvoices, getClientsWithBirthdayToday, getClientsWithAnniversaryToday, getClientsWithLowPackage, getMembershipsToSync, setMembershipStatus } from './db';
-import { syncMembershipStatus } from './lib/subscriptions';
+import { getDueReminders, markReminderSent, markReminderFailed, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getBookingsForDate, getClinicsWithSummaryPhone, getClinicIdsWithOverdueInvoices, getClientsWithBirthdayToday, getClientsWithAnniversaryToday, getClientsWithLowPackage, getMembershipsToSync, setMembershipStatus, getActiveClinics, getPendingMembershipsToReconcile, activateMembership } from './db';
+import { syncMembershipStatus, reconcilePendingMembership } from './lib/subscriptions';
 import { sendProactiveWhatsApp } from './lib/twilio';
 import { getClinicsWithEmailInbox, getOrCreateClientByEmail, getOrCreateConversation, saveMessage, getHistory, markProcessedOnce } from './db';
 import { processInbox, sendEmailReply, replySubject } from './lib/emailInbox';
@@ -463,6 +463,32 @@ async function syncMemberships(clinicId: string) {
   }
 }
 
+/** Catch memberships the client paid for but never confirmed (closed the tab).
+ *  Re-checks each recent pending membership against the provider via its stored
+ *  checkout ref and activates it if the payment actually went through — so a
+ *  paying member is never silently stuck on "pending". */
+async function reconcilePendingMemberships(clinicId: string) {
+  const clinic = await getClinic(clinicId);
+  if (!clinic) return;
+  const rows = await getPendingMembershipsToReconcile(clinicId);
+  for (const m of rows as any[]) {
+    try {
+      const confirmed = await reconcilePendingMembership(clinic, m);
+      if (confirmed) {
+        await activateMembership(m.id, confirmed.externalId, confirmed.renewsAt);
+        console.log(`[scheduler] reconciled stranded membership ${m.id} → active`);
+        if (m.clients?.phone) {
+          await sendProactiveWhatsApp(m.clients.phone, {
+            fallbackBody: `You're all set! 🎉 Your ${m.plan_name} membership at ${clinic.name} is now active.`,
+          }).catch(() => {});
+        }
+      }
+    } catch (e: any) {
+      console.error('[scheduler] membership reconcile error', m.id, e?.message ?? e);
+    }
+  }
+}
+
 async function maybeRunDailyJobs() {
   const { dateStr, hour } = clinicNow();
   if (dateStr === _lastDailyDate || hour < DAILY_HOUR) return;
@@ -473,22 +499,28 @@ async function maybeRunDailyJobs() {
   await purgeExpiredData(retentionDays).catch((e) => console.error('[retention]', e));
   // Auto-verify pending white-label email domains (flips to live once DNS lands).
   await verifyPendingEmailDomains().catch((e) => console.error('[email-domains]', e));
-  if (config.defaultClinicId) {
-    await ownerSummary(config.defaultClinicId).catch((e) => console.error('[ownerSummary]', e));
-    await reactivation(config.defaultClinicId).catch((e) => console.error('[reactivation]', e));
-    await birthdayTouches(config.defaultClinicId).catch((e) => console.error('[birthday]', e));
-    await anniversaryTouches(config.defaultClinicId).catch((e) => console.error('[anniversary]', e));
-    await lowPackageNudges(config.defaultClinicId).catch((e) => console.error('[low-package]', e));
-    await syncMemberships(config.defaultClinicId).catch((e) => console.error('[membership-sync]', e));
-    // Monthly report — once per calendar month, on/after MONTHLY_REPORT_DAY.
-    const monthKey = dateStr.slice(0, 7);
-    const day = parseInt(dateStr.slice(8, 10), 10);
-    const reportDay = parseInt(process.env.MONTHLY_REPORT_DAY ?? '1', 10);
-    if (monthKey !== _lastMonthlyKey && day >= reportDay) {
-      _lastMonthlyKey = monthKey;
-      await monthlyReport(config.defaultClinicId).catch((e) => console.error('[monthlyReport]', e));
-    }
+  // Per-tenant daily jobs run for EVERY onboarded clinic, not just a default one.
+  // Each job self-guards (owner phone, consent, etc.); a failure in one clinic
+  // never aborts the rest.
+  const clinics = await getActiveClinics();
+  const monthKey = dateStr.slice(0, 7);
+  const day = parseInt(dateStr.slice(8, 10), 10);
+  const reportDay = parseInt(process.env.MONTHLY_REPORT_DAY ?? '1', 10);
+  const doMonthly = monthKey !== _lastMonthlyKey && day >= reportDay;
+  if (doMonthly) _lastMonthlyKey = monthKey;
+
+  for (const clinic of clinics as any[]) {
+    const id = clinic.id;
+    await ownerSummary(id).catch((e) => console.error('[ownerSummary]', id, e));
+    await reactivation(id).catch((e) => console.error('[reactivation]', id, e));
+    await birthdayTouches(id).catch((e) => console.error('[birthday]', id, e));
+    await anniversaryTouches(id).catch((e) => console.error('[anniversary]', id, e));
+    await lowPackageNudges(id).catch((e) => console.error('[low-package]', id, e));
+    await syncMemberships(id).catch((e) => console.error('[membership-sync]', id, e));
+    await reconcilePendingMemberships(id).catch((e) => console.error('[membership-reconcile]', id, e));
+    if (doMonthly) await monthlyReport(id).catch((e) => console.error('[monthlyReport]', id, e));
   }
+  console.log(`[scheduler] daily jobs ran for ${clinics.length} clinic(s)`);
 }
 
 let _started = false;
