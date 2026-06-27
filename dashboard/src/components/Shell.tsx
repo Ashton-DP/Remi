@@ -45,7 +45,14 @@ const PLAN_NAV: Record<string, string[]> = {
 
 export function Shell({ onSignOut }: { onSignOut: () => void }) {
   const [me, setMe] = useState<Me | null>(null);
-  const [view, setView] = useState('assistant');
+  // Onboarding sets this flag when the user opts to finish an optional
+  // integration (Payments/Accounting/Email) — land them on Settings, not home.
+  const [view, setView] = useState(() => {
+    try {
+      if (localStorage.getItem('remi_open_settings')) { localStorage.removeItem('remi_open_settings'); return 'settings'; }
+    } catch { /* ignore */ }
+    return 'assistant';
+  });
   const [err, setErr] = useState('');
 
   useEffect(() => { api<Me>('/api/me').then(setMe).catch((e) => setErr(e.message)); }, []);

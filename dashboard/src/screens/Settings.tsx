@@ -268,8 +268,8 @@ export function Settings() {
           {services.map((sv, i) => (
             <div key={i} className="svc-row">
               <input className="conn-input" placeholder="Service name" value={sv.service ?? sv.name ?? ''} onChange={(e) => setServices(services.map((x, j) => j === i ? { ...x, service: e.target.value } : x))} disabled={!canEdit} />
-              <input className="conn-input" type="number" placeholder="min" style={{ maxWidth: 90 }} value={sv.duration_min ?? ''} onChange={(e) => setServices(services.map((x, j) => j === i ? { ...x, duration_min: e.target.value } : x))} disabled={!canEdit} />
-              <input className="conn-input" type="number" placeholder="R price" style={{ maxWidth: 110 }} value={sv.price_zar ?? ''} onChange={(e) => setServices(services.map((x, j) => j === i ? { ...x, price_zar: e.target.value } : x))} disabled={!canEdit} />
+              <input className="conn-input" type="number" min={5} step={5} placeholder="min" title="Appointment length in minutes" style={{ maxWidth: 90 }} value={sv.duration_min ?? ''} onChange={(e) => setServices(services.map((x, j) => j === i ? { ...x, duration_min: Math.max(0, +e.target.value) } : x))} disabled={!canEdit} />
+              <input className="conn-input" type="number" min={0} placeholder="R price" title="Price in rand" style={{ maxWidth: 110 }} value={sv.price_zar ?? ''} onChange={(e) => setServices(services.map((x, j) => j === i ? { ...x, price_zar: Math.max(0, +e.target.value) } : x))} disabled={!canEdit} />
               {canEdit && <button className="btn sm danger" onClick={() => setServices(services.filter((_, j) => j !== i))}>Remove</button>}
             </div>
           ))}

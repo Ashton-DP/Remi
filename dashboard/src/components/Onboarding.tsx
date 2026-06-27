@@ -27,6 +27,15 @@ const STEPS = [
   { num: 4, label: 'Knowledge' },
   { num: 5, label: 'Calendar' },
   { num: 6, label: 'WhatsApp' },
+  { num: 7, label: 'Connect' },
+];
+
+// Optional integrations that otherwise live only in Settings — surfaced here so
+// new clinics know they exist and aren't silently forgotten. None block go-live.
+const EXTRAS: { key: string; name: string; why: string }[] = [
+  { key: 'payments', name: '💳 Payments', why: 'Take deposits, send invoices and run memberships. Without it Remi can book, but can’t collect money.' },
+  { key: 'accounting', name: '📊 Accounting', why: 'Connect Xero, QuickBooks or Sage so Remi chases unpaid invoices for you automatically.' },
+  { key: 'email', name: '📧 Email inbox', why: 'Let Remi read and reply to booking emails too, not just WhatsApp.' },
 ];
 
 export function Onboarding({ onComplete }: { onComplete: () => void }) {
@@ -59,6 +68,9 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [waHasAccount, setWaHasAccount] = useState<boolean | null>(null);
   const [waSubmitted, setWaSubmitted] = useState(false);
 
+  // Step 7 — optional connections; true = "I'll set this up now" (→ land on Settings)
+  const [setupNow, setSetupNow] = useState<Record<string, boolean>>({});
+
   async function next() {
     setErr('');
     if (step === 1 && !name.trim()) { setErr('Please enter your clinic name.'); return; }
@@ -72,7 +84,12 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
     try {
       const cleanServices = services
         .filter((s) => s.service.trim())
-        .map((s) => ({ service: s.service.trim(), duration_min: Number(s.duration_min) || 30, price_zar: Number(s.price_zar) || 0, ...(s.prep ? { prep: s.prep } : {}) }));
+        .map((s) => ({
+          service: s.service.trim(),
+          duration_min: Math.max(5, Number(s.duration_min) || 30),
+          price_zar: Math.max(0, Number(s.price_zar) || 0),
+          ...(s.prep ? { prep: s.prep } : {}),
+        }));
 
       await api('/api/onboarding/complete', {
         method: 'POST',
@@ -87,6 +104,11 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
           hours_json: buildHours(hours),
         }),
       });
+      // If they chose to set up any optional integration now, land them on
+      // Settings (where Payments / Accounting / Email live) instead of the home.
+      if (Object.values(setupNow).some(Boolean)) {
+        try { localStorage.setItem('remi_open_settings', '1'); } catch { /* ignore */ }
+      }
       onComplete();
     } catch (e: any) {
       setErr(e.message);
@@ -165,28 +187,37 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
           {step === 2 && (
             <>
               <h2>Your services</h2>
-              <p className="onb-hint">Remi uses these to answer pricing questions and book the right slot length.</p>
+              <p className="onb-hint">Remi uses these to answer pricing questions and book the right slot length. <strong>Duration</strong> is the appointment length in minutes; <strong>price</strong> is in rand.</p>
+              <div className="onb-svc-head">
+                <span>Service</span>
+                <span>Duration (min)</span>
+                <span>Price (R)</span>
+                <span />
+              </div>
               {services.map((sv, i) => (
                 <div key={i} className="onb-svc-row">
                   <input
                     className="onb-svc-name"
-                    placeholder="Service name"
+                    placeholder="e.g. Deep tissue massage"
                     value={sv.service}
                     onChange={(e) => setServices(services.map((x, j) => j === i ? { ...x, service: e.target.value } : x))}
                   />
                   <input
                     type="number"
+                    min={5}
+                    step={5}
                     className="onb-svc-num"
-                    placeholder="min"
+                    placeholder="30"
                     value={sv.duration_min || ''}
-                    onChange={(e) => setServices(services.map((x, j) => j === i ? { ...x, duration_min: +e.target.value } : x))}
+                    onChange={(e) => setServices(services.map((x, j) => j === i ? { ...x, duration_min: Math.max(0, +e.target.value) } : x))}
                   />
                   <input
                     type="number"
+                    min={0}
                     className="onb-svc-num"
-                    placeholder="R price"
+                    placeholder="0"
                     value={sv.price_zar || ''}
-                    onChange={(e) => setServices(services.map((x, j) => j === i ? { ...x, price_zar: +e.target.value } : x))}
+                    onChange={(e) => setServices(services.map((x, j) => j === i ? { ...x, price_zar: Math.max(0, +e.target.value) } : x))}
                   />
                   <button className="onb-remove" onClick={() => setServices(services.filter((_, j) => j !== i))}>✕</button>
                 </div>
@@ -308,6 +339,39 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
                   <p className="onb-hint">Remi is already live on voice calls.</p>
                 </div>
               )}
+            </>
+          )}
+
+          {step === 7 && (
+            <>
+              <h2>A few optional extras</h2>
+              <p className="onb-hint">Remi goes live without these — but they unlock getting paid, invoice chasing and email. Set up what you can now, or skip and do it anytime in <strong>Settings → Connections</strong>.</p>
+              {EXTRAS.map((x) => {
+                const on = !!setupNow[x.key];
+                return (
+                  <div key={x.key} className="onb-extra">
+                    <div className="onb-extra-info">
+                      <div className="onb-extra-name">{x.name}<span className="onb-extra-badge">Not set up yet</span></div>
+                      <div className="onb-extra-why">{x.why}</div>
+                    </div>
+                    <div className="onb-extra-pills">
+                      <button
+                        className={`onb-extra-pill ${on ? 'sel' : ''}`}
+                        onClick={() => setSetupNow({ ...setupNow, [x.key]: true })}
+                      >Set up now</button>
+                      <button
+                        className={`onb-extra-pill ${!on ? 'sel' : ''}`}
+                        onClick={() => setSetupNow({ ...setupNow, [x.key]: false })}
+                      >Skip for now</button>
+                    </div>
+                  </div>
+                );
+              })}
+              <p className="onb-skip">
+                {Object.values(setupNow).some(Boolean)
+                  ? 'We’ll take you to Settings to finish the ones you picked.'
+                  : 'No problem — you can connect these whenever you’re ready from Settings.'}
+              </p>
             </>
           )}
 

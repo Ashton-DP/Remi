@@ -266,7 +266,20 @@ select.conn-input { cursor: pointer; }
 .onb-field select { cursor: pointer; }
 .onb-textarea { width: 100%; background: var(--elev); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; color: var(--text); resize: vertical; outline: none; box-sizing: border-box; transition: border-color .15s; font-family: inherit; line-height: 1.6; }
 .onb-textarea:focus { border-color: var(--purple); }
+.onb-svc-head { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; padding: 0 2px; }
+.onb-svc-head > span:first-child { flex: 1; }
+.onb-svc-head > span { width: 90px; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.onb-svc-head > span:nth-child(2), .onb-svc-head > span:nth-child(3) { width: 90px; }
 .onb-svc-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.onb-extra { display: flex; gap: 14px; align-items: center; justify-content: space-between; background: var(--elev); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
+.onb-extra-info { flex: 1; min-width: 0; }
+.onb-extra-name { font-size: 14px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.onb-extra-badge { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--amber); background: var(--amber-bg); border-radius: 6px; padding: 2px 7px; }
+.onb-extra-why { font-size: 12.5px; color: var(--muted); margin-top: 4px; line-height: 1.45; }
+.onb-extra-pills { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.onb-extra-pill { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; transition: all .15s; }
+.onb-extra-pill:hover { border-color: var(--purple); }
+.onb-extra-pill.sel { border-color: var(--purple); background: rgba(109,78,255,.12); color: var(--purple); }
 .onb-svc-name { flex: 1; background: var(--elev); border: 1px solid var(--border); border-radius: 9px; padding: 9px 12px; font-size: 13.5px; color: var(--text); outline: none; }
 .onb-svc-name:focus { border-color: var(--purple); }
 .onb-svc-num { width: 90px; background: var(--elev); border: 1px solid var(--border); border-radius: 9px; padding: 9px 10px; font-size: 13.5px; color: var(--text); outline: none; }
