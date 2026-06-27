@@ -3,7 +3,7 @@
  * Polls every 60 seconds for due reminders and sends WhatsApp messages.
  */
 import { config } from './config'; // also loads dotenv
-import { getDueReminders, markReminderSent, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getBookingsForDate, getClinicsWithSummaryPhone, getClinicIdsWithOverdueInvoices } from './db';
+import { getDueReminders, markReminderSent, markReminderFailed, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getBookingsForDate, getClinicsWithSummaryPhone, getClinicIdsWithOverdueInvoices } from './db';
 import { sendProactiveWhatsApp } from './lib/twilio';
 import { runChaseForClinic } from './lib/chaseRunner';
 import { syncInvoicesForClinic } from './lib/invoiceSources';
@@ -117,9 +117,17 @@ async function _tick() {
     // Atomically claim (pending→sending) so a crash/retry or a second instance
     // can't send the same reminder twice. If we don't win the claim, skip.
     if (!(await claimReminder(r.id))) continue;
-    await sendProactiveWhatsApp(client.phone, { contentSid, variables, fallbackBody: msg });
-    await markReminderSent(r.id);
-    console.log(`[scheduler] sent ${r.kind} reminder → ${client.phone}`);
+    try {
+      await sendProactiveWhatsApp(client.phone, { contentSid, variables, fallbackBody: msg });
+      await markReminderSent(r.id);
+      console.log(`[scheduler] sent ${r.kind} reminder → ${client.phone}`);
+    } catch (e) {
+      // A send failure must NOT strand the reminder in 'sending' forever, nor
+      // abort the rest of this tick (other reminders still need to go out).
+      // Mark it failed (terminal + visible) and carry on.
+      await markReminderFailed(r.id);
+      console.error(`[scheduler] reminder ${r.id} (${r.kind}) send FAILED → ${client.phone}:`, (e as Error)?.message ?? e);
+    }
   }
 }
 

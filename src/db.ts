@@ -269,6 +269,12 @@ export async function markReminderSent(id: string) {
   await supabase.from('reminders').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', id);
 }
 
+/** Mark a reminder as failed so a send error doesn't strand it in 'sending'
+ *  (claimed-but-never-completed) forever. Terminal + visible in the DB. */
+export async function markReminderFailed(id: string) {
+  await supabase.from('reminders').update({ status: 'failed' }).eq('id', id);
+}
+
 /** The client's next upcoming confirmed booking (used by cancel/reschedule). */
 export async function getNextBooking(clinicId: string, clientId: string) {
   const { data } = await supabase
