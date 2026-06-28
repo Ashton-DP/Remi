@@ -357,6 +357,13 @@
     color: #fff; border-bottom-right-radius: 4px; align-self: flex-end;
   }
   .bubble-label { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  /* Invoice-chasing spotlight */
+  .pay-proof { list-style: none; padding: 0; margin: 26px 0 0; display: flex; flex-direction: column; gap: 11px; }
+  .pay-proof li { position: relative; padding-left: 28px; font-size: 14.5px; color: var(--text); line-height: 1.5; }
+  .pay-proof li::before { content: "✓"; position: absolute; left: 0; top: 0; color: var(--green); font-weight: 700; }
+  .pay-stat { display: inline-flex; align-items: center; gap: 8px; background: rgba(74,222,128,.1); border: 1px solid rgba(74,222,128,.35); color: var(--green); border-radius: 10px; padding: 9px 15px; font-weight: 700; font-size: 14px; margin-top: 22px; }
+  .chase-day { text-align: center; font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 8px 0 2px; }
+  .bubble.paid { align-self: center; max-width: 92%; text-align: center; background: rgba(74,222,128,.12); border: 1px solid rgba(74,222,128,.4); color: var(--green); font-weight: 600; border-radius: 14px; margin-top: 8px; }
 
   /* CTA SECTION */
   .cta-section {
@@ -624,6 +631,37 @@
         <h3>Reads your inbox</h3>
         <p>Remi reads and replies to booking emails too — so enquiries get answered and booked whether they call, WhatsApp, or email.</p>
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- GET PAID / INVOICE-CHASING SPOTLIGHT -->
+<section class="lang-section">
+  <div class="lang-inner">
+    <div>
+      <p class="section-label">Get paid · PaidUp</p>
+      <h2>Stop writing awkward “just following up” emails.</h2>
+      <p style="color: var(--muted); margin-top: 12px; font-size: 16px;">
+        Remi chases every overdue invoice for you — polite, persistent and automatic — over WhatsApp and email, and stops the second they pay. No more dreading the follow-up, no more money quietly slipping through the cracks.
+      </p>
+      <ul class="pay-proof">
+        <li>Pulls overdue invoices straight from <strong>Xero, QuickBooks, Sage</strong> or a Google Sheet</li>
+        <li>Escalates gently over days — friendly nudge → firm reminder → final notice</li>
+        <li>Handles the replies for you: “already paid”, disputes, and snooze requests</li>
+        <li>One kill-switch to pause, and an instant opt-out for every customer</li>
+      </ul>
+      <div class="pay-stat">💰 Recover money you'd have written off · clients pay ~2× faster</div>
+      <p style="margin-top: 18px;"><a href="/paidup" style="color: var(--purple); font-weight: 600; text-decoration: none;">See how PaidUp recovers your money →</a></p>
+    </div>
+    <div class="chat-bubble-wrap">
+      <p class="chase-day">Day 3 · gentle nudge</p>
+      <p class="bubble-label" style="align-self: flex-end;">Remi</p>
+      <div class="bubble out">Hi Jane 👋 Friendly reminder — invoice #1042 (R2,400) was due on the 3rd. You can settle it in one tap here: pay.remi.co/1042</div>
+      <p class="chase-day">Day 7 · firm reminder</p>
+      <div class="bubble out">Hi Jane, following up on invoice #1042 (R2,400) — now a week overdue. Tap to pay: pay.remi.co/1042</div>
+      <p class="bubble-label">Jane</p>
+      <div class="bubble in">Ah sorry! Paying now 🙏</div>
+      <div class="bubble paid">✅ Payment received — invoice #1042 settled. Remi stopped chasing automatically.</div>
     </div>
   </div>
 </section>
