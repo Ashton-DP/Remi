@@ -51,6 +51,7 @@ const page = (title: string, bodyHtml: string) =>
   `<!DOCTYPE html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <body style="font-family:-apple-system,Segoe UI,sans-serif;max-width:640px;margin:60px auto;padding:0 20px;color:#1e2233">
   <h2>${title}</h2>${bodyHtml}</body>`;
+const esc = (s: any) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
 /** POST /onboard — create a clinic from the self-serve form. Token-gated. */
 export async function handleOnboard(req: Request, res: Response) {
@@ -86,6 +87,6 @@ export async function handleOnboard(req: Request, res: Response) {
        <p>Set <code>DEFAULT_CLINIC_ID=${clinic.id}</code> to point the agent at it, and generate its subscription link with <code>createClinicSubscriptionLink.mjs</code>.</p>`));
   } catch (e: any) {
     console.error('[onboard]', e);
-    return res.status(500).type('text/html').send(page('Something went wrong', `<p>${e.message}</p>`));
+    return res.status(500).type('text/html').send(page('Something went wrong', `<p>${esc(e.message)}</p>`));
   }
 }

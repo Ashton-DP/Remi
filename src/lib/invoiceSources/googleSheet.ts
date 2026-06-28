@@ -10,6 +10,18 @@ import type { InvoiceSource, ClinicLike } from './types';
 import type { NormalizedInvoice } from './mappers';
 import { parseInvoiceCsv } from '../chase';
 
+/** Only allow real Google published-CSV URLs — prevents SSRF (a clinic-supplied
+ *  URL is fetched server-side, so an unrestricted value could hit cloud-metadata
+ *  or internal hosts). Google redirects docs.google.com → googleusercontent.com,
+ *  both Google-controlled, so following that redirect chain is safe. */
+export function isAllowedSheetUrl(raw: string): boolean {
+  let u: URL;
+  try { u = new URL(raw); } catch { return false; }
+  if (u.protocol !== 'https:') return false;
+  const host = u.hostname.toLowerCase();
+  return host === 'docs.google.com' || host === 'sheets.google.com' || host.endsWith('.googleusercontent.com');
+}
+
 export const googleSheetSource: InvoiceSource = {
   key: 'gsheet',
   label: 'Google Sheet',
@@ -18,6 +30,7 @@ export const googleSheetSource: InvoiceSource = {
   async fetchOverdue(clinic: ClinicLike): Promise<NormalizedInvoice[]> {
     const url = clinic.invoice_source_config?.sheet_url;
     if (!url) throw new Error('No sheet_url configured for this clinic');
+    if (!isAllowedSheetUrl(url)) throw new Error('sheet_url is not an allowed Google Sheets URL');
 
     const res = await fetch(url, { redirect: 'follow' });
     if (!res.ok) throw new Error(`Google Sheet fetch ${res.status}`);

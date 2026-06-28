@@ -341,6 +341,9 @@ export async function setClinicSubscriptionStatus(clinicId: string, status: stri
 
 export async function rescheduleBooking(id: string, newStartISO: string, newEndISO: string) {
   await supabase.from('bookings').update({ start_at: newStartISO, end_at: newEndISO }).eq('id', id);
+  // Drop the booking's not-yet-sent reminders so a reschedule doesn't leave the
+  // old 48h/24h/2h/aftercare/review rows firing at the original (now-wrong) times.
+  await supabase.from('reminders').delete().eq('booking_id', id).eq('status', 'pending');
 }
 
 export async function addWaitlist(
@@ -946,9 +949,12 @@ export async function getInvoiceById(id: string) {
 
 /** Mark an invoice paid by id (idempotent — only flips overdue→paid). */
 export async function markInvoicePaidById(id: string) {
+  // Mark paid from ANY non-paid state (sent/pending/overdue/draft) — a customer
+  // can pay before an invoice goes overdue. `.neq('paid')` keeps it idempotent
+  // (a replayed webhook re-running this is a no-op once status is already paid).
   await supabase.from('invoices')
     .update({ status: 'paid', paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq('id', id).eq('status', 'overdue');
+    .eq('id', id).neq('status', 'paid');
 }
 
 /** Overdue invoices for a clinic that have already been chased (stage > 0) —
@@ -1378,12 +1384,16 @@ export async function createPendingMembership(
 
 /** Mark a pending membership active once the provider confirms the subscription. */
 export async function activateMembership(id: string, externalSubscriptionId: string, renewsAt: string | null) {
+  // Only activate from pending/past_due — never re-open a cancelled membership via
+  // a replayed/duplicate provider notification. maybeSingle() = no-op if it's
+  // already active or was cancelled (returns null instead of throwing).
   const { data } = await supabase
     .from('memberships')
     .update({ status: 'active', external_subscription_id: externalSubscriptionId, renews_at: renewsAt })
     .eq('id', id)
+    .in('status', ['pending', 'past_due'])
     .select()
-    .single();
+    .maybeSingle();
   return data;
 }
 

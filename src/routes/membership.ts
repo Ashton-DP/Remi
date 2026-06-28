@@ -61,7 +61,7 @@ export async function handleMembershipReturn(req: Request, res: Response) {
     const confirmed = await confirmMembershipReturn(clinic, membership, req.query as Record<string, any>);
     if (confirmed) {
       await activateMembership(membership.id, confirmed.externalId, confirmed.renewsAt);
-      return res.type('text/html').send(note("You're a member! 🎉", `Welcome to ${clinic.name}'s ${membership.plan_name}. Your subscription is active.`));
+      return res.type('text/html').send(note("You're a member! 🎉", `Welcome to ${esc(clinic.name)}'s ${esc(membership.plan_name)}. Your subscription is active.`));
     }
     // PayFast (ITN-confirmed) or still-processing — reassure, the webhook/sync finishes it.
     return res.type('text/html').send(note('Thank you 💛', 'Your membership is being set up — you’ll get confirmation shortly.'));

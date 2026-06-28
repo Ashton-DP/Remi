@@ -59,13 +59,14 @@ export async function executeStaffTool(
     case 'update_client_profile': {
       const ident = String(input?.client_identifier ?? '').trim();
       if (!ident) return { error: 'no_client', message: 'Which client should I update?' };
-      // Match by name (ilike) or phone
-      const { data: matches } = await supabase
-        .from('clients')
-        .select('id, name, phone')
-        .eq('clinic_id', clinic.id)
-        .or(`name.ilike.%${ident}%,phone.eq.${ident}`)
-        .limit(5);
+      // Match by phone if it looks like a number, else by name. Use parameterised
+      // builder calls (.eq/.ilike) — NEVER interpolate the value into a raw .or()
+      // filter string, which PostgREST would parse as filter grammar (injection).
+      const isPhone = /^[+\d][\d\s()-]{5,}$/.test(ident);
+      const base = supabase.from('clients').select('id, name, phone').eq('clinic_id', clinic.id);
+      const { data: matches } = isPhone
+        ? await base.ilike('phone', `%${ident.replace(/\D/g, '')}%`).limit(5)
+        : await base.ilike('name', `%${ident.replace(/[%_\\]/g, '')}%`).limit(5);
       if (!matches?.length) return { error: 'not_found', message: `No client matching "${ident}" found.` };
       if (matches.length > 1) {
         return { error: 'ambiguous', message: `Multiple clients match "${ident}": ${matches.map((c: any) => c.name ?? c.phone).join(', ')}. Please be more specific.` };

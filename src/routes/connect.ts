@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { config } from '../config';
 import { safeEqual, qp } from '../lib/dashboardAuth';
 import { getInvoiceSource } from '../lib/invoiceSources';
+import { isAllowedSheetUrl } from '../lib/invoiceSources/googleSheet';
 import { setInvoiceSource } from '../db';
 
 // State = "<clinicId>.<hmac>" so the OAuth callback can trust which clinic to
@@ -23,6 +24,9 @@ const page = (title: string, body: string) =>
   `<!DOCTYPE html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
    <body style="font-family:-apple-system,Segoe UI,sans-serif;max-width:620px;margin:60px auto;padding:0 20px;color:#1e2233">
    <h2>${title}</h2>${body}</body>`;
+/** Escape values interpolated into the HTML above (provider key, account name,
+ *  error text) — they can be attacker-influenced (URL path, OAuth response). */
+const esc = (s: any) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
 /** GET /connect/:provider?clinic_id=&token=  → redirect to the provider's consent screen. */
 export async function handleConnectStart(req: Request, res: Response) {
@@ -36,7 +40,7 @@ export async function handleConnectStart(req: Request, res: Response) {
 
   const source = getInvoiceSource(providerKey);
   if (!source || source.kind !== 'oauth' || !source.getAuthUrl) {
-    return res.status(400).type('text/html').send(page('Unknown provider', `<p>"${providerKey}" is not an OAuth invoice source.</p>`));
+    return res.status(400).type('text/html').send(page('Unknown provider', `<p>"${esc(providerKey)}" is not an OAuth invoice source.</p>`));
   }
   const c = (config.invoiceSources as any)[providerKey];
   if (!c?.clientId) return res.status(503).type('text/html').send(page('Provider not configured', `<p>Set the ${source.label} developer-app credentials (client id/secret) in the server env first.</p>`));
@@ -59,10 +63,10 @@ export async function handleConnectCallback(req: Request, res: Response) {
     const { tokens, config: srcConfig, name } = await source.handleCallback(query, clinicId);
     await setInvoiceSource(clinicId, source.key, tokens, srcConfig);
     return res.type('text/html').send(page(`✅ ${source.label} connected`,
-      `<p><b>${name ?? 'Your account'}</b> is now linked. Remi will sync overdue invoices and chase them automatically.</p>`));
+      `<p><b>${esc(name ?? 'Your account')}</b> is now linked. Remi will sync overdue invoices and chase them automatically.</p>`));
   } catch (e: any) {
     console.error('[connect]', providerKey, e?.message ?? e);
-    return res.status(500).type('text/html').send(page('Connection failed', `<p>${e?.message ?? e}</p><p>Please try again.</p>`));
+    return res.status(500).type('text/html').send(page('Connection failed', `<p>${esc(e?.message ?? e)}</p><p>Please try again.</p>`));
   }
 }
 
@@ -76,7 +80,7 @@ export async function handleConnectSheet(req: Request, res: Response) {
   const clinicId = String((req.body && req.body.clinic_id) ?? '').trim();
   const sheetUrl = String((req.body && req.body.sheet_url) ?? '').trim();
   if (!clinicId || !sheetUrl) return res.status(400).json({ error: 'clinic_id and sheet_url are required.' });
-  if (!/^https?:\/\//.test(sheetUrl)) return res.status(400).json({ error: 'sheet_url must be a published-to-web CSV URL.' });
+  if (!isAllowedSheetUrl(sheetUrl)) return res.status(400).json({ error: 'sheet_url must be a published-to-web Google Sheets CSV URL (docs.google.com).' });
 
   await setInvoiceSource(clinicId, 'gsheet', null, { sheet_url: sheetUrl });
   return res.json({ ok: true, source: 'gsheet', clinic_id: clinicId });

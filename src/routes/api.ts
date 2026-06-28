@@ -30,6 +30,7 @@ import { computeReportStats } from '../report';
 import { computeInsights } from '../dashboard';
 import { runAssistant } from '../brain/assistant';
 import { getInvoiceSource } from '../lib/invoiceSources';
+import { isAllowedSheetUrl } from '../lib/invoiceSources/googleSheet';
 import { serviceAccountEmail, testCalendar } from '../lib/googleCalendar';
 import { signState } from './connect';
 import { config } from '../config';
@@ -371,7 +372,7 @@ export async function handleConnectSheetAuthed(req: Request, res: Response) {
   const auth = getAuth(req);
   if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'You have read-only access.' });
   const url = String(req.body?.sheet_url ?? '').trim();
-  if (!/^https?:\/\//.test(url)) return res.status(400).json({ error: 'A published-to-web CSV URL is required.' });
+  if (!isAllowedSheetUrl(url)) return res.status(400).json({ error: 'A published-to-web Google Sheets CSV URL (docs.google.com) is required.' });
   await setInvoiceSource(auth.clinicId, 'gsheet', null, { sheet_url: url });
   res.json({ ok: true });
 }

@@ -193,14 +193,18 @@ app.post('/api/invoices/:id/action', requireApiAuth, handleInvoiceActionWrite);
 app.post('/api/escalations/:id/resolve', requireApiAuth, handleResolveEscalation);
 
 // Payment links — customers pay an overdue invoice from the chase message.
+// /pay/:id and /membership/:id/start make a billable provider call on every hit
+// (create checkout/order), so they're rate-limited even though the UUID is the
+// only auth — a leaked link can't be looped to spam the clinic's payment account.
+const payLimiter = rateLimit({ name: 'pay', windowMs: 60_000, max: Number(process.env.RL_PAY_MAX ?? 20) });
 app.get('/pay/success', handlePaySuccess);
 app.get('/pay/cancel', handlePayCancel);
 app.get('/pay/stripe/return', handleStripeReturn);
 app.get('/pay/paystack/return', handlePaystackReturn);
 app.get('/pay/paypal/return', handlePaypalReturn);
-app.get('/membership/:id/start', handleMembershipStart);
+app.get('/membership/:id/start', payLimiter, handleMembershipStart);
 app.get('/membership/:id/return', handleMembershipReturn);
-app.get('/pay/:invoiceId', handlePay);
+app.get('/pay/:invoiceId', payLimiter, handlePay);
 app.post('/webhooks/payfast', webhookLimiter, handlePayfastNotify);
 
 // Invoice sources — connect an accounting tool so invoices auto-load.
