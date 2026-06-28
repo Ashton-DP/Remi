@@ -2,6 +2,7 @@ import { supabase } from './lib/supabase';
 import { buildReminderRows } from './lib/reminders';
 import { isPackageActive, isLowPackage } from './lib/clientOs';
 import { mergeGrowthSettings, cadenceOverdue, type GrowthSettings, type GrowthType } from './lib/growth';
+import { generateReferralCode, extractReferralCode } from './lib/referral';
 import { encryptPaymentConfig, decryptClinicSecrets, encryptField, encryptTokens } from './lib/secretCrypto';
 
 export async function getClinic(id: string) {
@@ -1610,4 +1611,63 @@ export async function getConsentedClients(clinicId: string, limit = 60) {
     .eq('clinic_id', clinicId).not('consent_at', 'is', null).not('phone', 'is', null)
     .order('created_at', { ascending: false }).limit(limit);
   return data ?? [];
+}
+
+// ---- Referral attribution --------------------------------------------------
+
+/** Get (or lazily create) a client's personal referral code. */
+export async function getOrCreateReferralCode(clientId: string): Promise<string> {
+  const { data } = await supabase.from('clients').select('referral_code').eq('id', clientId).maybeSingle();
+  if (data?.referral_code) return data.referral_code;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = generateReferralCode();
+    const { error } = await supabase.from('clients').update({ referral_code: code }).eq('id', clientId);
+    if (!error) return code; // unique index makes a collision error; retry
+  }
+  throw new Error('could not allocate referral code');
+}
+
+export async function findClientByReferralCode(clinicId: string, code: string) {
+  const { data } = await supabase.from('clients').select('id,name,phone')
+    .eq('clinic_id', clinicId).eq('referral_code', code).maybeSingle();
+  return data;
+}
+
+/**
+ * Capture a referral from an inbound message: parse the code, find the referrer,
+ * and record the attribution (idempotent — first attribution per friend wins, and
+ * never self-refer). Returns the recorded referral, or null if nothing to capture.
+ */
+export async function captureReferralFromMessage(clinic: any, customer: any, text: string) {
+  const code = extractReferralCode(text);
+  if (!code) return null;
+  const referrer = await findClientByReferralCode(clinic.id, code);
+  if (!referrer || referrer.id === customer.id) return null; // unknown code or self-referral
+  const reward = (clinic.growth_settings?.referral?.reward) || '';
+  const { data } = await supabase.from('referrals').upsert({
+    clinic_id: clinic.id, referrer_client_id: referrer.id, referred_client_id: customer.id,
+    referred_phone: customer.phone ?? null, code, reward, status: 'pending',
+  }, { onConflict: 'clinic_id,referred_client_id', ignoreDuplicates: true }).select().maybeSingle();
+  return data ? { ...data, referrer } : null;
+}
+
+/** Mark a referred client's referral as 'booked' once they actually book. No-op
+ *  if they weren't referred. */
+export async function markReferralBooked(clinicId: string, referredClientId: string) {
+  await supabase.from('referrals').update({ status: 'booked', booked_at: new Date().toISOString() })
+    .eq('clinic_id', clinicId).eq('referred_client_id', referredClientId).eq('status', 'pending');
+}
+
+export async function listReferrals(clinicId: string) {
+  const { data } = await supabase.from('referrals')
+    .select('*, referrer:referrer_client_id(name,phone), referred:referred_client_id(name,phone)')
+    .eq('clinic_id', clinicId).order('created_at', { ascending: false }).limit(100);
+  return data ?? [];
+}
+
+export async function rewardReferral(clinicId: string, id: string) {
+  const { data } = await supabase.from('referrals')
+    .update({ status: 'rewarded', rewarded_at: new Date().toISOString() })
+    .eq('clinic_id', clinicId).eq('id', id).select('*, referrer:referrer_client_id(name,phone)').maybeSingle();
+  return data;
 }

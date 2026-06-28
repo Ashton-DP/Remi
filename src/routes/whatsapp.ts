@@ -7,6 +7,7 @@ import {
   getOrCreateClient,
   getOrCreateConversation,
   saveMessage,
+  captureReferralFromMessage,
   getHistory,
   markProcessedOnce,
   unmarkProcessed,
@@ -70,6 +71,10 @@ export async function handleInboundWhatsApp(req: Request, res: Response) {
       const transcript = await transcribeTwilioAudio(mediaUrl, mediaType);
       if (transcript) body = transcript;
     }
+
+    // Referral attribution: if this message carries a referral code (from a share
+    // link), record who referred this person. Non-blocking.
+    captureReferralFromMessage(clinic, customer, body).catch(() => {});
 
     // Invoice chase reply? (paid / snooze / dispute / stop from a recently-chased
     // contact). Handled directly — never routed to the receptionist brain. Returns

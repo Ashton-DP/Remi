@@ -11,7 +11,9 @@ import {
   listWaitlist, getLapsedClients, markReactivated,
   createGrowthProposal, markGrowthProposalSent, hasOpenGrowthProposal,
   getCadenceOverdueClients, getRecentlyVisitedClients, getConsentedClients,
+  getOrCreateReferralCode,
 } from '../db';
+import { buildReferralShareLink } from './referral';
 
 const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const GAP_MIN_OPEN = 3;     // don't bother the owner under this many open slots
@@ -182,12 +184,20 @@ export async function executeReferral(clinic: any, proposal: any, _settings: Gro
   const excluded: string[] = owner.excluded_ids ?? [];
   const reward = owner.reward ?? proposal.payload?.reward ?? '';
   const targets: any[] = (proposal.payload?.targets ?? []).filter((t: any) => !excluded.includes(t.id));
+  const waNumber = clinic.whatsapp_number || clinic.twilio_number || '';
   let sent = 0;
   for (const t of targets) {
     if (!t.phone) continue;
     try {
+      // Give each referrer a personal, trackable share link — the friend who taps
+      // it arrives with the code in their first message, so we auto-attribute.
+      const code = await getOrCreateReferralCode(t.id);
+      const link = waNumber ? buildReferralShareLink(waNumber, t.name, code) : '';
+      const share = link
+        ? ` Share this link with them and they're all set: ${link}`
+        : ` Just have them mention your code “${code}” when they book.`;
       await sendProactiveWhatsApp(t.phone, {
-        fallbackBody: `Hi ${t.name}! 💛 So glad you've been enjoying ${clinic.name}. Know someone who'd love us too? Refer a friend and ${reward} Just share our number with them — and tell us who sent them so we can say thanks!`,
+        fallbackBody: `Hi ${t.name}! 💛 So glad you've been enjoying ${clinic.name}. Know someone who'd love us too? Refer a friend and ${reward}.${share}`,
       });
       sent++;
     } catch (e) { console.error('[growth] referral send failed', t.id, e); }

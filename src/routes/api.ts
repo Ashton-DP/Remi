@@ -25,6 +25,7 @@ import {
   createPendingMembership, getMembershipById, setMembershipStatus,
   getGrowthSettings, setGrowthSettings, listGrowthProposals, getGrowthProposal,
   decideGrowthProposal, countPendingGrowthProposals, markGrowthProposalSent,
+  listReferrals, rewardReferral,
 } from '../db';
 import { mergeGrowthSettings } from '../lib/growth';
 import { executeGrowthProposal } from '../lib/growthEngine';
@@ -223,12 +224,30 @@ export async function handleCreatePackage(req: Request, res: Response) {
 /** GET /api/growth — the Growth inbox: proposals + the clinic's guardrail settings. */
 export async function handleGrowth(req: Request, res: Response) {
   const auth = getAuth(req);
-  const [proposals, settings, pending] = await Promise.all([
+  const [proposals, settings, pending, referrals] = await Promise.all([
     listGrowthProposals(auth.clinicId),
     getGrowthSettings(auth.clinicId),
     countPendingGrowthProposals(auth.clinicId),
+    listReferrals(auth.clinicId),
   ]);
-  res.json({ proposals, settings, pending });
+  res.json({ proposals, settings, pending, referrals });
+}
+
+/** POST /api/growth/referrals/:id/reward — mark a referral rewarded + thank the
+ *  referrer over WhatsApp. Admin/owner only. */
+export async function handleRewardReferral(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'Read-only access.' });
+  const r = await rewardReferral(auth.clinicId, String(req.params.id));
+  if (!r) return res.status(404).json({ error: 'Not found.' });
+  const phone = (r as any).referrer?.phone;
+  const clinic = await getClinic(auth.clinicId);
+  if (phone) {
+    await sendProactiveWhatsApp(phone, {
+      fallbackBody: `Thank you for referring a friend to ${clinic?.name ?? 'us'}! 🎉 Your reward: ${r.reward || 'a little something from us'}. We appreciate you 💛`,
+    }).catch(() => {});
+  }
+  res.json({ referral: r });
 }
 
 /** POST /api/growth/:id/decide { action:'approve'|'decline', owner_input? } — owner

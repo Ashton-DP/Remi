@@ -13,7 +13,11 @@ type Settings = {
   review: { enabled: boolean };
   offpeak: { enabled: boolean; approval: string; windows: string };
 };
-type Data = { proposals: Proposal[]; settings: Settings; pending: number };
+type Referral = {
+  id: string; status: string; reward?: string; created_at: string;
+  referrer?: { name?: string; phone?: string }; referred?: { name?: string; phone?: string };
+};
+type Data = { proposals: Proposal[]; settings: Settings; pending: number; referrals: Referral[] };
 
 const TYPE_LABEL: Record<string, string> = {
   gap_fill: '🗓️ Fill a gap', winback: '💌 Win back regulars', referral: '🤝 Referrals',
@@ -40,6 +44,12 @@ export function Growth() {
       if (action === 'approve' && r.results?.sent != null) setSavedMsg(`Sent to ${r.results.sent} client${r.results.sent === 1 ? '' : 's'}.`);
       load();
     } catch (e: any) { setErr(e.message); } finally { setBusy(null); }
+  }
+
+  async function reward(id: string) {
+    setBusy(id); setErr('');
+    try { await api(`/api/growth/referrals/${id}/reward`, { method: 'POST' }); setSavedMsg('Referrer thanked & marked rewarded.'); load(); }
+    catch (e: any) { setErr(e.message); } finally { setBusy(null); }
   }
 
   async function saveSettings() {
@@ -90,6 +100,31 @@ export function Growth() {
           </div>
         )}
       </div>
+
+      {/* Referrals */}
+      {d.referrals.length > 0 && (
+        <div className="panel">
+          <div className="panel-head"><h2>Referrals</h2><span className="count">{d.referrals.filter((r) => r.status !== 'rewarded').length} to reward</span></div>
+          <table>
+            <thead><tr><th>Referred by</th><th>New client</th><th>Status</th><th>When</th><th></th></tr></thead>
+            <tbody>
+              {d.referrals.map((r) => (
+                <tr key={r.id}>
+                  <td><span className="primary">{r.referrer?.name || r.referrer?.phone || '—'}</span></td>
+                  <td>{r.referred?.name || r.referred?.phone || '—'}</td>
+                  <td><span className={`badge ${r.status === 'booked' ? 'b-green' : r.status === 'rewarded' ? 'b-blue' : 'b-amber'}`}>{r.status}</span></td>
+                  <td>{date(r.created_at)}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    {r.status !== 'rewarded'
+                      ? <button className="btn sm primary" disabled={busy === r.id} onClick={() => reward(r.id)}>{busy === r.id ? '…' : 'Reward'}</button>
+                      : <span className="muted" style={{ fontSize: 12 }}>✓ rewarded</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Guardrails */}
       <div className="panel">

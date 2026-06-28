@@ -41,7 +41,7 @@ import {
   handleCompleteOnboarding, handleSubmitWhatsApp,
   handleListPackages, handleCreatePackage, handleListMemberships,
   handleCreateMembership, handleCancelMembership,
-  handleGrowth, handleDecideGrowth, handleUpdateGrowthSettings,
+  handleGrowth, handleDecideGrowth, handleUpdateGrowthSettings, handleRewardReferral,
 } from './routes/api';
 import { handleMembershipStart, handleMembershipReturn } from './routes/membership';
 
@@ -172,6 +172,7 @@ app.post('/api/memberships/:id/cancel', requireApiAuth, handleCancelMembership);
 app.get('/api/growth', requireApiAuth, handleGrowth);
 app.post('/api/growth/:id/decide', requireApiAuth, handleDecideGrowth);
 app.post('/api/growth/settings', requireApiAuth, handleUpdateGrowthSettings);
+app.post('/api/growth/referrals/:id/reward', requireApiAuth, handleRewardReferral);
 app.get('/api/settings', requireApiAuth, handleSettings);
 app.post('/api/settings', requireApiAuth, handleUpdateSettings);
 app.get('/api/calendar/test', requireApiAuth, handleTestCalendar);

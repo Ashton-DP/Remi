@@ -10,7 +10,7 @@ import {
   addWaitlist, getNextWaitlist, setBookingDepositStatus, setClientName,
   findConfirmedBooking, setConversationStatus,
   getTodaysBookings, listWaitlist, getOverdueChasedInvoices,
-  addTask, getActivePackage, decrementPackage, getClientMembership,
+  addTask, getActivePackage, decrementPackage, getClientMembership, markReferralBooked,
 } from '../db';
 import { sessionsRemaining } from '../lib/clientOs';
 
@@ -155,6 +155,9 @@ export async function executeTool(
 
       // Mark the conversation booked so the follow-up job won't chase them.
       if (convo?.id) await setConversationStatus(convo.id, 'booked').catch(() => {});
+
+      // If this client was referred, the referral has now converted → mark it booked.
+      await markReferralBooked(clinic.id, customer.id).catch(() => {});
 
       // Decrement active prepaid package session if one exists.
       let package_sessions_remaining: number | undefined;
