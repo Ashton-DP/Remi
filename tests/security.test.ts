@@ -1,6 +1,8 @@
 // Security-relevant pure-logic tests. Run: tsx tests/security.test.ts
 import assert from 'node:assert';
+import crypto from 'node:crypto';
 import { isAllowedSheetUrl } from '../src/lib/invoiceSources/googleSheet';
+import { encryptField, decryptField } from '../src/lib/secretCrypto';
 
 let passed = 0;
 function test(name: string, fn: () => void) {
@@ -33,6 +35,24 @@ test('isAllowedSheetUrl blocks SSRF targets', () => {
   ]) {
     assert.ok(!isAllowedSheetUrl(bad), `should block: ${bad}`);
   }
+});
+
+// ── secret encryption (payment creds / inbox password at rest) ────────────────
+test('secretCrypto: no key → plaintext passthrough (opt-in, no behaviour change)', () => {
+  delete process.env.PAYMENT_ENC_KEY;
+  assert.equal(encryptField('sk_live_abc'), 'sk_live_abc');
+  assert.equal(decryptField('sk_live_abc'), 'sk_live_abc');
+});
+
+test('secretCrypto: with key → round-trips, ciphertext differs, legacy plaintext still reads', () => {
+  process.env.PAYMENT_ENC_KEY = crypto.randomBytes(32).toString('hex');
+  const enc = encryptField('sk_live_secret');
+  assert.ok(typeof enc === 'string' && enc.startsWith('enc:v1:'), 'should be tagged ciphertext');
+  assert.notEqual(enc, 'sk_live_secret');
+  assert.equal(decryptField(enc), 'sk_live_secret');           // decrypts back
+  assert.equal(encryptField(enc), enc);                        // already-encrypted is a no-op
+  assert.equal(decryptField('plaintext-legacy'), 'plaintext-legacy'); // legacy still reads
+  delete process.env.PAYMENT_ENC_KEY;
 });
 
 console.log(`\n${passed} passed\n`);

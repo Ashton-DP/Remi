@@ -50,6 +50,22 @@ export async function executeTool(
         return { ok: true, booking_id: existingDup.id, when: existingDup.start_at, duplicate: true };
       }
 
+      // Re-check the slot is STILL free right before booking — guards against
+      // double-booking when two conversations confirm the same time, or the offered
+      // slot list went stale. Fail-open on a provider error (don't block all
+      // bookings on a hiccup); only reject when we have a fresh list that excludes it.
+      try {
+        const tz = clinic.timezone ?? 'Africa/Johannesburg';
+        const localDate = start.toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
+        const freeSlots = await computeFreeSlots(clinic, localDate, input.service);
+        const stillFree = freeSlots.some((s) => Math.abs(new Date(s).getTime() - start.getTime()) < 60_000);
+        if (freeSlots.length && !stillFree) {
+          return { error: 'That time was just taken — could you pick another slot? Let me check what else is open.', slot_taken: true };
+        }
+      } catch (e) {
+        console.error('[booking] availability re-check failed (allowing)', e);
+      }
+
       const ev = await getBookingProvider(clinic).createEvent(clinic, {
         summary: `${input.service} — ${input.client_name}`,
         startISO: start.toISOString(),

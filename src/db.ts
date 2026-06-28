@@ -1,10 +1,11 @@
 import { supabase } from './lib/supabase';
 import { buildReminderRows } from './lib/reminders';
 import { isPackageActive, isLowPackage } from './lib/clientOs';
+import { encryptPaymentConfig, decryptClinicSecrets, encryptField } from './lib/secretCrypto';
 
 export async function getClinic(id: string) {
   const { data } = await supabase.from('clinics').select('*').eq('id', id).single();
-  return data;
+  return decryptClinicSecrets(data);
 }
 
 /** Look up a clinic by its Twilio number (voice or WhatsApp).
@@ -14,10 +15,10 @@ export async function getClinicByNumber(to: string) {
   const number = to.replace(/^whatsapp:/, ''); // strip prefix if present
   // 1. Try per-clinic WhatsApp number (each clinic's own number)
   const { data: byWa } = await supabase.from('clinics').select('*').eq('whatsapp_number', number).maybeSingle();
-  if (byWa) return byWa;
+  if (byWa) return decryptClinicSecrets(byWa);
   // 2. Fall back to shared Twilio number
   const { data } = await supabase.from('clinics').select('*').eq('twilio_number', number).maybeSingle();
-  return data ?? null;
+  return decryptClinicSecrets(data ?? null);
 }
 
 /** Mark a clinic's onboarding as complete. */
@@ -69,12 +70,15 @@ export async function getOrCreateClientByEmail(clinicId: string, email: string, 
 /** Clinics that have an enabled email inbox configured (Remi reads/replies to it). */
 export async function getClinicsWithEmailInbox() {
   const { data } = await supabase.from('clinics').select('*').not('email_inbox', 'is', null);
-  return (data ?? []).filter((c: any) => c.email_inbox?.imap_host && c.email_inbox?.enabled !== false);
+  return (data ?? [])
+    .filter((c: any) => c.email_inbox?.imap_host && c.email_inbox?.enabled !== false)
+    .map(decryptClinicSecrets);
 }
 
 /** Save a clinic's email-inbox connection config (IMAP/SMTP + app-password). */
 export async function setEmailInbox(clinicId: string, cfg: any) {
-  await supabase.from('clinics').update({ email_inbox: cfg }).eq('id', clinicId);
+  const enc = cfg && cfg.pass != null ? { ...cfg, pass: encryptField(cfg.pass) } : cfg;
+  await supabase.from('clinics').update({ email_inbox: enc }).eq('id', clinicId);
 }
 
 export async function getOrCreateConversation(clinicId: string, clientId: string) {
@@ -1066,7 +1070,7 @@ export async function updateClinicSettings(clinicId: string, patch: Record<strin
 /** Set a clinic's payment provider + its credentials (Settings → Connections). */
 export async function setPaymentConfig(clinicId: string, provider: string, config: any) {
   const { error } = await supabase.from('clinics')
-    .update({ payment_provider: provider, payment_config: config }).eq('id', clinicId);
+    .update({ payment_provider: provider, payment_config: encryptPaymentConfig(config) }).eq('id', clinicId);
   if (error) throw new Error(`setPaymentConfig: ${error.message}`);
 }
 
