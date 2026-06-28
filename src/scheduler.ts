@@ -5,9 +5,10 @@
 import { config } from './config'; // also loads dotenv
 import { installFetchTimeout } from './lib/httpTimeout';
 import { initMonitoring } from './lib/monitoring';
-import { getDueReminders, markReminderSent, markReminderFailed, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getBookingsForDate, getClinicsWithSummaryPhone, getClinicIdsWithOverdueInvoices, getClientsWithBirthdayToday, getClientsWithAnniversaryToday, getClientsWithLowPackage, getMembershipsToSync, setMembershipStatus, getActiveClinics, getPendingMembershipsToReconcile, activateMembership, claimSchedulerRun, purgeOldSchedulerRuns } from './db';
+import { getDueReminders, markReminderSent, markReminderFailed, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getBookingsForDate, getClinicsWithSummaryPhone, getClinicIdsWithOverdueInvoices, getClientsWithBirthdayToday, getClientsWithAnniversaryToday, getClientsWithLowPackage, getMembershipsToSync, setMembershipStatus, getActiveClinics, getPendingMembershipsToReconcile, activateMembership, claimSchedulerRun, purgeOldSchedulerRuns, isSuppressed } from './db';
 import { syncMembershipStatus, reconcilePendingMembership } from './lib/subscriptions';
-import { sendProactiveWhatsApp } from './lib/twilio';
+import { phoneKey } from './lib/chase';
+import { sendProactiveWhatsApp, sendMarketingWhatsApp } from './lib/twilio';
 import { getClinicsWithEmailInbox, getOrCreateClientByEmail, getOrCreateConversation, saveMessage, getHistory, markProcessedOnce } from './db';
 import { processInbox, sendEmailReply, replySubject } from './lib/emailInbox';
 import { triageEmail } from './lib/emailTriage';
@@ -165,6 +166,10 @@ async function _tick() {
       case 'review': {
         const url = booking.clinics?.google_review_url;
         if (!url) { await markReminderSent(r.id); continue; } // no review link configured → skip
+        // Review requests are MARKETING — never send to an opted-out contact.
+        if (await isSuppressed(booking.clinic_id, config.twilio.channel, phoneKey(client.phone))) {
+          await markReminderSent(r.id); continue;
+        }
         const clinicName = booking.clinics?.name ?? 'us';
         msg = `Hi ${name} 🌟 Thanks so much for visiting ${clinicName}! If you have a moment, a quick Google review really helps us: ${url}`;
         contentSid = config.templates.review || undefined;
@@ -244,7 +249,7 @@ async function reactivation(clinicId: string) {
   for (const c of lapsed as any[]) {
     if (!c.phone) continue;
     const cName = c.name ?? 'there';
-    await sendProactiveWhatsApp(c.phone, {
+    await sendMarketingWhatsApp(clinicId, c.phone, {
       contentSid: config.templates.reactivation || undefined,
       variables: { '1': cName, '2': clinic.name },
       fallbackBody: `Hi ${cName} 👋 It's been a while since your last visit to ${clinic.name}. We'd love to see you again — just reply here and I'll find a time that suits you.`,

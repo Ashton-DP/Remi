@@ -146,10 +146,32 @@ approved template; when blank, it falls back to free-form text (sandbox / 24h
 window). So going live is just **pasting the approved SIDs into env** — no code change.
 
 Status last checked **2026-06-27** via the Twilio Content API
-(`GET /v1/Content/{sid}/ApprovalRequests`). None are approved yet: 7 are pending
-Meta review, and 2 were rejected for ending on a variable (Meta error 2388299:
-"Variables can't be at the start or end of the template") and have been reworded +
-resubmitted as new templates (`*_v2`).
+(`GET /v1/Content/{sid}/ApprovalRequests`). None are approved yet: all 9 are pending
+Meta review. (Two earlier ones, `review_request` / `deposit_request`, were rejected
+for ending on a variable — Meta error 2388299 — and reworded + resubmitted as `*_v2`.)
+Re-check anytime with `npm run check:templates`.
+
+### Categories & opt-outs (important)
+
+Meta classifies each template as **UTILITY** (transactional — cheaper, exempt from
+marketing opt-out) or **MARKETING** (promotional — pricier, must honour opt-outs):
+
+| Category | Templates |
+|---|---|
+| **UTILITY** | appointment_reminder 48h/24h/2h · aftercare_check_in · deposit_request_v2 |
+| **MARKETING** | review_request_v2 · reactivation_winback · waitlist_slot_offer · missed_call_text_back |
+
+Meta auto-recategorises borderline ones (e.g. it moved `review_request_v2`
+UTILITY→MARKETING) — that's expected; it doesn't block approval.
+
+**Opt-out handling (code):** MARKETING sends go through `sendMarketingWhatsApp`
+(`lib/twilio.ts`), which skips any contact on the `suppressions` opt-out list.
+A customer replying **STOP** is added to the list (both whatsapp + sms channels);
+**START** removes them (`routes/whatsapp.ts`). UTILITY/transactional sends
+(reminders, deposits) use `sendProactiveWhatsApp` directly and are **not** suppressed,
+since they're service messages for a booking the customer made. Note: `consent_at`
+is auto-stamped at first contact, so it's an implied-consent record, not a marketing
+opt-in — the suppression list is the real opt-out gate.
 
 | Template | Env var to set | Content SID | Status |
 |---|---|---|---|

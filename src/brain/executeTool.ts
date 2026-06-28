@@ -1,6 +1,6 @@
 import { getBookingProvider } from '../lib/booking';
 import { computeFreeSlots } from '../lib/slots';
-import { sendProactiveWhatsApp } from '../lib/twilio';
+import { sendProactiveWhatsApp, sendMarketingWhatsApp } from '../lib/twilio';
 import { intakeLink } from '../lib/intake';
 import { config } from '../config';
 import {
@@ -214,7 +214,7 @@ export async function executeTool(
             dateStyle: 'medium',
             timeStyle: 'short',
           });
-          await sendProactiveWhatsApp(waiterClient.phone, {
+          await sendMarketingWhatsApp(clinic.id, waiterClient.phone, {
             contentSid: config.templates.waitlistOffer || undefined,
             variables: { '1': waiterClient.name ?? 'there', '2': existing.service, '3': when },
             fallbackBody: `Hi ${waiterClient.name ?? 'there'}! A slot just opened for ${existing.service} on ${when}. Would you like to book it? Reply YES and we'll confirm it for you.`,

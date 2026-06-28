@@ -272,7 +272,7 @@ export async function scheduleReminders(bookingId: string, startAtISO: string) {
 export async function getDueReminders() {
   const { data } = await supabase
     .from('reminders')
-    .select('id,kind,booking_id,bookings(service,start_at,status,clients(phone,name),clinics(name,google_review_url))')
+    .select('id,kind,booking_id,bookings(clinic_id,service,start_at,status,clients(phone,name),clinics(name,google_review_url))')
     .eq('status', 'pending')
     .lte('scheduled_for', new Date().toISOString())
     .order('scheduled_for', { ascending: true })
@@ -833,6 +833,12 @@ export async function addSuppression(clinicId: string, channel: string, identifi
     { clinic_id: clinicId, channel, identifier, reason },
     { onConflict: 'clinic_id,channel,identifier', ignoreDuplicates: true },
   );
+}
+/** Re-opt-in: remove a contact from the suppression list (e.g. they replied START). */
+export async function removeSuppression(clinicId: string, channel: string, identifier: string | null) {
+  if (!identifier) return;
+  await supabase.from('suppressions').delete()
+    .eq('clinic_id', clinicId).eq('channel', channel).eq('identifier', identifier);
 }
 
 /** Clinic ids that currently have at least one chaseable invoice (for the scheduler). */

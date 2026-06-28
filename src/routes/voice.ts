@@ -11,7 +11,7 @@ import {
   logEvent,
 } from '../db';
 import { runAgent } from '../brain/agent';
-import { sendProactiveWhatsApp } from '../lib/twilio';
+import { sendProactiveWhatsApp, sendMarketingWhatsApp } from '../lib/twilio';
 import { callState } from '../lib/callState';
 import { buildConversationRelayTwiml } from './voiceRelay';
 import { buildMediaStreamTwiml } from './mediaStream';
@@ -175,7 +175,7 @@ export async function handleCallStatus(req: Request, res: Response) {
       const clinic = (await getClinicByNumber(req.body.To ?? '')) ?? (await getClinic(config.defaultClinicId));
       if (clinic) {
         const whatsappTo = from.startsWith('whatsapp:') ? from : `whatsapp:${from}`;
-        await sendProactiveWhatsApp(whatsappTo, {
+        await sendMarketingWhatsApp(clinic.id, whatsappTo, {
           contentSid: config.templates.missedCall || undefined,
           variables: { '1': 'there', '2': clinic.name },
           fallbackBody: `Hi there 👋 You just called ${clinic.name} but we missed you. I'm Remi, the virtual assistant — I can help you book an appointment or answer any questions right here on WhatsApp. What can I help you with?`,

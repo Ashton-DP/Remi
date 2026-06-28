@@ -10,7 +10,10 @@ import {
   getHistory,
   markProcessedOnce,
   unmarkProcessed,
+  addSuppression,
+  removeSuppression,
 } from '../db';
+import { phoneKey } from '../lib/chase';
 import { runAgent } from '../brain/agent';
 import { runStaffAgent } from '../brain/staffAgent';
 import { twimlReply } from '../lib/twilio';
@@ -79,9 +82,20 @@ export async function handleInboundWhatsApp(req: Request, res: Response) {
       return;
     }
 
-    // POPIA opt-out
+    // POPIA opt-out — actually record the suppression (both channels), so proactive
+    // marketing sends skip this contact. START reverses it.
     if (/^stop$/i.test(body)) {
+      const key = phoneKey(from);
+      await addSuppression(clinic.id, 'whatsapp', key, 'stop');
+      await addSuppression(clinic.id, 'sms', key, 'stop');
       res.type('text/xml').send(twimlReply("You've been unsubscribed. Reply START to opt back in."));
+      return;
+    }
+    if (/^start$/i.test(body)) {
+      const key = phoneKey(from);
+      await removeSuppression(clinic.id, 'whatsapp', key);
+      await removeSuppression(clinic.id, 'sms', key);
+      res.type('text/xml').send(twimlReply("You're opted back in 👍 Reply STOP any time to unsubscribe."));
       return;
     }
 

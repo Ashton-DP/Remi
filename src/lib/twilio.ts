@@ -1,5 +1,7 @@
 import twilio from 'twilio';
 import { config } from '../config';
+import { isSuppressed } from '../db';
+import { phoneKey } from './chase';
 
 const enabled = Boolean(config.twilio.accountSid && config.twilio.authToken);
 const client = enabled ? twilio(config.twilio.accountSid, config.twilio.authToken) : null;
@@ -74,6 +76,26 @@ export async function sendProactiveWhatsApp(
     return;
   }
   return client.messages.create(params as any);
+}
+
+/**
+ * Send a MARKETING / promotional proactive message (review request, win-back,
+ * waitlist offer, missed-call follow-up) — but FIRST honour the opt-out
+ * suppression list. Meta's MARKETING template category and POPIA both require
+ * respecting opt-outs; transactional sends (reminders, deposits) use
+ * sendProactiveWhatsApp directly and are not suppressed.
+ */
+export async function sendMarketingWhatsApp(
+  clinicId: string,
+  to: string,
+  opts: { contentSid?: string; variables?: Record<string, string>; fallbackBody: string },
+) {
+  const channel = config.twilio.channel;
+  if (await isSuppressed(clinicId, channel, phoneKey(to))) {
+    console.log(`[${channel}] suppressed (opted out) — skipping marketing send to ${to}`);
+    return;
+  }
+  return sendProactiveWhatsApp(to, opts);
 }
 
 /** Build a TwiML reply for synchronous webhook responses. */
