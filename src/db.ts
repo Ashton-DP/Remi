@@ -1557,3 +1557,63 @@ export async function getApprovedGrowthProposals(clinicId: string) {
     .order('decided_at', { ascending: true }).limit(50);
   return data ?? [];
 }
+
+// ---- Growth targeting queries ----------------------------------------------
+
+/** Consented clients overdue vs their OWN visit cadence (needs ≥2 past visits to
+ *  learn the rhythm). For cadence-aware win-backs — far better than a flat timer. */
+export async function getCadenceOverdueClients(clinicId: string, bufferDays = 14, limit = 15) {
+  const { data: clients } = await supabase
+    .from('clients').select('id,name,phone,consent_at,last_reactivated_at')
+    .eq('clinic_id', clinicId).not('consent_at', 'is', null).not('phone', 'is', null);
+  if (!clients?.length) return [];
+  const { data: bks } = await supabase
+    .from('bookings').select('client_id,start_at').eq('clinic_id', clinicId)
+    .in('client_id', clients.map((c) => c.id));
+  const byClient: Record<string, number[]> = {};
+  for (const b of bks ?? []) (byClient[b.client_id] ??= []).push(new Date(b.start_at).getTime());
+  const now = Date.now();
+  const reactCutoff = now - bufferDays * 86_400_000;
+  const out: any[] = [];
+  for (const c of clients) {
+    const times = (byClient[c.id] ?? []).sort((a, b) => a - b);
+    if (times.length < 2) continue;                       // can't learn a cadence yet
+    let total = 0;
+    for (let i = 1; i < times.length; i++) total += times[i] - times[i - 1];
+    const avg = total / (times.length - 1);
+    const last = times[times.length - 1];
+    if (last >= now) continue;                            // has an upcoming/just-had visit
+    if (now - last <= avg + bufferDays * 86_400_000) continue; // not yet overdue vs their rhythm
+    if (c.last_reactivated_at && new Date(c.last_reactivated_at).getTime() >= reactCutoff) continue;
+    out.push({ ...c, cadence_days: Math.round(avg / 86_400_000) });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/** Consented clients who visited within `days` — for referral asks (recently
+ *  served = most likely to be happy enough to refer). */
+export async function getRecentlyVisitedClients(clinicId: string, days = 30, limit = 20) {
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const { data } = await supabase
+    .from('bookings').select('start_at, clients!inner(id,name,phone,consent_at)')
+    .eq('clinic_id', clinicId).gte('start_at', since).lte('start_at', new Date().toISOString())
+    .order('start_at', { ascending: false });
+  const seen = new Set<string>(); const out: any[] = [];
+  for (const b of (data ?? []) as any[]) {
+    const c = b.clients;
+    if (!c?.phone || !c.consent_at || seen.has(c.id)) continue;
+    seen.add(c.id); out.push({ id: c.id, name: c.name ?? 'there', phone: c.phone });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/** All consented, contactable clients — for an off-peak broadcast. Capped. */
+export async function getConsentedClients(clinicId: string, limit = 60) {
+  const { data } = await supabase
+    .from('clients').select('id,name,phone')
+    .eq('clinic_id', clinicId).not('consent_at', 'is', null).not('phone', 'is', null)
+    .order('created_at', { ascending: false }).limit(limit);
+  return data ?? [];
+}

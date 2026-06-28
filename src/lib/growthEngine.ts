@@ -10,6 +10,7 @@ import { allowedDiscount, isEnabled, isAuto, type GrowthSettings } from './growt
 import {
   listWaitlist, getLapsedClients, markReactivated,
   createGrowthProposal, markGrowthProposalSent, hasOpenGrowthProposal,
+  getCadenceOverdueClients, getRecentlyVisitedClients, getConsentedClients,
 } from '../db';
 
 const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -97,10 +98,110 @@ export async function executeGapFill(clinic: any, proposal: any, settings: Growt
   return { sent, targeted: targets.length, discount_pct: discount };
 }
 
+// ── WIN-BACKS (cadence-aware) ─────────────────────────────────────────────────
+export async function generateWinback(clinic: any, settings: GrowthSettings): Promise<any | null> {
+  const buffer = settings.winback.cadence_buffer_days ?? 14;
+  const overdue = (await getCadenceOverdueClients(clinic.id, buffer, 15)) as any[];
+  if (overdue.length < 2) return null; // not worth a campaign for one person
+  const targets = overdue.map((c) => ({ id: c.id, name: c.name ?? 'there', phone: c.phone, source: 'cadence' }));
+  return {
+    type: 'winback',
+    title: `Win back ${targets.length} regulars who are overdue`,
+    detail: `These clients usually visit more often than they have lately — based on their own past rhythm, not a flat timer. I can send a warm “we’d love to see you” nudge. Add a comeback discount if you'd like.`,
+    payload: { targets, suggested_discount_pct: 0 },
+  };
+}
+export async function executeWinback(clinic: any, proposal: any, settings: GrowthSettings) {
+  const owner = proposal.owner_input ?? {};
+  const excluded: string[] = owner.excluded_ids ?? [];
+  const discount = allowedDiscount(owner.discount_pct, settings);
+  const targets: any[] = (proposal.payload?.targets ?? []).filter((t: any) => !excluded.includes(t.id));
+  let sent = 0;
+  for (const t of targets) {
+    if (!t.phone) continue;
+    const deal = discount > 0 ? ` We'd love to welcome you back with ${discount}% off your next visit.` : '';
+    try {
+      await sendProactiveWhatsApp(t.phone, {
+        fallbackBody: `Hi ${t.name} 👋 It's been a little while since we saw you at ${clinic.name} — we'd love to have you back!${deal} Want me to find you a time? Just reply here 💛`,
+      });
+      sent++; await markReactivated(t.id).catch(() => {});
+    } catch (e) { console.error('[growth] winback send failed', t.id, e); }
+  }
+  return { sent, targeted: targets.length, discount_pct: discount };
+}
+
+// ── OFF-PEAK OFFERS ───────────────────────────────────────────────────────────
+export async function generateOffpeak(clinic: any, settings: GrowthSettings): Promise<any | null> {
+  if (!settings.offpeak.windows?.trim()) return null;   // owner must define quiet times
+  if (settings.max_discount_pct <= 0) return null;       // off-peak only makes sense with an incentive
+  const clients = (await getConsentedClients(clinic.id, 60)) as any[];
+  if (clients.length < 3) return null;
+  const targets = clients.map((c) => ({ id: c.id, name: c.name ?? 'there', phone: c.phone, source: 'offpeak' }));
+  return {
+    type: 'offpeak',
+    title: `Promote your quiet times (${settings.offpeak.windows})`,
+    detail: `Fill your slow patch by offering a deal on ${settings.offpeak.windows} to ${targets.length} clients. Set the discount when you approve.`,
+    payload: { windows: settings.offpeak.windows, targets, suggested_discount_pct: settings.max_discount_pct },
+  };
+}
+export async function executeOffpeak(clinic: any, proposal: any, settings: GrowthSettings) {
+  const owner = proposal.owner_input ?? {};
+  const excluded: string[] = owner.excluded_ids ?? [];
+  const discount = allowedDiscount(owner.discount_pct ?? proposal.payload?.suggested_discount_pct, settings);
+  const windows = proposal.payload?.windows ?? 'our quiet times';
+  const targets: any[] = (proposal.payload?.targets ?? []).filter((t: any) => !excluded.includes(t.id));
+  let sent = 0;
+  for (const t of targets) {
+    if (!t.phone) continue;
+    const deal = discount > 0 ? `${discount}% off` : 'a special rate';
+    try {
+      await sendProactiveWhatsApp(t.phone, {
+        fallbackBody: `Hi ${t.name}! 🌟 This week ${clinic.name} has ${deal} on ${windows}. Want me to book you in? Just reply here 💛`,
+      });
+      sent++;
+    } catch (e) { console.error('[growth] offpeak send failed', t.id, e); }
+  }
+  return { sent, targeted: targets.length, discount_pct: discount };
+}
+
+// ── REFERRALS ─────────────────────────────────────────────────────────────────
+export async function generateReferral(clinic: any, settings: GrowthSettings): Promise<any | null> {
+  if (!settings.referral.reward?.trim()) return null;    // owner must set the reward
+  const clients = (await getRecentlyVisitedClients(clinic.id, 30, 20)) as any[];
+  if (clients.length < 2) return null;
+  const targets = clients.map((c) => ({ id: c.id, name: c.name ?? 'there', phone: c.phone, source: 'recent' }));
+  return {
+    type: 'referral',
+    title: `Ask ${targets.length} happy clients to refer a friend`,
+    detail: `Recently-served clients are your best advocates. I'll invite them to refer a friend with your reward: “${settings.referral.reward}”.`,
+    payload: { reward: settings.referral.reward, targets },
+  };
+}
+export async function executeReferral(clinic: any, proposal: any, _settings: GrowthSettings) {
+  const owner = proposal.owner_input ?? {};
+  const excluded: string[] = owner.excluded_ids ?? [];
+  const reward = owner.reward ?? proposal.payload?.reward ?? '';
+  const targets: any[] = (proposal.payload?.targets ?? []).filter((t: any) => !excluded.includes(t.id));
+  let sent = 0;
+  for (const t of targets) {
+    if (!t.phone) continue;
+    try {
+      await sendProactiveWhatsApp(t.phone, {
+        fallbackBody: `Hi ${t.name}! 💛 So glad you've been enjoying ${clinic.name}. Know someone who'd love us too? Refer a friend and ${reward} Just share our number with them — and tell us who sent them so we can say thanks!`,
+      });
+      sent++;
+    } catch (e) { console.error('[growth] referral send failed', t.id, e); }
+  }
+  return { sent, targeted: targets.length, reward };
+}
+
 /** Dispatch: run an approved proposal's executor by type. Returns results. */
 export async function executeGrowthProposal(clinic: any, proposal: any, settings: GrowthSettings): Promise<any> {
   switch (proposal.type) {
     case 'gap_fill': return executeGapFill(clinic, proposal, settings);
+    case 'winback': return executeWinback(clinic, proposal, settings);
+    case 'offpeak': return executeOffpeak(clinic, proposal, settings);
+    case 'referral': return executeReferral(clinic, proposal, settings);
     default: return { error: `executor for ${proposal.type} not implemented yet` };
   }
 }
@@ -110,19 +211,29 @@ export async function executeGrowthProposal(clinic: any, proposal: any, settings
  *  executes immediately within guardrails. Returns created proposals for notify. */
 export async function runGrowthGenerators(clinic: any, settings: GrowthSettings): Promise<any[]> {
   const created: any[] = [];
+  // type → its generator. (review routing isn't proposal-based; it's per-visit.)
+  const generators: Record<string, () => Promise<any | null>> = {
+    gap_fill: () => generateGapFill(clinic),
+    winback: () => generateWinback(clinic, settings),
+    offpeak: () => generateOffpeak(clinic, settings),
+    referral: () => generateReferral(clinic, settings),
+  };
 
-  if (isEnabled('gap_fill', settings) && !(await hasOpenGrowthProposal(clinic.id, 'gap_fill'))) {
-    const draft = await generateGapFill(clinic);
-    if (draft) {
-      if (isAuto('gap_fill', settings)) {
+  for (const [type, gen] of Object.entries(generators)) {
+    try {
+      if (!isEnabled(type as any, settings)) continue;
+      if (await hasOpenGrowthProposal(clinic.id, type as any)) continue; // already one awaiting the owner
+      const draft = await gen();
+      if (!draft) continue;
+      if (isAuto(type as any, settings)) {
         const p = await createGrowthProposal(clinic.id, { ...draft, status: 'pending' });
-        const results = await executeGapFill(clinic, p, settings);
-        await markGrowthProposalSent(p.id, results);
+        await markGrowthProposalSent(p.id, await executeGrowthProposal(clinic, p, settings));
       } else {
         created.push(await createGrowthProposal(clinic.id, draft));
       }
+    } catch (e) {
+      console.error(`[growth] generator ${type} failed`, e);
     }
   }
-  // (winback / referral / offpeak generators land in later phases)
   return created;
 }
