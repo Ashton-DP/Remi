@@ -24,9 +24,10 @@ import {
   getClientProfile, updateClientProfile, listPackages, upsertPackage, listMemberships,
   createPendingMembership, getMembershipById, setMembershipStatus,
   getGrowthSettings, setGrowthSettings, listGrowthProposals, getGrowthProposal,
-  decideGrowthProposal, countPendingGrowthProposals,
+  decideGrowthProposal, countPendingGrowthProposals, markGrowthProposalSent,
 } from '../db';
 import { mergeGrowthSettings } from '../lib/growth';
+import { executeGrowthProposal } from '../lib/growthEngine';
 import { sumHours, startOfWeek, formatHours } from '../lib/teamOps';
 import { sendProactiveWhatsApp } from '../lib/twilio';
 import { computeReportStats } from '../report';
@@ -249,6 +250,18 @@ export async function handleDecideGrowth(req: Request, res: Response) {
   const updated = await decideGrowthProposal(
     auth.clinicId, proposal.id, action === 'approve' ? 'approved' : 'declined', auth.email || auth.userId, ownerInput,
   );
+  // On approve, run it now (target lists are small) so the owner sees what went out.
+  if (action === 'approve') {
+    try {
+      const [clinic, settings] = await Promise.all([getClinic(auth.clinicId), getGrowthSettings(auth.clinicId)]);
+      const results = await executeGrowthProposal(clinic, updated, settings);
+      const sent = await markGrowthProposalSent(updated.id, results);
+      return res.json({ proposal: sent, results });
+    } catch (e: any) {
+      console.error('[growth] execute on approve failed', e?.message ?? e);
+      return res.json({ proposal: updated, results: { error: 'queued — will run shortly' } });
+    }
+  }
   res.json({ proposal: updated });
 }
 

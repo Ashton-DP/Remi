@@ -5,7 +5,8 @@
 import { config } from './config'; // also loads dotenv
 import { installFetchTimeout } from './lib/httpTimeout';
 import { initMonitoring } from './lib/monitoring';
-import { getDueReminders, markReminderSent, markReminderFailed, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getBookingsForDate, getClinicsWithSummaryPhone, getClinicIdsWithOverdueInvoices, getClientsWithBirthdayToday, getClientsWithAnniversaryToday, getClientsWithLowPackage, getMembershipsToSync, setMembershipStatus, getActiveClinics, getPendingMembershipsToReconcile, activateMembership, claimSchedulerRun, purgeOldSchedulerRuns, isSuppressed } from './db';
+import { getDueReminders, markReminderSent, markReminderFailed, claimReminder, getClinic, getLapsedClients, markReactivated, purgeExpiredData, getReportData, getStaleOpenConversations, markFollowupSent, getTodaysBookings, getBookingsForDate, getClinicsWithSummaryPhone, getClinicIdsWithOverdueInvoices, getClientsWithBirthdayToday, getClientsWithAnniversaryToday, getClientsWithLowPackage, getMembershipsToSync, setMembershipStatus, getActiveClinics, getPendingMembershipsToReconcile, activateMembership, claimSchedulerRun, purgeOldSchedulerRuns, isSuppressed, getGrowthSettings } from './db';
+import { runGrowthGenerators } from './lib/growthEngine';
 import { syncMembershipStatus, reconcilePendingMembership } from './lib/subscriptions';
 import { phoneKey } from './lib/chase';
 import { sendProactiveWhatsApp, sendMarketingWhatsApp } from './lib/twilio';
@@ -507,6 +508,21 @@ async function reconcilePendingMemberships(clinicId: string) {
   }
 }
 
+/** Run the growth generators for a clinic. Owner-guided: each opportunity becomes
+ *  a pending proposal the owner approves (with the specifics) — Remi just pings
+ *  them. Types set to "auto" execute within guardrails and skip the ping. */
+async function growthCampaigns(clinic: any) {
+  const settings = await getGrowthSettings(clinic.id);
+  const created = await runGrowthGenerators(clinic, settings);
+  const to = clinic.owner_summary_phone || clinic.escalation_contact;
+  if (!to) return;
+  for (const p of created) {
+    await sendProactiveWhatsApp(to, {
+      fallbackBody: `📈 Remi spotted a way to fill your diary: ${p.title}. Open your Remi dashboard → Growth to review and approve (set a discount if you'd like).`,
+    }).catch(() => {});
+  }
+}
+
 async function maybeRunDailyJobs() {
   const { dateStr, hour } = clinicNow();
   if (dateStr === _lastDailyDate || hour < DAILY_HOUR) return;
@@ -539,6 +555,7 @@ async function maybeRunDailyJobs() {
     await lowPackageNudges(id).catch((e) => console.error('[low-package]', id, e));
     await syncMemberships(id).catch((e) => console.error('[membership-sync]', id, e));
     await reconcilePendingMemberships(id).catch((e) => console.error('[membership-reconcile]', id, e));
+    await growthCampaigns(clinic).catch((e) => console.error('[growth]', id, e));
     if (doMonthly) await monthlyReport(id).catch((e) => console.error('[monthlyReport]', id, e));
   }
   console.log(`[scheduler] daily jobs ran for ${clinics.length} clinic(s)`);
