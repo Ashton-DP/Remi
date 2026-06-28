@@ -287,6 +287,12 @@ async function maybeRunInvoiceChase() {
 
 const HUDDLE_HOUR = parseInt(process.env.HUDDLE_HOUR ?? '7', 10);
 const EVENING_HOUR = parseInt(process.env.EVENING_BRIEF_HOUR ?? '17', 10);
+// Briefs are greetings tied to a time of day. If the scheduler only comes up well
+// after the scheduled hour (e.g. a deploy/restart at 3pm), skip the brief rather
+// than send a stale "good morning" in the afternoon. Window = [hour, hour+grace).
+const BRIEF_GRACE_HOURS = parseInt(process.env.BRIEF_GRACE_HOURS ?? '3', 10);
+const inBriefWindow = (hour: number, scheduledHour: number) =>
+  hour >= scheduledHour && hour < scheduledHour + BRIEF_GRACE_HOURS;
 
 // Per-clinic once-a-day guard, keyed `${clinicId}:${dateStr}:${kind}`. Cleared
 // when the day rolls over so it never grows unbounded.
@@ -319,7 +325,7 @@ async function briefRecipients() {
  *  flags. Runs once each morning on/after HUDDLE_HOUR, for every opted-in clinic. */
 async function maybeRunHuddle() {
   const { dateStr, hour } = clinicNow();
-  if (hour < HUDDLE_HOUR) return;
+  if (!inBriefWindow(hour, HUDDLE_HOUR)) return;
   for (const clinic of await briefRecipients()) {
     const to = clinic.owner_summary_phone || clinic.escalation_contact;
     if (!to || await alreadySent(`${clinic.id}:${dateStr}:morning`, dateStr)) continue;
@@ -347,7 +353,7 @@ async function maybeRunHuddle() {
  *  Runs once each evening on/after EVENING_HOUR, for every opted-in clinic. */
 async function maybeRunEveningBrief() {
   const { dateStr, hour } = clinicNow();
-  if (hour < EVENING_HOUR) return;
+  if (!inBriefWindow(hour, EVENING_HOUR)) return;
   for (const clinic of await briefRecipients()) {
     const to = clinic.owner_summary_phone || clinic.escalation_contact;
     if (!to || await alreadySent(`${clinic.id}:${dateStr}:evening`, dateStr)) continue;
@@ -460,6 +466,10 @@ async function syncMemberships(clinicId: string) {
     try {
       const synced = await syncMembershipStatus(clinic, m);
       if (!synced) continue;
+      if (!synced.status) { // provider returned an unrecognised status — leave unchanged
+        console.warn(`[scheduler] membership ${m.id} unknown provider status — left as ${m.status}`);
+        continue;
+      }
       const renews = synced.renewsAt ?? m.renews_at;
       if (synced.status !== m.status || (synced.renewsAt && synced.renewsAt !== m.renews_at)) {
         await setMembershipStatus(m.id, synced.status, renews);

@@ -122,7 +122,7 @@ export async function cancelPayfastSubscription(
 export async function fetchPayfastSubscription(
   creds: { merchant_id?: string; passphrase?: string },
   token: string,
-): Promise<{ status: MembershipStatus; renewsAt: string | null }> {
+): Promise<{ status: MembershipStatus | null; renewsAt: string | null }> {
   const timestamp = payfastTimestamp();
   const url = `${apiBase()}/subscriptions/${encodeURIComponent(token)}/fetch${config.payments.payfastSandbox ? '?testing=true' : ''}`;
   const res = await fetch(url, { headers: apiHeaders(creds, timestamp) });
@@ -132,13 +132,15 @@ export async function fetchPayfastSubscription(
   return { status: mapPayfastStatus(d?.status_text ?? d?.status), renewsAt: d?.run_date ?? null };
 }
 
-/** Map a PayFast subscription status to our enum. Pure.
+/** Map a PayFast subscription status to our enum. Pure. Returns null for an
+ *  unrecognised status so the sync leaves the membership unchanged (the ITN is
+ *  the real source of truth) rather than fail-open to 'active'.
  *  PayFast status: 1=active, 2=cancelled, 3=paused/complete; status_text gives words. */
-export function mapPayfastStatus(status: string | number | undefined): MembershipStatus {
+export function mapPayfastStatus(status: string | number | undefined): MembershipStatus | null {
   const s = String(status ?? '').toLowerCase();
   if (s === '1' || s === 'active') return 'active';
   if (s === '2' || s === 'cancelled' || s === 'canceled') return 'cancelled';
   if (s === '3' || s === 'paused') return 'paused';
   if (s === 'complete' || s === 'completed') return 'cancelled';
-  return 'active'; // unknown/blank: assume still active (ITN is the real source of truth)
+  return null; // unknown/blank — don't guess
 }

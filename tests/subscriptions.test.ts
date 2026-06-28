@@ -89,6 +89,8 @@ test('mapPayfastStatus maps codes + words', () => {
   assert.equal(mapPayfastStatus('cancelled'), 'cancelled');
   assert.equal(mapPayfastStatus('3'), 'paused');
   assert.equal(mapPayfastStatus('complete'), 'cancelled');
+  assert.equal(mapPayfastStatus('weird-unknown'), null); // unknown → don't guess (no fail-open)
+  assert.equal(mapPayfastStatus(''), null);
 });
 
 // ── Paystack ──────────────────────────────────────────────────────────────────
@@ -103,6 +105,7 @@ test('mapPaystackStatus maps statuses', () => {
   assert.equal(mapPaystackStatus('non-renewing'), 'cancelled');
   assert.equal(mapPaystackStatus('completed'), 'cancelled');
   assert.equal(mapPaystackStatus('cancelled'), 'cancelled');
+  assert.equal(mapPaystackStatus('surprise-status'), null); // unknown → don't guess
 });
 
 console.log(`\n${passed} passed\n`);

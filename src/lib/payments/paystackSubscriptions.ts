@@ -75,7 +75,7 @@ export async function confirmPaystackSubscription(
 /** Fetch a subscription's status + next payment date (daily sync). */
 export async function fetchPaystackSubscription(
   secretKey: string, code: string,
-): Promise<{ status: MembershipStatus; renewsAt: string | null }> {
+): Promise<{ status: MembershipStatus | null; renewsAt: string | null }> {
   const s = await paystack(secretKey, `/subscription/${encodeURIComponent(code)}`);
   return { status: mapPaystackStatus(s?.status), renewsAt: s?.next_payment_date ?? null };
 }
@@ -91,9 +91,10 @@ export async function cancelPaystackSubscription(secretKey: string, code: string
   });
 }
 
-/** Map a Paystack subscription status to our enum. Pure.
- *  active | non-renewing | attention | completed | cancelled. */
-export function mapPaystackStatus(status: string | undefined): MembershipStatus {
+/** Map a Paystack subscription status to our enum. Pure. Returns null for an
+ *  unrecognised status so the sync leaves the membership UNCHANGED rather than
+ *  fail-open to 'active' (which would keep a cancelled member alive). */
+export function mapPaystackStatus(status: string | undefined): MembershipStatus | null {
   switch (String(status ?? '').toLowerCase()) {
     case 'active':
       return 'active';
@@ -105,6 +106,6 @@ export function mapPaystackStatus(status: string | undefined): MembershipStatus 
     case 'completed':
       return 'cancelled';
     default:
-      return 'active';
+      return null; // unknown — don't guess
   }
 }

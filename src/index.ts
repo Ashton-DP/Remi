@@ -24,7 +24,7 @@ import { handleInvoiceImport, handleInvoiceList, handleSourcePreview } from './r
 import { handleConnectStart, handleConnectCallback, handleConnectSheet } from './routes/connect';
 import { handleEmailDomainSetup, handleEmailDomainVerify, handleEmailDomainStatus } from './routes/emailDomain';
 import { handlePay, handlePaySuccess, handlePayCancel, handlePayfastNotify, handleStripeReturn, handlePaypalReturn, handlePaystackReturn } from './routes/pay';
-import { requireApiAuth, requirePlatformAdmin } from './lib/apiAuth';
+import { requireApiAuth, requirePlatformAdmin, getAuth } from './lib/apiAuth';
 import {
   handleMe, handleToday, handleInvoices, handleInvoiceDetail, handleBookings,
   handleConversations, handleConversationDetail, handleInsights, handleAssistant,
@@ -109,18 +109,24 @@ app.get('/health/db', async (_req, res) => {
 // for Twilio webhooks (shared source IPs), tighter for the agent tools endpoint.
 const webhookLimiter = rateLimit({ name: 'webhook', windowMs: 60_000, max: Number(process.env.RL_WEBHOOK_MAX ?? 300) });
 const toolsLimiter = rateLimit({ name: 'tools', windowMs: 60_000, max: Number(process.env.RL_TOOLS_MAX ?? 60) });
+// Per-SENDER limiters (keyed by phone/caller/user, not IP) — the IP webhook limiter
+// is weak because all Twilio traffic shares a small IP pool. Each inbound message
+// runs the paid LLM brain + sends, so cap per phone number, per call, per user.
+const inboundLimiter = rateLimit({ name: 'inbound', windowMs: 60_000, max: Number(process.env.RL_INBOUND_MAX ?? 15), keyFn: (req) => String(req.body?.From ?? req.ip ?? 'x') });
+const voiceLimiter = rateLimit({ name: 'voice', windowMs: 60_000, max: Number(process.env.RL_VOICE_MAX ?? 40), keyFn: (req) => String(req.body?.CallSid ?? req.body?.From ?? req.ip ?? 'x') });
+const assistantLimiter = rateLimit({ name: 'assistant', windowMs: 60_000, max: Number(process.env.RL_ASSISTANT_MAX ?? 20), keyFn: (req) => { try { return String(getAuth(req)?.userId ?? req.ip ?? 'x'); } catch { return String(req.ip ?? 'x'); } } });
 
 // WhatsApp (signature-validated)
-app.post('/webhooks/whatsapp', webhookLimiter, validateTwilioWebhook, handleInboundWhatsApp);
+app.post('/webhooks/whatsapp', webhookLimiter, validateTwilioWebhook, inboundLimiter, handleInboundWhatsApp);
 
 // Inbound SMS — same brain as WhatsApp (handler reads From/Body/MessageSid and
 // replies via TwiML, which works for SMS too). Point your Twilio number's
 // Messaging webhook here when running MESSAGING_CHANNEL=sms.
-app.post('/webhooks/sms', webhookLimiter, validateTwilioWebhook, handleInboundWhatsApp);
+app.post('/webhooks/sms', webhookLimiter, validateTwilioWebhook, inboundLimiter, handleInboundWhatsApp);
 
 // Voice (signature-validated)
-app.post('/webhooks/voice/inbound', webhookLimiter, validateTwilioWebhook, handleInboundCall);
-app.post('/webhooks/voice/gather', webhookLimiter, validateTwilioWebhook, handleVoiceGather);
+app.post('/webhooks/voice/inbound', webhookLimiter, validateTwilioWebhook, voiceLimiter, handleInboundCall);
+app.post('/webhooks/voice/gather', webhookLimiter, validateTwilioWebhook, voiceLimiter, handleVoiceGather);
 app.post('/webhooks/voice/status', webhookLimiter, validateTwilioWebhook, handleCallStatus);
 
 // ElevenLabs agent server tools (booking actions during a voice call)
@@ -184,7 +190,7 @@ app.get('/api/team', requireApiAuth, handleTeam);
 app.post('/api/team/invite', requireApiAuth, handleTeamInvite);
 app.post('/api/team/:userId/role', requireApiAuth, handleTeamRole);
 app.delete('/api/team/:userId', requireApiAuth, handleTeamRemove);
-app.post('/api/assistant', requireApiAuth, handleAssistant);
+app.post('/api/assistant', requireApiAuth, assistantLimiter, handleAssistant);
 app.post('/api/onboarding/complete', requireApiAuth, handleCompleteOnboarding);
 app.post('/api/onboarding/whatsapp', requireApiAuth, handleSubmitWhatsApp);
 // Phase 3 controls (write actions)

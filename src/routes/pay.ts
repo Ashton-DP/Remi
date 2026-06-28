@@ -175,6 +175,14 @@ export async function handlePayfastNotify(req: Request, res: Response) {
     if (!passphrase) { console.warn('[payfast] no passphrase set — rejecting invoice ITN', invoiceId); return; }
     if (!validatePayfastNotify(body, passphrase)) { console.warn('[payfast] bad signature for', invoiceId); return; }
     if (body.payment_status === 'COMPLETE') {
+      // Verify the amount actually paid matches what's owed — don't mark a R5000
+      // invoice "paid" off an R5 ITN.
+      const paid = Number(body.amount_gross);
+      const due = Number(invoice.amount_due);
+      if (Number.isFinite(paid) && Number.isFinite(due) && Math.abs(paid - due) > 0.01) {
+        console.warn(`[payfast] amount mismatch for ${invoiceId}: paid ${paid} vs due ${due} — NOT marking paid`);
+        return;
+      }
       await markInvoicePaidById(invoiceId);
       console.log(`[payfast] invoice ${invoice.invoice_number} marked paid`);
     }

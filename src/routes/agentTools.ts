@@ -39,8 +39,11 @@ export async function handleAgentTool(req: Request, res: Response) {
   // protected by TOOLS_SHARED_SECRET in production. Fail closed if it's unset in
   // prod rather than leaving booking actions open to the internet.
   if (!config.toolsSecret) {
-    if (process.env.NODE_ENV === 'production') {
-      console.error('[agentTools] BLOCKED: TOOLS_SHARED_SECRET is not set in production');
+    // Fail closed in EVERY deployed environment when no secret is set — only an
+    // explicit local opt-in (TOOLS_ALLOW_INSECURE=true) leaves these real booking
+    // actions open, so a staging deploy can't be open to the internet by default.
+    if (process.env.NODE_ENV === 'production' || process.env.TOOLS_ALLOW_INSECURE !== 'true') {
+      console.error('[agentTools] BLOCKED: TOOLS_SHARED_SECRET not set (set it, or TOOLS_ALLOW_INSECURE=true for local dev only)');
       return res.status(503).json({ error: 'tools endpoint not configured' });
     }
   } else if (!safeEqual(req.header('X-Tool-Secret') ?? '', config.toolsSecret)) {

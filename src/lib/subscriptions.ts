@@ -147,7 +147,7 @@ export async function confirmMembershipReturn(
 /** Reconcile a membership's status + renewal date from the provider (daily sync). */
 export async function syncMembershipStatus(
   clinic: any, membership: any,
-): Promise<{ status: MembershipStatus; renewsAt: string | null } | null> {
+): Promise<{ status: MembershipStatus | null; renewsAt: string | null } | null> {
   const cfg = clinic.payment_config ?? {};
   const extId = membership.external_subscription_id;
   if (!extId) return null;
