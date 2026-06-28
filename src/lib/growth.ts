@@ -64,3 +64,23 @@ export function isAuto(type: GrowthType, settings: GrowthSettings): boolean {
 export function isEnabled(type: GrowthType, settings: GrowthSettings): boolean {
   return Boolean(((settings as any)[type] ?? {}).enabled);
 }
+
+/**
+ * Is a client overdue vs their OWN visit cadence? Pure — the core of cadence-aware
+ * win-backs. `visitTimes` are epoch-ms of past visits. Returns null when there are
+ * too few visits to infer a rhythm (≥2 needed). A client is overdue when the gap
+ * since their last visit exceeds their average interval plus a buffer.
+ */
+export function cadenceOverdue(
+  visitTimes: number[], bufferDays: number, now: number,
+): { overdue: boolean; cadenceDays: number } | null {
+  const t = visitTimes.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
+  if (t.length < 2) return null;
+  let total = 0;
+  for (let i = 1; i < t.length; i++) total += t[i] - t[i - 1];
+  const avg = total / (t.length - 1);
+  const last = t[t.length - 1];
+  const cadenceDays = Math.round(avg / 86_400_000);
+  if (last >= now) return { overdue: false, cadenceDays }; // upcoming/just-had a visit
+  return { overdue: now - last > avg + bufferDays * 86_400_000, cadenceDays };
+}

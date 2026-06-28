@@ -1,7 +1,7 @@
 import { supabase } from './lib/supabase';
 import { buildReminderRows } from './lib/reminders';
 import { isPackageActive, isLowPackage } from './lib/clientOs';
-import { mergeGrowthSettings, type GrowthSettings, type GrowthType } from './lib/growth';
+import { mergeGrowthSettings, cadenceOverdue, type GrowthSettings, type GrowthType } from './lib/growth';
 import { encryptPaymentConfig, decryptClinicSecrets, encryptField, encryptTokens } from './lib/secretCrypto';
 
 export async function getClinic(id: string) {
@@ -1576,16 +1576,10 @@ export async function getCadenceOverdueClients(clinicId: string, bufferDays = 14
   const reactCutoff = now - bufferDays * 86_400_000;
   const out: any[] = [];
   for (const c of clients) {
-    const times = (byClient[c.id] ?? []).sort((a, b) => a - b);
-    if (times.length < 2) continue;                       // can't learn a cadence yet
-    let total = 0;
-    for (let i = 1; i < times.length; i++) total += times[i] - times[i - 1];
-    const avg = total / (times.length - 1);
-    const last = times[times.length - 1];
-    if (last >= now) continue;                            // has an upcoming/just-had visit
-    if (now - last <= avg + bufferDays * 86_400_000) continue; // not yet overdue vs their rhythm
+    const verdict = cadenceOverdue(byClient[c.id] ?? [], bufferDays, now);
+    if (!verdict || !verdict.overdue) continue;
     if (c.last_reactivated_at && new Date(c.last_reactivated_at).getTime() >= reactCutoff) continue;
-    out.push({ ...c, cadence_days: Math.round(avg / 86_400_000) });
+    out.push({ ...c, cadence_days: verdict.cadenceDays });
     if (out.length >= limit) break;
   }
   return out;

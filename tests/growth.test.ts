@@ -1,8 +1,11 @@
 // Remi Growth guardrail logic. Run: tsx tests/growth.test.ts
 import assert from 'node:assert';
 import {
-  DEFAULT_GROWTH_SETTINGS, mergeGrowthSettings, clampPct, allowedDiscount, isAuto, isEnabled,
+  DEFAULT_GROWTH_SETTINGS, mergeGrowthSettings, clampPct, allowedDiscount, isAuto, isEnabled, cadenceOverdue,
 } from '../src/lib/growth';
+
+const DAY = 86_400_000;
+const NOW = Date.parse('2026-06-28T12:00:00Z');
 
 let passed = 0;
 function test(name: string, fn: () => void) {
@@ -52,6 +55,39 @@ test('isAuto / isEnabled read per-type config', () => {
   assert.equal(isAuto('winback', s), false);
   assert.equal(isEnabled('winback', s), false);
   assert.equal(isEnabled('gap_fill', s), true);
+});
+
+test('cadenceOverdue: null with fewer than 2 visits', () => {
+  assert.equal(cadenceOverdue([], 14, NOW), null);
+  assert.equal(cadenceOverdue([NOW - 30 * DAY], 14, NOW), null);
+});
+
+test('cadenceOverdue: overdue when gap exceeds avg interval + buffer', () => {
+  // ~30-day cadence, last visit 60 days ago → overdue
+  const visits = [NOW - 120 * DAY, NOW - 90 * DAY, NOW - 60 * DAY];
+  const v = cadenceOverdue(visits, 14, NOW)!;
+  assert.equal(v.cadenceDays, 30);
+  assert.equal(v.overdue, true);
+});
+
+test('cadenceOverdue: NOT overdue when within their normal rhythm', () => {
+  // ~30-day cadence, last visit 20 days ago → not yet due
+  const visits = [NOW - 80 * DAY, NOW - 50 * DAY, NOW - 20 * DAY];
+  const v = cadenceOverdue(visits, 14, NOW)!;
+  assert.equal(v.overdue, false);
+});
+
+test('cadenceOverdue: buffer prevents nagging just past the average', () => {
+  // 30-day cadence, last visit 35 days ago: past avg but within the 14-day buffer
+  const visits = [NOW - 65 * DAY, NOW - 35 * DAY];
+  assert.equal(cadenceOverdue(visits, 14, NOW)!.overdue, false);
+  // same client with no buffer → would be overdue
+  assert.equal(cadenceOverdue(visits, 0, NOW)!.overdue, true);
+});
+
+test('cadenceOverdue: not overdue if a visit is upcoming', () => {
+  const visits = [NOW - 30 * DAY, NOW + 3 * DAY];
+  assert.equal(cadenceOverdue(visits, 14, NOW)!.overdue, false);
 });
 
 console.log(`\n${passed} passed\n`);
