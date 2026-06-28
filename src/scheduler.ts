@@ -167,6 +167,9 @@ async function _tick() {
       case 'review': {
         const url = booking.clinics?.google_review_url;
         if (!url) { await markReminderSent(r.id); continue; } // no review link configured → skip
+        // Owner can switch review requests off in Growth settings.
+        const gs = await getGrowthSettings(booking.clinic_id).catch(() => null);
+        if (gs && !gs.review.enabled) { await markReminderSent(r.id); continue; }
         // Review requests are MARKETING — never send to an opted-out contact.
         if (await isSuppressed(booking.clinic_id, config.twilio.channel, phoneKey(client.phone))) {
           await markReminderSent(r.id); continue;
