@@ -187,6 +187,23 @@ export function attachMediaStream(server: Server) {
       closed: false,
     };
 
+    // Absolute safety cap: tear the session down after MAX_CALL_MINUTES so a stuck
+    // or maliciously-held-open socket can't keep billable STT/LLM running forever.
+    const teardown = () => {
+      if (ctx.closed) return;
+      ctx.closed = true;
+      if (ctx.turnAbort) ctx.turnAbort.aborted = true;
+      if (ctx.ttsAbort) ctx.ttsAbort.abort();
+      try { ctx.dg?.close(); } catch { /* */ }
+      try { ctx.azureStt?.close(); } catch { /* */ }
+      try { ctx.azureTts?.stop(); } catch { /* */ }
+      try { twilioWs.close(); } catch { /* */ }
+    };
+    const maxCallMs = parseInt(process.env.MAX_CALL_MINUTES ?? '15', 10) * 60_000;
+    const maxTimer = setTimeout(() => { console.warn('[mediaStream] max call duration reached — closing'); teardown(); }, maxCallMs);
+    maxTimer.unref?.();
+    twilioWs.on('close', () => clearTimeout(maxTimer));
+
     const handleUtterance = async (text: string) => {
       if (ctx.thinking || ctx.closed) return; // one turn at a time
       ctx.thinking = true;

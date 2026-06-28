@@ -87,6 +87,13 @@ export function attachVoiceRelay(server: Server) {
 
   wss.on('connection', (ws: WebSocket) => {
     let session: RelaySession | null = null;
+    let turns = 0;
+    const maxTurns = parseInt(process.env.MAX_CALL_TURNS ?? '40', 10);
+    // Absolute safety cap so a held-open socket can't run paid LLM turns forever.
+    const maxTimer = setTimeout(() => { console.warn('[voiceRelay] max call duration reached — closing'); try { ws.close(); } catch { /* */ } },
+      parseInt(process.env.MAX_CALL_MINUTES ?? '15', 10) * 60_000);
+    maxTimer.unref?.();
+    ws.on('close', () => clearTimeout(maxTimer));
 
     ws.on('message', async (raw) => {
       let msg: any;
@@ -116,6 +123,7 @@ export function attachVoiceRelay(server: Server) {
       if (msg.type === 'prompt' && session) {
         const text = String(msg.voicePrompt ?? '').trim();
         if (!text || session.busy) return;
+        if (++turns > maxTurns) { console.warn('[voiceRelay] max turns reached — closing'); try { ws.close(); } catch { /* */ } return; }
         session.busy = true;
         try {
           await saveMessage(session.convo.id, 'in', text);
