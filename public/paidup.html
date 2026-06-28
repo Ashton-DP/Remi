@@ -99,6 +99,18 @@
   .price-card li::before { content: '✓'; position: absolute; left: 0; color: var(--green); font-weight: 700; }
   .price-card .tiers { font-size: 13px; color: var(--muted); margin-top: 14px; }
 
+  /* Volume ladder */
+  .tier-ladder { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; max-width: 720px; margin: 28px auto 0; }
+  .tier { flex: 1 1 200px; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 20px 18px; position: relative; }
+  .tier.featured { border-color: var(--purple); }
+  .tier-tag { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: var(--purple); color: #fff; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+  .tier-name { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .tier-price { font-size: 30px; font-weight: 800; margin: 4px 0 8px; }
+  .tier-price span { font-size: 14px; color: var(--muted); font-weight: 500; }
+  .tier-vol { font-size: 13.5px; color: var(--text); line-height: 1.5; }
+  .tier-vol span { color: var(--muted); font-size: 12.5px; }
+  .ladder-note { font-size: 13px; color: var(--muted); margin: 20px auto 0; max-width: 600px; }
+
   /* CTA */
   .cta-section { text-align: center; background: linear-gradient(180deg, var(--surface), var(--bg)); }
   .cta-section h2 { max-width: 640px; margin: 0 auto 14px; }
@@ -218,8 +230,29 @@
       <li>Kill-switch, full timeline &amp; monthly recovered-revenue report</li>
     </ul>
     <a href="https://buy.stripe.com/28E8wO7hD38R3bHd8s57W09" target="_blank" rel="noopener" class="btn-primary" style="display:block;">Start your free 2-week trial</a>
-    <p class="tiers">Higher volumes: R599 &amp; R999 tiers · Want bookings &amp; a voice receptionist too? <a href="/#offers" style="color:var(--purple);">See all of Remi →</a></p>
+    <p class="tiers">Same features at every tier — you only move up as your invoice volume grows.</p>
   </div>
+
+  <!-- Volume ladder -->
+  <div class="tier-ladder">
+    <div class="tier">
+      <div class="tier-name">PaidUp</div>
+      <div class="tier-price">R299<span>/mo</span></div>
+      <div class="tier-vol">Solo &amp; small practices<br><span>up to ~50 invoices / month</span></div>
+    </div>
+    <div class="tier featured">
+      <div class="tier-tag">Most pick this</div>
+      <div class="tier-name">Growth</div>
+      <div class="tier-price">R599<span>/mo</span></div>
+      <div class="tier-vol">Busy practices<br><span>up to ~200 invoices / month</span></div>
+    </div>
+    <div class="tier">
+      <div class="tier-name">Scale</div>
+      <div class="tier-price">R999<span>/mo</span></div>
+      <div class="tier-vol">High-volume &amp; groups<br><span>up to ~600 invoices / month</span></div>
+    </div>
+  </div>
+  <p class="ladder-note">Not sure which fits? Start on PaidUp — we'll suggest a move up if you outgrow it. Want bookings &amp; a voice receptionist too? <a href="/#offers" style="color:var(--purple);">See all of Remi →</a></p>
 </section>
 
 <!-- CTA -->
