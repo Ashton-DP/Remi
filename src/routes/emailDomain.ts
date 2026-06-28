@@ -7,7 +7,9 @@ import { getClinic, setClinicEmailDomain, updateClinicEmailDomainStatus } from '
 function authed(req: Request): boolean {
   const tok = config.chase.importToken;
   if (!tok) return false;
-  const given = String((req.body && req.body.token) ?? qp(req.query.token) ?? '');
+  // Prefer header/body; query (?token=) stays for backward compat but leaks into
+  // access logs — the X-Chase-Token header is the recommended way to pass it.
+  const given = String(req.get('X-Chase-Token') ?? (req.body && req.body.token) ?? qp(req.query.token) ?? '');
   return safeEqual(given, tok);
 }
 

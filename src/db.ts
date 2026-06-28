@@ -1,7 +1,7 @@
 import { supabase } from './lib/supabase';
 import { buildReminderRows } from './lib/reminders';
 import { isPackageActive, isLowPackage } from './lib/clientOs';
-import { encryptPaymentConfig, decryptClinicSecrets, encryptField } from './lib/secretCrypto';
+import { encryptPaymentConfig, decryptClinicSecrets, encryptField, encryptTokens } from './lib/secretCrypto';
 
 export async function getClinic(id: string) {
   const { data } = await supabase.from('clinics').select('*').eq('id', id).single();
@@ -868,13 +868,13 @@ export async function getClinicsWithInvoiceSource() {
     .from('clinics')
     .select('id,name,invoice_source,invoice_source_tokens,invoice_source_config')
     .not('invoice_source', 'is', null);
-  return data ?? [];
+  return (data ?? []).map(decryptClinicSecrets);
 }
 
 /** Persist refreshed OAuth tokens / config for a clinic's invoice source. */
 export async function setInvoiceSourceData(clinicId: string, patch: { tokens?: any; config?: any }) {
   const update: any = {};
-  if (patch.tokens !== undefined) update.invoice_source_tokens = patch.tokens;
+  if (patch.tokens !== undefined) update.invoice_source_tokens = encryptTokens(patch.tokens);
   if (patch.config !== undefined) update.invoice_source_config = patch.config;
   if (!Object.keys(update).length) return;
   const { error } = await supabase.from('clinics').update(update).eq('id', clinicId);
@@ -885,7 +885,7 @@ export async function setInvoiceSourceData(clinicId: string, patch: { tokens?: a
 export async function setInvoiceSource(clinicId: string, source: string, tokens: any, config: any) {
   const { error } = await supabase.from('clinics').update({
     invoice_source: source,
-    invoice_source_tokens: tokens,
+    invoice_source_tokens: encryptTokens(tokens),
     invoice_source_config: config,
   }).eq('id', clinicId);
   if (error) throw new Error(`setInvoiceSource: ${error.message}`);

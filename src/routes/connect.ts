@@ -74,7 +74,7 @@ export async function handleConnectCallback(req: Request, res: Response) {
 export async function handleConnectSheet(req: Request, res: Response) {
   const tok = config.chase.importToken;
   if (!tok) return res.status(503).json({ error: 'Set CHASE_IMPORT_TOKEN (or ONBOARD_TOKEN) to enable connecting.' });
-  const given = String((req.body && req.body.token) ?? qp(req.query.token) ?? '');
+  const given = String(req.get('X-Chase-Token') ?? (req.body && req.body.token) ?? qp(req.query.token) ?? '');
   if (!safeEqual(given, tok)) return res.status(403).json({ error: 'Invalid token.' });
 
   const clinicId = String((req.body && req.body.clinic_id) ?? '').trim();

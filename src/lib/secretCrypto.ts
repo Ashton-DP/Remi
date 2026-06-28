@@ -66,11 +66,26 @@ function mapPaymentSecrets(cfg: any, fn: (v: any) => any): any {
 export const encryptPaymentConfig = (cfg: any) => mapPaymentSecrets(cfg, encryptField);
 export const decryptPaymentConfig = (cfg: any) => mapPaymentSecrets(cfg, decryptField);
 
+/** Encrypt an OAuth token blob (Xero/QBO/Sage) as a whole, since its shape varies.
+ *  Stored as { enc: 'enc:v1:...' }. No key → returned unchanged (plaintext). */
+export function encryptTokens(tokens: any): any {
+  if (tokens == null || (typeof tokens === 'object' && typeof tokens.enc === 'string')) return tokens;
+  if (!process.env.PAYMENT_ENC_KEY) return tokens; // opt-in
+  return { enc: encryptField(JSON.stringify(tokens)) };
+}
+export function decryptTokens(tokens: any): any {
+  if (tokens && typeof tokens === 'object' && typeof tokens.enc === 'string') {
+    try { return JSON.parse(decryptField(tokens.enc)); } catch { return tokens; }
+  }
+  return tokens; // plaintext / legacy
+}
+
 /** Decrypt the secret fields on a clinic row loaded from the DB (in place-ish). */
 export function decryptClinicSecrets<T extends Record<string, any> | null | undefined>(clinic: T): T {
   if (!clinic) return clinic;
   const c: any = clinic;
   if (c.payment_config) c.payment_config = decryptPaymentConfig(c.payment_config);
   if (c.email_inbox && c.email_inbox.pass != null) c.email_inbox = { ...c.email_inbox, pass: decryptField(c.email_inbox.pass) };
+  if (c.invoice_source_tokens) c.invoice_source_tokens = decryptTokens(c.invoice_source_tokens);
   return clinic;
 }
