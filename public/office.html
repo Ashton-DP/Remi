@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run your whole practice with Remi — memberships, packages &amp; team back-office</title>
+<meta name="description" content="Remi runs the office, not just the front desk: prepaid packages and recurring memberships that keep clients coming back, rich client profiles, automatic birthday and win-back touches, and a staff back-office — clock-in, timesheets and leave — all over WhatsApp. Part of Remi Complete.">
+<link rel="canonical" href="https://www.remireception.com/office">
+<meta name="robots" content="index, follow">
+<link rel="icon" type="image/svg+xml" href="/logo-mark.svg">
+<link rel="apple-touch-icon" href="/logo-profile.png">
+<meta property="og:title" content="Run your whole practice with Remi — memberships, packages &amp; team back-office">
+<meta property="og:description" content="Packages, recurring memberships, rich client profiles, birthday &amp; win-back touches, and a WhatsApp staff back-office — Remi runs the half of your business the phone doesn't.">
+<meta property="og:image" content="https://www.remireception.com/logo-profile.png">
+<meta property="og:url" content="https://www.remireception.com/office">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0b0f; --surface: #13151f; --border: #1e2235; --text: #e2e8f0;
+    --muted: #64748b; --purple: #7c6fea; --teal: #2dd4bf; --green: #4ade80;
+  }
+  html { scroll-behavior: smooth; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+
+  /* NAV */
+  nav { position: fixed; top: 0; width: 100%; z-index: 100; background: rgba(10,11,15,0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 5%; display: flex; align-items: center; justify-content: space-between; height: 60px; }
+  .nav-logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; text-decoration: none; color: var(--text); }
+  .logo-dot { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, var(--purple), var(--teal)); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: #fff; }
+  .nav-links { display: flex; align-items: center; gap: 28px; }
+  .nav-links a.nav-link { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color .2s; }
+  .nav-links a.nav-link:hover { color: var(--text); }
+  .nav-cta { background: var(--purple); color: #fff; padding: 8px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; transition: opacity .2s; }
+  .nav-cta:hover { opacity: .85; }
+
+  /* HERO */
+  .hero { min-height: 86vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 130px 5% 70px; position: relative; overflow: hidden; }
+  .hero::before { content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%); width: 800px; height: 800px; border-radius: 50%; background: radial-gradient(circle, rgba(45,212,191,0.11) 0%, transparent 70%); pointer-events: none; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(45,212,191,0.12); border: 1px solid rgba(45,212,191,0.3); color: #5eead4; padding: 5px 14px; border-radius: 20px; font-size: 13px; font-weight: 500; margin-bottom: 28px; }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+  h1 { font-size: clamp(36px, 6vw, 64px); font-weight: 800; line-height: 1.08; letter-spacing: -1.5px; max-width: 840px; margin-bottom: 24px; }
+  h1 span { background: linear-gradient(135deg, var(--teal), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .hero-sub { font-size: clamp(16px, 2vw, 20px); color: var(--muted); max-width: 640px; margin-bottom: 40px; }
+  .hero-buttons { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  .btn-primary { background: linear-gradient(135deg, var(--purple), #5b4fcc); color: #fff; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 16px; transition: transform .2s, box-shadow .2s; box-shadow: 0 4px 24px rgba(124,111,234,0.35); }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(124,111,234,0.45); }
+  .btn-secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 16px; transition: border-color .2s; }
+  .btn-secondary:hover { border-color: var(--purple); }
+  .hero-note { margin-top: 18px; font-size: 13px; color: var(--muted); }
+
+  /* STATS */
+  .stats { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--surface); display: flex; justify-content: center; flex-wrap: wrap; }
+  .stat { padding: 32px 48px; text-align: center; border-right: 1px solid var(--border); }
+  .stat:last-child { border-right: none; }
+  .stat-val { font-size: 34px; font-weight: 800; color: var(--teal); }
+  .stat-label { font-size: 13px; color: var(--muted); margin-top: 4px; max-width: 200px; }
+
+  /* SECTIONS */
+  section { padding: 92px 5%; }
+  .center { text-align: center; }
+  .section-label { font-size: 12px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--purple); margin-bottom: 12px; }
+  h2 { font-size: clamp(28px, 4vw, 40px); font-weight: 800; letter-spacing: -.5px; margin-bottom: 16px; }
+  .section-sub { font-size: 18px; color: var(--muted); max-width: 620px; margin-bottom: 56px; }
+  .center .section-sub { margin-left: auto; margin-right: auto; }
+  .alt { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+
+  /* CARD GRID */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; max-width: 1000px; margin: 0 auto; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+  .alt .card { background: var(--bg); }
+  .card-ico { font-size: 22px; margin-bottom: 12px; }
+  .card h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .card p { font-size: 14px; color: var(--muted); }
+  .logos { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; max-width: 760px; margin: 0 auto; }
+  .logo-pill { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 22px; font-weight: 600; font-size: 15px; }
+  .alt .logo-pill { background: var(--bg); }
+
+  /* PRICING STRIP */
+  .price-card { max-width: 460px; margin: 0 auto; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 36px 32px; text-align: center; }
+  .price-card .amt { font-size: 48px; font-weight: 800; }
+  .price-card .amt span { font-size: 18px; color: var(--muted); font-weight: 500; }
+  .price-card .roi { color: var(--green); font-weight: 600; font-size: 14px; margin: 6px 0 18px; }
+  .price-card ul { list-style: none; text-align: left; margin: 0 0 24px; display: flex; flex-direction: column; gap: 10px; }
+  .price-card li { position: relative; padding-left: 26px; font-size: 14.5px; }
+  .price-card li::before { content: '✓'; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+  .price-card .tiers { font-size: 13px; color: var(--muted); margin-top: 14px; }
+
+  /* CTA */
+  .cta-section { text-align: center; background: linear-gradient(180deg, var(--surface), var(--bg)); }
+  .cta-section h2 { max-width: 640px; margin: 0 auto 14px; }
+  .cta-section p { color: var(--muted); max-width: 520px; margin: 0 auto 30px; }
+
+  /* FOOTER */
+  footer { border-top: 1px solid var(--border); padding: 28px 5%; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  footer p { font-size: 13px; color: var(--muted); }
+  footer a { color: var(--muted); text-decoration: none; font-size: 13px; }
+  footer a:hover { color: var(--text); }
+
+  @media (max-width: 760px) { .nav-links .nav-link { display: none; } }
+  @media (max-width: 640px) {
+    .stat { padding: 24px 28px; border-right: none; border-bottom: 1px solid var(--border); }
+    .stat:last-child { border-bottom: none; }
+    nav .nav-cta { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo"><span class="logo-dot">R</span> Remi</a>
+  <div class="nav-links">
+    <a href="/#offers" class="nav-link">All of Remi</a>
+    <a href="#clients" class="nav-link">Clients</a>
+    <a href="#team" class="nav-link">Team</a>
+    <a href="#start" class="nav-cta">Start free</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="badge"><span class="badge-dot"></span> Remi · Complete</div>
+  <h1>Remi runs the office — <span>not just the front desk.</span></h1>
+  <p class="hero-sub">Beyond answering and booking, Remi keeps your clients coming back — with prepaid packages, recurring memberships and a memory for every regular — and runs your team's clock-ins, hours and leave, all over WhatsApp.</p>
+  <div class="hero-buttons">
+    <a href="#start" class="btn-primary">See Remi Complete</a>
+    <a href="#clients" class="btn-secondary">What it does</a>
+  </div>
+  <p class="hero-note">Part of Remi Complete · 2-week free trial · no setup fee</p>
+</section>
+
+<!-- STATS -->
+<div class="stats">
+  <div class="stat"><div class="stat-val">Recurring</div><div class="stat-label">membership revenue, billed automatically</div></div>
+  <div class="stat"><div class="stat-val">Every</div><div class="stat-label">client remembered — notes, prefs &amp; allergies</div></div>
+  <div class="stat"><div class="stat-val">Zero</div><div class="stat-label">spreadsheets for packages or staff hours</div></div>
+</div>
+
+<!-- PROBLEM -->
+<section class="center">
+  <p class="section-label">The other half of the job</p>
+  <h2>The phone is only half your business.</h2>
+  <p class="section-sub" style="margin-bottom:0;">Packages tracked on a paper card. Memberships you keep forgetting to bill. Regulars who quietly drift away. Staff hours scribbled on a clipboard. It's the admin that eats your evenings — so Remi runs it, the same way it runs your front desk.</p>
+</section>
+
+<!-- CLIENTS / CLIENT OS -->
+<section id="clients">
+  <div class="center"><p class="section-label">Keep clients coming back</p><h2>A memory — and a money machine — for every client.</h2><p class="section-sub" style="margin-left:auto;margin-right:auto;">Remi turns one-off visits into regulars, and regulars into recurring revenue.</p></div>
+  <div class="grid">
+    <div class="card"><div class="card-ico">🎟️</div><h3>Prepaid packages</h3><p>Sell session bundles once; Remi tracks every client's balance, counts down on each booking, and nudges them to rebook before it runs out.</p></div>
+    <div class="card"><div class="card-ico">♻️</div><h3>Recurring memberships</h3><p>Turn regulars into monthly revenue. Remi sends a signup link, bills it through your own PayFast, Paystack or Stripe, and keeps it renewing.</p></div>
+    <div class="card"><div class="card-ico">🗂️</div><h3>Rich client profiles</h3><p>Notes, preferences, allergies and tags on every client — so every visit feels personal and your whole team sees it instantly.</p></div>
+    <div class="card"><div class="card-ico">🎂</div><h3>Birthday &amp; win-back touches</h3><p>Consent-gated birthday and anniversary messages, plus gentle nudges to clients who've drifted — sent automatically, in their language.</p></div>
+  </div>
+</section>
+
+<!-- TEAM / TEAM OPS -->
+<section id="team" class="alt">
+  <div class="center"><p class="section-label">Run your team — from WhatsApp</p><h2>Your staff back-office, in the chat they already use.</h2><p class="section-sub" style="margin-left:auto;margin-right:auto;">No app to install, no clock terminal on the wall. Staff just message Remi; you watch it all from one dashboard.</p></div>
+  <div class="grid">
+    <div class="card"><div class="card-ico">🕐</div><h3>Clock in &amp; out</h3><p>Staff clock in and out by WhatsApp — "I'm here", "klaar" — and Remi stamps the time. No app, no terminal.</p></div>
+    <div class="card"><div class="card-ico">📋</div><h3>Live timesheets</h3><p>Hours tally automatically, per person, per week — payroll-ready, with a forgot-to-clock-out guard so nothing's left running.</p></div>
+    <div class="card"><div class="card-ico">🌴</div><h3>Leave requests</h3><p>Staff request leave over WhatsApp; you approve or decline from the dashboard, and Remi lets them know — no back-and-forth.</p></div>
+    <div class="card"><div class="card-ico">👥</div><h3>One team view</h3><p>See who's clocked in right now, this week's hours, and your leave inbox — all in the same dashboard as your bookings.</p></div>
+  </div>
+</section>
+
+<!-- ONE PLACE -->
+<section class="center">
+  <p class="section-label">All in one place</p>
+  <h2>One login for your whole operation.</h2>
+  <p class="section-sub" style="margin-left:auto;margin-right:auto;">Clients, packages, memberships, staff hours, bookings and invoices live in the same dashboard — and every client conversation, on any channel, in one unified inbox. Nothing scattered across apps and notebooks.</p>
+  <div class="logos">
+    <span class="logo-pill">🗂️ Client CRM</span>
+    <span class="logo-pill">🎟️ Packages</span>
+    <span class="logo-pill">♻️ Memberships</span>
+    <span class="logo-pill">⏱️ Timesheets</span>
+    <span class="logo-pill">🌴 Leave inbox</span>
+    <span class="logo-pill">📥 Unified inbox</span>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="pricing" class="alt center">
+  <p class="section-label">Pricing</p>
+  <h2>It all comes with Remi Complete.</h2>
+  <div class="price-card" id="start">
+    <p class="amt">R6,500<span>/mo</span></p>
+    <p class="roi">your whole front office + back office, in one</p>
+    <ul>
+      <li>Everything in the AI receptionist (calls, booking, messaging)</li>
+      <li>Packages, recurring memberships &amp; rich client profiles</li>
+      <li>Birthday, anniversary &amp; win-back touches on autopilot</li>
+      <li>Staff clock-in, live timesheets &amp; leave over WhatsApp</li>
+      <li>PaidUp invoice chasing + deposits, reviews &amp; insights</li>
+    </ul>
+    <a href="https://buy.stripe.com/fZufZg0TfgZHeUpc4o57W0c" target="_blank" rel="noopener" class="btn-primary" style="display:block;">Start your free 2-week trial</a>
+    <p class="tiers">Just want one piece? <a href="/#offers" style="color:var(--purple);">See all Remi plans →</a></p>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <h2>Let Remi run the admin.</h2>
+  <p>Spend your evenings on your business, not your spreadsheets. See the whole thing in a quick demo.</p>
+  <a href="https://wa.me/27600151104?text=Hi%2C%20I%27d%20like%20a%20demo%20of%20Remi%20Complete%20%E2%80%94%20memberships%2C%20packages%20%26%20team%20ops." target="_blank" rel="noopener" class="btn-primary">Book a free demo</a>
+  <p style="margin-top:16px;font-size:13px;color:var(--muted);">Or start your trial — Remi Complete from R6,500/mo</p>
+</section>
+
+<footer>
+  <a href="/" class="nav-logo"><span class="logo-dot">R</span> Remi</a>
+  <p>AI front desk &amp; invoice chasing for South African businesses.</p>
+  <p style="margin-top:10px;"><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms of Service</a></p>
+  <p>© 2026 Remi · a product of The Visionaries (Pty) Ltd. Built in George, South Africa.</p>
+</footer>
+
+</body>
+</html>
