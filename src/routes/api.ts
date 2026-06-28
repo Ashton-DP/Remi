@@ -23,7 +23,10 @@ import {
   addTask, listTasks, completeTask, deleteTask, addExpense, listExpenses,
   getClientProfile, updateClientProfile, listPackages, upsertPackage, listMemberships,
   createPendingMembership, getMembershipById, setMembershipStatus,
+  getGrowthSettings, setGrowthSettings, listGrowthProposals, getGrowthProposal,
+  decideGrowthProposal, countPendingGrowthProposals,
 } from '../db';
+import { mergeGrowthSettings } from '../lib/growth';
 import { sumHours, startOfWeek, formatHours } from '../lib/teamOps';
 import { sendProactiveWhatsApp } from '../lib/twilio';
 import { computeReportStats } from '../report';
@@ -214,6 +217,48 @@ export async function handleCreatePackage(req: Request, res: Response) {
     expires_at: expires_at ?? undefined,
   });
   res.status(201).json({ package: pkg });
+}
+
+/** GET /api/growth — the Growth inbox: proposals + the clinic's guardrail settings. */
+export async function handleGrowth(req: Request, res: Response) {
+  const auth = getAuth(req);
+  const [proposals, settings, pending] = await Promise.all([
+    listGrowthProposals(auth.clinicId),
+    getGrowthSettings(auth.clinicId),
+    countPendingGrowthProposals(auth.clinicId),
+  ]);
+  res.json({ proposals, settings, pending });
+}
+
+/** POST /api/growth/:id/decide { action:'approve'|'decline', owner_input? } — owner
+ *  approves a campaign and sets its specifics (discount, reward, excluded clients). */
+export async function handleDecideGrowth(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'Read-only access.' });
+  const proposal = await getGrowthProposal(auth.clinicId, String(req.params.id));
+  if (!proposal) return res.status(404).json({ error: 'Not found.' });
+  if (proposal.status !== 'pending') return res.status(409).json({ error: `Already ${proposal.status}.` });
+  const action = String(req.body?.action ?? '');
+  if (action !== 'approve' && action !== 'decline') return res.status(400).json({ error: "action must be 'approve' or 'decline'." });
+  // Guardrail: clamp any owner-set discount to the clinic's max before saving.
+  let ownerInput = req.body?.owner_input ?? undefined;
+  if (ownerInput && ownerInput.discount_pct !== undefined) {
+    const settings = await getGrowthSettings(auth.clinicId);
+    ownerInput = { ...ownerInput, discount_pct: Math.min(Number(ownerInput.discount_pct) || 0, settings.max_discount_pct) };
+  }
+  const updated = await decideGrowthProposal(
+    auth.clinicId, proposal.id, action === 'approve' ? 'approved' : 'declined', auth.email || auth.userId, ownerInput,
+  );
+  res.json({ proposal: updated });
+}
+
+/** POST /api/growth/settings — update the clinic's growth guardrails. Admin/owner only. */
+export async function handleUpdateGrowthSettings(req: Request, res: Response) {
+  const auth = getAuth(req);
+  if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'Read-only access.' });
+  const settings = mergeGrowthSettings(req.body?.settings ?? req.body);
+  await setGrowthSettings(auth.clinicId, settings);
+  res.json({ settings });
 }
 
 /** GET /api/memberships — all memberships for this clinic. */

@@ -1,6 +1,7 @@
 import { supabase } from './lib/supabase';
 import { buildReminderRows } from './lib/reminders';
 import { isPackageActive, isLowPackage } from './lib/clientOs';
+import { mergeGrowthSettings, type GrowthSettings, type GrowthType } from './lib/growth';
 import { encryptPaymentConfig, decryptClinicSecrets, encryptField, encryptTokens } from './lib/secretCrypto';
 
 export async function getClinic(id: string) {
@@ -1475,4 +1476,84 @@ export async function getClientsWithAnniversaryToday(clinicId: string) {
     const a: string = c.anniversary ?? '';
     return a.slice(5) === mmdd;
   });
+}
+
+// ---- Remi Growth: owner-guided campaign proposals --------------------------
+
+/** A clinic's growth guardrails + per-type config, merged over safe defaults. */
+export async function getGrowthSettings(clinicId: string): Promise<GrowthSettings> {
+  const { data } = await supabase.from('clinics').select('growth_settings').eq('id', clinicId).maybeSingle();
+  return mergeGrowthSettings(data?.growth_settings);
+}
+
+export async function setGrowthSettings(clinicId: string, settings: GrowthSettings) {
+  await supabase.from('clinics').update({ growth_settings: settings }).eq('id', clinicId);
+}
+
+/** Create a pending (or, for auto types, pre-sent) growth proposal. */
+export async function createGrowthProposal(clinicId: string, p: {
+  type: GrowthType; title: string; detail?: string; payload?: any;
+  status?: 'pending' | 'sent'; expires_at?: string;
+}) {
+  const { data } = await supabase.from('growth_proposals').insert({
+    clinic_id: clinicId, type: p.type, title: p.title, detail: p.detail ?? null,
+    payload: p.payload ?? {}, status: p.status ?? 'pending', expires_at: p.expires_at ?? null,
+  }).select().single();
+  return data;
+}
+
+/** List proposals for the dashboard Growth inbox (newest first). */
+export async function listGrowthProposals(clinicId: string, status?: string) {
+  let q = supabase.from('growth_proposals').select('*').eq('clinic_id', clinicId);
+  if (status) q = q.eq('status', status);
+  const { data } = await q.order('created_at', { ascending: false }).limit(100);
+  return data ?? [];
+}
+
+export async function getGrowthProposal(clinicId: string, id: string) {
+  const { data } = await supabase.from('growth_proposals').select('*')
+    .eq('clinic_id', clinicId).eq('id', id).maybeSingle();
+  return data;
+}
+
+export async function countPendingGrowthProposals(clinicId: string): Promise<number> {
+  const { count } = await supabase.from('growth_proposals')
+    .select('*', { count: 'exact', head: true })
+    .eq('clinic_id', clinicId).eq('status', 'pending');
+  return count ?? 0;
+}
+
+/** Has a recent, still-open proposal of this type? Prevents the generators from
+ *  re-proposing the same campaign every day while one awaits the owner. */
+export async function hasOpenGrowthProposal(clinicId: string, type: GrowthType): Promise<boolean> {
+  const { count } = await supabase.from('growth_proposals')
+    .select('*', { count: 'exact', head: true })
+    .eq('clinic_id', clinicId).eq('type', type).in('status', ['pending', 'approved']);
+  return (count ?? 0) > 0;
+}
+
+/** Owner approves/declines a proposal, optionally setting the specifics. */
+export async function decideGrowthProposal(
+  clinicId: string, id: string, status: 'approved' | 'declined', decidedBy: string, ownerInput?: any,
+) {
+  const { data } = await supabase.from('growth_proposals')
+    .update({ status, decided_by: decidedBy, decided_at: new Date().toISOString(), ...(ownerInput ? { owner_input: ownerInput } : {}) })
+    .eq('clinic_id', clinicId).eq('id', id).select().single();
+  return data;
+}
+
+/** Mark a proposal executed, recording what Remi actually did. */
+export async function markGrowthProposalSent(id: string, results: any) {
+  const { data } = await supabase.from('growth_proposals')
+    .update({ status: 'sent', sent_at: new Date().toISOString(), results })
+    .eq('id', id).select().single();
+  return data;
+}
+
+/** Approved proposals waiting to be executed by the scheduler. */
+export async function getApprovedGrowthProposals(clinicId: string) {
+  const { data } = await supabase.from('growth_proposals').select('*')
+    .eq('clinic_id', clinicId).eq('status', 'approved')
+    .order('decided_at', { ascending: true }).limit(50);
+  return data ?? [];
 }
