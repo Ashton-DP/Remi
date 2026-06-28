@@ -229,6 +229,21 @@
   .offer-btn:hover { opacity: .85; }
   .offer-btn.primary { background: var(--purple); color: #fff; }
   .offer-btn.outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  /* Secondary deep-dive link — alluring, but lighter than the See-plans button. */
+  .offer-deeplink {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;
+    padding: 8px 16px; border-radius: 22px; font-size: 13px; font-weight: 600;
+    color: #a78bfa; text-decoration: none;
+    background: rgba(124,111,234,0.1); border: 1px solid rgba(124,111,234,0.28);
+    transition: background .2s, border-color .2s, transform .2s, box-shadow .2s;
+  }
+  .offer-deeplink:hover {
+    background: rgba(124,111,234,0.2); border-color: var(--purple); color: #fff;
+    transform: translateY(-1px); box-shadow: 0 4px 16px rgba(124,111,234,0.25);
+  }
+  .offer-deeplink .arrow { transition: transform .2s; }
+  .offer-deeplink:hover .arrow { transform: translateX(4px); }
+  .offer-deeplink-wrap { text-align: center; }
 
   /* HOW IT WORKS */
   .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; }
@@ -489,7 +504,7 @@
       </ul>
       <p class="offer-price">from R2,900<span>/mo</span></p>
       <a href="#pricing" class="offer-btn primary">See plans</a>
-      <p style="margin-top:10px;text-align:center;font-size:13px;"><a href="/receptionist" style="color:var(--purple);font-weight:600;text-decoration:none;">See the AI receptionist →</a></p>
+      <p class="offer-deeplink-wrap"><a href="/receptionist" class="offer-deeplink">▶ See the AI receptionist <span class="arrow">→</span></a></p>
     </div>
     <!-- Complete -->
     <div class="offer">
@@ -505,7 +520,7 @@
       </ul>
       <p class="offer-price">from R6,500<span>/mo</span></p>
       <a href="#pricing" class="offer-btn outline">See plans</a>
-      <p style="margin-top:10px;text-align:center;font-size:13px;"><a href="/office" style="color:var(--purple);font-weight:600;text-decoration:none;">See the whole back office →</a></p>
+      <p class="offer-deeplink-wrap"><a href="/office" class="offer-deeplink">▶ See the whole back office <span class="arrow">→</span></a></p>
     </div>
   </div>
   <p class="offers-more">Just want to get paid? <a href="#pricing">PaidUp from R299/mo</a> &nbsp;·&nbsp; Running a group or multiple locations? <a href="#pricing">Remi for Chains →</a></p>
