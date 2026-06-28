@@ -7,6 +7,7 @@ import { Today } from '../screens/Today';
 import { Inbox } from '../screens/Inbox';
 import { Bookings } from '../screens/Bookings';
 import { GetPaid } from '../screens/GetPaid';
+import { Growth } from '../screens/Growth';
 import { Insights } from '../screens/Insights';
 import { Customers } from '../screens/Customers';
 import { Team } from '../screens/Team';
@@ -27,6 +28,7 @@ const NAV = [
   { key: 'inbox', label: 'Conversations', icon: 'inbox', title: 'Conversations', sub: 'Calls & messages Remi handled', ready: true },
   { key: 'bookings', label: 'Appointments', icon: 'bookings', title: 'Appointments', sub: 'Book, view and cancel appointments', ready: true },
   { key: 'getpaid', label: 'Get Paid', icon: 'getpaid', title: 'Get Paid', sub: 'Invoices Remi is chasing', ready: true },
+  { key: 'growth', label: 'Growth', icon: 'insights', title: 'Growth', sub: 'Remi fills your diary — you approve', ready: true },
   { key: 'insights', label: 'Insights', icon: 'insights', title: 'Insights', sub: 'Last 30 days', ready: true },
   { key: 'customers', label: 'Customers', icon: 'customers', title: 'Customers', sub: 'Everyone Remi has spoken to', ready: true },
   { key: 'tasks', label: 'Tasks', icon: 'today', title: 'Tasks & Messages', sub: 'The team to-do list & messages taken', ready: true },
@@ -39,7 +41,7 @@ const NAV = [
 const PLAN_NAV: Record<string, string[]> = {
   paidup: ['getpaid', 'team', 'settings'],
   basic: ['bookings', 'inbox', 'team', 'settings'],
-  standard: ['assistant', 'today', 'inbox', 'bookings', 'customers', 'tasks', 'teamops', 'team', 'settings'],
+  standard: ['assistant', 'today', 'inbox', 'bookings', 'customers', 'growth', 'tasks', 'teamops', 'team', 'settings'],
   complete: NAV.map((n) => n.key),
 };
 
@@ -128,6 +130,7 @@ export function Shell({ onSignOut }: { onSignOut: () => void }) {
           {view === 'inbox' && <Inbox />}
           {view === 'bookings' && <Bookings />}
           {view === 'getpaid' && <GetPaid />}
+          {view === 'growth' && <Growth />}
           {view === 'insights' && <Insights />}
           {view === 'operator' && <Operator />}
           {view === 'customers' && <Customers />}
