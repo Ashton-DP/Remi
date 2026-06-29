@@ -22,6 +22,12 @@ import {
 // configured; otherwise fall back to the Deepgram + ElevenLabs pipeline.
 const USE_AZURE = azureSpeechEnabled();
 
+// Half-duplex echo suppression: we ignore inbound caller audio while Remi is speaking
+// AND for a short tail afterwards, because the phone line echoes Remi's own voice back
+// into the inbound stream (there's no echo cancellation on Twilio media). Without this
+// the recogniser transcribes Remi's own greeting/replies and the bot talks to itself.
+const ECHO_GRACE_MS = parseInt(process.env.VOICE_ECHO_GRACE_MS ?? '800', 10);
+
 /**
  * Custom voice pipeline using Twilio Media Streams (raw audio) + our OWN providers:
  *   caller audio → Deepgram (streaming STT) → Gemini (runAgent) → ElevenLabs (TTS, μ-law 8k) → caller
@@ -96,6 +102,7 @@ interface CallCtx {
   lang: 'en' | 'af' | 'zu'; // caller's current language (from STT auto-detect)
   setupReady: Promise<void> | null; // resolves once client + conversation are loaded
   history: { role: string; content: string }[]; // in-memory transcript (avoids per-turn DB read)
+  muteUntil: number; // epoch ms until which caller audio is ignored (echo suppression)
 }
 
 const DG_URL = () =>
@@ -155,6 +162,7 @@ function azureSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string, voice: stri
       onDone: () => {
         if (!ctx.closed) twilioWs.send(JSON.stringify({ event: 'mark', streamSid: ctx.streamSid, mark: { name: 'eos' } }));
         if (ctx.azureTts === tts) ctx.azureTts = null;
+        ctx.muteUntil = Date.now() + ECHO_GRACE_MS; // ignore the echo tail of what we just said
         ctx.botSpeaking = false;
         resolve();
       },
@@ -188,6 +196,7 @@ async function elevenLabsSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string) 
     if (e?.name !== 'AbortError') console.error('[mediaStream] ElevenLabs speak error', e);
   } finally {
     if (ctx.ttsAbort === abort) ctx.ttsAbort = null;
+    ctx.muteUntil = Date.now() + ECHO_GRACE_MS; // ignore the echo tail of what we just said
     ctx.botSpeaking = false;
   }
 }
@@ -245,6 +254,7 @@ export function attachMediaStream(server: Server) {
       lang: 'en',
       setupReady: null,
       history: [],
+      muteUntil: 0,
     };
 
     // Absolute safety cap: tear the session down after MAX_CALL_MINUTES so a stuck
@@ -414,7 +424,10 @@ export function attachMediaStream(server: Server) {
           break;
         }
         case 'media': {
-          // Forward caller audio (base64 μ-law) to the active STT.
+          // Forward caller audio (base64 μ-law) to the active STT — but NOT while Remi
+          // is speaking or during the echo tail, or the recogniser hears Remi's own
+          // voice (phone-line echo) and the bot ends up answering itself.
+          if (ctx.botSpeaking || Date.now() < ctx.muteUntil) break;
           const payload = msg.media?.payload;
           if (!payload) break;
           if (USE_AZURE) {
