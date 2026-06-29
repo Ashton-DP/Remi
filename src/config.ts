@@ -73,7 +73,11 @@ export const config = {
     azureSpeechRegion: opt('AZURE_SPEECH_REGION', 'southafricanorth'),
     // Candidate languages for auto-detection (English + Afrikaans + isiZulu — the
     // three most-spoken; handles code-switching). Azure caps continuous LID at 4.
-    azureSttLanguages: opt('AZURE_STT_LANGUAGES', 'en-ZA,af-ZA,zu-ZA').split(',').map((s) => s.trim()).filter(Boolean),
+    // STT auto-detect candidate languages. Default to English + Afrikaans only:
+    // Azure's continuous language-ID across 3 acoustically-similar SA languages
+    // (adding zu-ZA) is unreliable and mis-tags English as Zulu/Afrikaans. Clinics
+    // that serve isiZulu callers can opt in via AZURE_STT_LANGUAGES=en-ZA,af-ZA,zu-ZA.
+    azureSttLanguages: opt('AZURE_STT_LANGUAGES', 'en-ZA,af-ZA').split(',').map((s) => s.trim()).filter(Boolean),
     // Azure TTS voice per reply language. en/af use natural multilingual voices
     // (spoken via SSML in the right locale); zu uses the native isiZulu voice.
     azureVoiceEn: opt('AZURE_VOICE_EN', 'en-US-AvaMultilingualNeural'),

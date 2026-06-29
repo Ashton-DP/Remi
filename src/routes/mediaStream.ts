@@ -359,15 +359,14 @@ export function attachMediaStream(server: Server) {
             ctx.azureStt = createAzureRecognizer({
               onInterim: () => bargeIn(ctx, twilioWs),
               onFinal: (utterance, lang) => {
-                // Trust Azure's STT language-ID as authoritative (reliable with the
-                // dedicated West Europe key); only fall back to text heuristics when
-                // Azure returns no language — keeps the detected language stable and
-                // avoids false flips on words shared between English and Afrikaans.
-                const detected: 'en' | 'af' | 'zu' =
-                  lang.startsWith('zu') ? 'zu' :
-                  lang.startsWith('af') ? 'af' :
-                  lang.startsWith('en') ? 'en' :
-                  detectZulu(utterance) ? 'zu' : detectAfrikaans(utterance) ? 'af' : 'en';
+                // English is the default and is "sticky": only switch the voice to
+                // Afrikaans/isiZulu when BOTH signals agree — Azure's STT language-ID
+                // AND our text heuristic on the transcript. Either alone misfires
+                // (Azure mistags English; shared words trip the text check), which is
+                // what made the voice jump to Zulu / German-ish Afrikaans mid-call.
+                const az: 'en' | 'af' | 'zu' = lang.startsWith('zu') ? 'zu' : lang.startsWith('af') ? 'af' : 'en';
+                const tx: 'en' | 'af' | 'zu' = detectZulu(utterance) ? 'zu' : detectAfrikaans(utterance) ? 'af' : 'en';
+                const detected: 'en' | 'af' | 'zu' = az !== 'en' && az === tx ? az : 'en';
                 ctx.lang = detected; // drives the TTS voice for this whole turn
                 const tag = detected === 'zu' ? '[Caller is speaking isiZulu] ' : detected === 'af' ? '[Caller is speaking Afrikaans] ' : '';
                 void handleUtterance(`${tag}${utterance}`).catch((e) => console.error('[mediaStream] utterance error', e));

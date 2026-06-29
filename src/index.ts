@@ -119,6 +119,7 @@ app.get('/health/voice', (_req, res) => {
     azureSttRegion: config.voice.azureSttRegion,
     voices: { en: config.voice.azureVoiceEn, af: config.voice.azureVoiceAf, zu: config.voice.azureVoiceZu },
     sttSilenceMs: config.voice.azureSttSilenceMs,
+    sttLanguages: config.voice.azureSttLanguages,
   });
 });
 
