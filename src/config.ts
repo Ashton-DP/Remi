@@ -61,8 +61,13 @@ export const config = {
     // Azure handles STT (understanding the caller) AND TTS (Remi's voice): a natural
     // multilingual voice per language. ElevenLabs is only a fallback if no Azure key.
     azureSpeechKey: opt('AZURE_SPEECH_KEY'),
-    // STT region MUST support af-ZA language ID — southafricanorth does NOT.
-    // Use westeurope or eastus for full af-ZA continuous language-ID support.
+    // Optional DEDICATED STT key. Azure keys are region-bound, and full multi-language
+    // continuous language-ID (en/af/zu auto-detect) needs westeurope/eastus —
+    // southafricanorth does NOT support it. So: to get af/zu auto-detect, create a
+    // Speech resource in westeurope and set AZURE_STT_KEY + AZURE_STT_REGION. If you
+    // leave AZURE_STT_KEY blank, STT falls back to the main key/region (works with a
+    // single SA key, but English-primary recognition).
+    azureSttKey: opt('AZURE_STT_KEY'),
     azureSttRegion: opt('AZURE_STT_REGION', 'westeurope'),
     // TTS region: southafricanorth is fine for af-ZA TTS (just voice synthesis, no LID).
     azureSpeechRegion: opt('AZURE_SPEECH_REGION', 'southafricanorth'),

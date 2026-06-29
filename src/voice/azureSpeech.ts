@@ -92,9 +92,12 @@ export function createAzureRecognizer(handlers: {
   onInterim: () => void;
   onFinal: (text: string, language: string) => void;
 }, phrases: string[] = []): AzureRecognizer {
-  // STT uses azureSttRegion (westeurope/eastus) — southafricanorth does NOT support
-  // af-ZA continuous language ID and silently falls back to English-only recognition.
-  const speechConfig = sdk.SpeechConfig.fromSubscription(config.voice.azureSpeechKey, config.voice.azureSttRegion);
+  // Azure keys are region-bound. Use a dedicated STT key+region if provided
+  // (westeurope/eastus → full en/af/zu continuous language-ID); otherwise fall back
+  // to the main key+region so a single SA key still works (English-primary STT).
+  const sttKey = config.voice.azureSttKey || config.voice.azureSpeechKey;
+  const sttRegion = config.voice.azureSttKey ? config.voice.azureSttRegion : config.voice.azureSpeechRegion;
+  const speechConfig = sdk.SpeechConfig.fromSubscription(sttKey, sttRegion);
   // Continuous language-ID so it keeps detecting af-ZA vs en-ZA throughout the
   // call (the default "at-start" mode fails to switch on code-switching).
   speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_LanguageIdMode, 'Continuous');
