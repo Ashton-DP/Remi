@@ -106,6 +106,22 @@ app.get('/health/db', async (_req, res) => {
   }
 });
 
+// Voice diagnostic — what voice pipeline + config is actually live. Safe: presence
+// flags + non-secret voice names/region only, no keys. Lets us confirm a deploy
+// picked up VOICE_MODE=mediastream and the Azure voices, without guessing.
+app.get('/health/voice', (_req, res) => {
+  res.json({
+    mode: config.voice.mode,
+    mediaWsUrl: config.voice.mediaWsUrl,
+    azureSpeechKey: Boolean(config.voice.azureSpeechKey),
+    azureSpeechRegion: config.voice.azureSpeechRegion,
+    azureSttKey: Boolean(config.voice.azureSttKey),
+    azureSttRegion: config.voice.azureSttRegion,
+    voices: { en: config.voice.azureVoiceEn, af: config.voice.azureVoiceAf, zu: config.voice.azureVoiceZu },
+    sttSilenceMs: config.voice.azureSttSilenceMs,
+  });
+});
+
 // Rate limiters (defence-in-depth; webhooks are also signature-gated). Generous
 // for Twilio webhooks (shared source IPs), tighter for the agent tools endpoint.
 const webhookLimiter = rateLimit({ name: 'webhook', windowMs: 60_000, max: Number(process.env.RL_WEBHOOK_MAX ?? 300) });
