@@ -7,3 +7,4 @@ dist/
 # Filled legal sheets with personal data — never commit
 docs/legal/*.local.md
 docs/legal/**/*.local.docx
+voice-samples/

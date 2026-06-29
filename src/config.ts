@@ -57,9 +57,9 @@ export const config = {
     deepgramApiKey: opt('DEEPGRAM_API_KEY'),
     deepgramModel: opt('DEEPGRAM_MODEL', 'nova-2-phonecall'),
     mediaWsUrl: opt('PUBLIC_MEDIA_WS_URL', 'wss://www.remireception.com/ws/media'),
-    // --- Azure Speech (English/Afrikaans/isiZulu STT auto-detect + zu/af TTS) ---
-    // Azure is used ONLY for STT (understanding the caller). TTS uses ElevenLabs
-    // for English and Azure af-ZA-AdriNeural for Afrikaans replies.
+    // --- Azure Speech (English/Afrikaans/isiZulu STT auto-detect + Azure TTS) ---
+    // Azure handles STT (understanding the caller) AND TTS (Remi's voice): a natural
+    // multilingual voice per language. ElevenLabs is only a fallback if no Azure key.
     azureSpeechKey: opt('AZURE_SPEECH_KEY'),
     // STT region MUST support af-ZA language ID — southafricanorth does NOT.
     // Use westeurope or eastus for full af-ZA continuous language-ID support.
@@ -69,8 +69,10 @@ export const config = {
     // Candidate languages for auto-detection (English + Afrikaans + isiZulu — the
     // three most-spoken; handles code-switching). Azure caps continuous LID at 4.
     azureSttLanguages: opt('AZURE_STT_LANGUAGES', 'en-ZA,af-ZA,zu-ZA').split(',').map((s) => s.trim()).filter(Boolean),
-    // Azure TTS voices for non-English replies (English goes through ElevenLabs).
-    azureVoiceAf: opt('AZURE_VOICE_AF', 'af-ZA-AdriNeural'),
+    // Azure TTS voice per reply language. en/af use natural multilingual voices
+    // (spoken via SSML in the right locale); zu uses the native isiZulu voice.
+    azureVoiceEn: opt('AZURE_VOICE_EN', 'en-US-AvaMultilingualNeural'),
+    azureVoiceAf: opt('AZURE_VOICE_AF', 'en-GB-AdaMultilingualNeural'),
     azureVoiceZu: opt('AZURE_VOICE_ZU', 'zu-ZA-ThandoNeural'),
     // How long Azure waits for silence before finalising a caller's utterance.
     azureSttSilenceMs: parseInt(opt('AZURE_STT_SILENCE_MS', '500'), 10),

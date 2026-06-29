@@ -149,6 +149,8 @@ export interface AzureSynthesis { stop(): void; }
 export function azureSynthesize(opts: {
   text: string;
   voice: string;
+  locale?: string;       // when set, speak via SSML in this language — needed so a
+                         // multilingual voice (e.g. Ada) reliably speaks Afrikaans.
   onChunk: (mulaw: Buffer) => void;
   onDone: () => void;
 }): AzureSynthesis {
@@ -168,11 +170,15 @@ export function azureSynthesize(opts: {
   const synthesizer = new sdk.SpeechSynthesizer(speechConfig, audioConfig);
 
   const finish = () => { try { synthesizer.close(); } catch { /* */ } opts.onDone(); };
-  synthesizer.speakTextAsync(
-    opts.text,
-    () => finish(),
-    (err) => { console.error('[azure] TTS error:', err); finish(); },
-  );
+  const ok = () => finish();
+  const fail = (err: any) => { console.error('[azure] TTS error:', err); finish(); };
+  if (opts.locale) {
+    const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]!));
+    const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${opts.locale}"><voice name="${opts.voice}">${esc(opts.text)}</voice></speak>`;
+    synthesizer.speakSsmlAsync(ssml, ok, fail);
+  } else {
+    synthesizer.speakTextAsync(opts.text, ok, fail);
+  }
 
   return {
     stop() {

@@ -90,13 +90,14 @@ function openDeepgram(
   return dg;
 }
 
-/** Stream Azure TTS μ-law 8k to Twilio — used for Afrikaans + isiZulu replies. */
-function azureSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string, voice: string): Promise<void> {
+/** Stream Azure TTS μ-law 8k to Twilio — Remi's voice, per reply language. */
+function azureSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string, voice: string, locale: string): Promise<void> {
   ctx.botSpeaking = true;
   return new Promise<void>((resolve) => {
     const tts = azureSynthesize({
       text,
       voice,
+      locale,
       onChunk: (mulaw) => {
         if (ctx.closed) return;
         twilioWs.send(JSON.stringify({ event: 'media', streamSid: ctx.streamSid, media: { payload: mulaw.toString('base64') } }));
@@ -142,18 +143,19 @@ async function elevenLabsSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string) 
 }
 
 /**
- * Route TTS by reply language:
- *   isiZulu reply   → Azure zu-ZA neural voice
- *   Afrikaans reply → Azure af-ZA neural voice
- *   English reply   → ElevenLabs (warm, conversational English voice)
+ * Route TTS by reply language (all Azure neural, spoken in-locale via SSML):
+ *   English   → Ava (multilingual)   · Afrikaans → Ada (multilingual)
+ *   isiZulu   → Thando (native zu-ZA)
+ * ElevenLabs is only a fallback when no Azure key is configured.
  */
 async function speak(ctx: CallCtx, twilioWs: WebSocket, text: string) {
   const clean = speechNormalize(text);
   if (USE_AZURE) {
-    if (detectZulu(clean)) return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceZu);
-    if (detectAfrikaans(clean)) return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceAf);
+    if (detectZulu(clean)) return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceZu, 'zu-ZA');
+    if (detectAfrikaans(clean)) return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceAf, 'af-ZA');
+    return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceEn, 'en-ZA');
   }
-  return elevenLabsSpeak(ctx, twilioWs, clean);
+  return elevenLabsSpeak(ctx, twilioWs, clean); // fallback only when no Azure key
 }
 
 /** Stop any in-progress TTS and flush Twilio's playback buffer (barge-in). */
