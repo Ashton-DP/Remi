@@ -68,6 +68,7 @@ export function buildMediaStreamTwiml(clinic: any, from: string, callSid: string
     '  <Connect>',
     `    <Stream url="${xmlEscape(config.voice.mediaWsUrl)}">`,
     `      <Parameter name="clinicId" value="${xmlEscape(clinicId)}"/>`,
+    `      <Parameter name="clinicName" value="${xmlEscape(clinic?.name ?? '')}"/>`,
     `      <Parameter name="from" value="${xmlEscape(from)}"/>`,
     `      <Parameter name="callSid" value="${xmlEscape(callSid)}"/>`,
     `      <Parameter name="exp" value="${exp}"/>`,
@@ -94,6 +95,7 @@ interface CallCtx {
   closed: boolean;
   lang: 'en' | 'af' | 'zu'; // caller's current language (from STT auto-detect)
   setupReady: Promise<void> | null; // resolves once client + conversation are loaded
+  history: { role: string; content: string }[]; // in-memory transcript (avoids per-turn DB read)
 }
 
 const DG_URL = () =>
@@ -242,6 +244,7 @@ export function attachMediaStream(server: Server) {
       closed: false,
       lang: 'en',
       setupReady: null,
+      history: [],
     };
 
     // Absolute safety cap: tear the session down after MAX_CALL_MINUTES so a stuck
@@ -313,14 +316,16 @@ export function attachMediaStream(server: Server) {
       };
 
       try {
-        if (ctx.setupReady) await ctx.setupReady; // ensure client + conversation are loaded
+        if (ctx.setupReady) await ctx.setupReady; // ensure client + conversation + history loaded
         if (ctx.closed || !ctx.convo.id) return;
-        await saveMessage(ctx.convo.id, 'in', text);
-        const history = await getHistory(ctx.convo.id);
-        console.log(`[lat] db (save+history) +${Date.now() - t0}ms`);
+        console.log(`[lat] setup ready +${Date.now() - t0}ms`);
+        // History is kept in memory; persist the inbound message in the background so
+        // the DB write isn't on the path to Remi's reply.
+        ctx.history.push({ role: 'user', content: text });
+        void saveMessage(ctx.convo.id, 'in', text).catch((e) => console.error('[mediaStream] saveMessage(in)', e));
         let firstSentence = false;
         const reply = await runAgentStream(
-          ctx.clinic, ctx.customer, ctx.convo, history, ctx.isFirstTurn, true,
+          ctx.clinic, ctx.customer, ctx.convo, ctx.history, ctx.isFirstTurn, true,
           (sentence) => {
             if (!firstSentence) { firstSentence = true; console.log(`[lat] brain first sentence +${Date.now() - t0}ms`); }
             if (!abort.aborted && !ctx.closed) { queue.push(sentence); void pump(); }
@@ -328,7 +333,10 @@ export function attachMediaStream(server: Server) {
           abort,
         );
         ctx.isFirstTurn = false;
-        if (reply && !abort.aborted) await saveMessage(ctx.convo.id, 'out', reply);
+        if (reply && !abort.aborted) {
+          ctx.history.push({ role: 'assistant', content: reply });
+          void saveMessage(ctx.convo.id, 'out', reply).catch((e) => console.error('[mediaStream] saveMessage(out)', e));
+        }
         // Wait for the queued sentences to finish before ending the turn.
         while ((queue.length || pumping) && !ctx.closed && !abort.aborted) await sleep(50);
         console.log(`[lat] turn complete +${Date.now() - t0}ms`);
@@ -360,29 +368,27 @@ export function attachMediaStream(server: Server) {
             teardown();
             break;
           }
-          // Load ONLY the clinic before greeting (one quick read), then greet
-          // immediately. The client + conversation records are loaded in the
-          // background (ctx.setupReady) so the caller isn't met with dead air while
-          // we hit the DB — handleUtterance awaits setupReady before its first turn.
-          let clinic: any;
-          try {
-            clinic = await getClinic(params.clinicId);
-          } catch (e) {
-            console.error('[mediaStream] getClinic error', e); teardown(); break;
-          }
-          if (!clinic) { console.error('[mediaStream] unknown clinic in start frame'); teardown(); break; }
-          ctx.clinic = clinic;
+          // GREET INSTANTLY — no DB on the critical path. The clinic name rides in on
+          // the (token-gated) TwiML params, so Remi can start speaking the moment the
+          // stream connects. Everything else — the clinic record, client, conversation
+          // and prior history — loads in the background (ctx.setupReady); the first
+          // caller turn awaits it (it finishes long before the greeting does).
+          const clinicName = (params.clinicName || '').trim() || 'the clinic';
           ctx.setupReady = (async () => {
+            const clinic = await getClinic(params.clinicId);
+            if (!clinic) throw new Error('unknown clinic');
+            ctx.clinic = clinic;
             const { client: customer, isNew } = await getOrCreateClient(clinic.id, params.from || '');
             ctx.customer = customer;
             ctx.convo = await getOrCreateConversation(clinic.id, customer.id);
             ctx.isFirstTurn = isNew;
+            ctx.history = await getHistory(ctx.convo.id); // load once; kept in memory thereafter
           })();
-          ctx.setupReady.catch((e) => { console.error('[mediaStream] client/convo setup error', e); teardown(); });
+          ctx.setupReady.catch((e) => { console.error('[mediaStream] background setup error', e); teardown(); });
           // Greet in English (the language nearly everyone here understands) and warmly
           // invite the caller to use Afrikaans or isiZulu — so they pick, rather than us
           // guessing wrong and answering in a language they don't speak.
-          const greeting = `Hi, thanks for calling ${clinic.name}. You're speaking to Remi, the virtual assistant. Feel free to talk to me in English, Afrikaans, or isiZulu — whichever you prefer. How can I help you today?`;
+          const greeting = `Hi, thanks for calling ${clinicName}. You're speaking to Remi, the virtual assistant. Feel free to talk to me in English, Afrikaans, or isiZulu — whichever you prefer. How can I help you today?`;
           if (USE_AZURE) {
             // Azure STT auto-detects en-ZA/af-ZA/zu-ZA; barge-in on interim, turn on final.
             // Prefix the detected language so the brain knows which to mirror.
