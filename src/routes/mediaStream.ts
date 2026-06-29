@@ -198,13 +198,13 @@ async function elevenLabsSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string) 
 async function speak(ctx: CallCtx, twilioWs: WebSocket, text: string) {
   const clean = speechNormalize(text);
   if (USE_AZURE) {
-    // Pick the language: trust strong reply-text signals first, but fall back to the
-    // caller's STT-detected language (ctx.lang) so a short Afrikaans/isiZulu reply that
-    // doesn't trip text detection still gets the right voice+locale — otherwise it'd be
-    // spoken by the English voice and sound foreign/Germanic.
-    const lang = detectZulu(clean) ? 'zu' : detectAfrikaans(clean) ? 'af' : ctx.lang;
-    if (lang === 'zu') return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceZu, 'zu-ZA');
-    if (lang === 'af') return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceAf, 'af-ZA');
+    // Voice is driven SOLELY by the language the CALLER spoke (ctx.lang, set once per
+    // caller turn from STT) — never by re-parsing Remi's reply text. This keeps a
+    // single, consistent voice for the whole answer (no mid-sentence accent flips from
+    // shared words like "is"/"die" tripping a detector), and only switches when the
+    // caller themselves switches language.
+    if (ctx.lang === 'zu') return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceZu, 'zu-ZA');
+    if (ctx.lang === 'af') return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceAf, 'af-ZA');
     return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceEn, 'en-ZA');
   }
   return elevenLabsSpeak(ctx, twilioWs, clean); // fallback only when no Azure key
@@ -359,10 +359,17 @@ export function attachMediaStream(server: Server) {
             ctx.azureStt = createAzureRecognizer({
               onInterim: () => bargeIn(ctx, twilioWs),
               onFinal: (utterance, lang) => {
-                const isZu = lang.startsWith('zu') || detectZulu(utterance);
-                const isAf = !isZu && (lang.startsWith('af') || detectAfrikaans(utterance));
-                ctx.lang = isZu ? 'zu' : isAf ? 'af' : 'en'; // remember for TTS voice selection
-                const tag = isZu ? '[Caller is speaking isiZulu] ' : isAf ? '[Caller is speaking Afrikaans] ' : '';
+                // Trust Azure's STT language-ID as authoritative (reliable with the
+                // dedicated West Europe key); only fall back to text heuristics when
+                // Azure returns no language — keeps the detected language stable and
+                // avoids false flips on words shared between English and Afrikaans.
+                const detected: 'en' | 'af' | 'zu' =
+                  lang.startsWith('zu') ? 'zu' :
+                  lang.startsWith('af') ? 'af' :
+                  lang.startsWith('en') ? 'en' :
+                  detectZulu(utterance) ? 'zu' : detectAfrikaans(utterance) ? 'af' : 'en';
+                ctx.lang = detected; // drives the TTS voice for this whole turn
+                const tag = detected === 'zu' ? '[Caller is speaking isiZulu] ' : detected === 'af' ? '[Caller is speaking Afrikaans] ' : '';
                 void handleUtterance(`${tag}${utterance}`).catch((e) => console.error('[mediaStream] utterance error', e));
               },
             }, sttPhraseHints(ctx.clinic));
