@@ -38,10 +38,16 @@ export const config = {
     calendarId: opt('GOOGLE_CALENDAR_ID', 'primary'),
     serviceAccountJson: opt('GOOGLE_SERVICE_ACCOUNT_JSON'),
   },
-  // Voice mode: 'gather' (TwiML <Gather>/<Say> — works today) or 'conversationrelay'
-  // (real-time WebSocket + ElevenLabs natural voice — needs Twilio CR onboarding).
+  // Voice mode:
+  //  'conversationrelay' (RECOMMENDED) — Twilio-managed real-time pipeline: Twilio
+  //     handles listening, echo cancellation and barge-in natively; ElevenLabs voice.
+  //     This is the smooth, robust path.
+  //  'mediastream' — custom Azure (or Deepgram+ElevenLabs) pipeline where we hand-roll
+  //     STT/echo/barge-in ourselves. More control (distinct per-language voices) but
+  //     fragile; only use if you specifically need the custom voices.
+  //  'gather' — basic TwiML <Gather>/<Say> fallback.
   voice: {
-    mode: opt('VOICE_MODE', 'mediastream'),
+    mode: opt('VOICE_MODE', 'conversationrelay'),
     elevenLabsVoiceId: opt('ELEVENLABS_VOICE_ID'),
     // Public wss:// URL of this server's ConversationRelay WebSocket endpoint.
     wsUrl: opt('PUBLIC_WS_URL', 'wss://www.remireception.com/ws/voice'),
