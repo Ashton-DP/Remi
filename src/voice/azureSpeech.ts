@@ -98,9 +98,12 @@ export function createAzureRecognizer(handlers: {
   const sttKey = config.voice.azureSttKey || config.voice.azureSpeechKey;
   const sttRegion = config.voice.azureSttKey ? config.voice.azureSttRegion : config.voice.azureSpeechRegion;
   const speechConfig = sdk.SpeechConfig.fromSubscription(sttKey, sttRegion);
-  // Continuous language-ID so it keeps detecting af-ZA vs en-ZA throughout the
-  // call (the default "at-start" mode fails to switch on code-switching).
-  speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_LanguageIdMode, 'Continuous');
+  // AT-START language-ID: identify the language ONCE from the opening audio and keep
+  // it for the whole call. Continuous mode re-decides every utterance, which flaps
+  // wildly across the 3 acoustically-similar SA languages (English heard as Zulu,
+  // etc.). Callers almost never change language mid-call, so one stable decision is
+  // far more reliable than constant re-detection.
+  speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_LanguageIdMode, 'AtStart');
   // Finalise the caller's turn faster after they stop speaking (lower latency).
   speechConfig.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, String(config.voice.azureSttSilenceMs));
   const autoDetect = sdk.AutoDetectSourceLanguageConfig.fromLanguages(config.voice.azureSttLanguages);

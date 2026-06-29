@@ -93,6 +93,7 @@ interface CallCtx {
   ttsAbort: AbortController | null;
   closed: boolean;
   lang: 'en' | 'af' | 'zu'; // caller's current language (from STT auto-detect)
+  setupReady: Promise<void> | null; // resolves once client + conversation are loaded
 }
 
 const DG_URL = () =>
@@ -240,6 +241,7 @@ export function attachMediaStream(server: Server) {
       ttsAbort: null,
       closed: false,
       lang: 'en',
+      setupReady: null,
     };
 
     // Absolute safety cap: tear the session down after MAX_CALL_MINUTES so a stuck
@@ -264,28 +266,23 @@ export function attachMediaStream(server: Server) {
     const MAX_TURNS = parseInt(process.env.MAX_CALL_TURNS ?? '40', 10);
     let turnCount = 0;
 
-    // Per-call language lock. Rather than re-detect every sentence (which flaps across
-    // the 3 similar SA languages), we LOCK the call's language on the first confident
-    // read and only switch on sustained evidence — callers rarely change language
-    // mid-call, so this is far more reliable than per-utterance detection.
-    let langConfirmed = false;        // has a confident language been locked yet?
-    let switchCand: 'en' | 'af' | 'zu' | null = null;
-    let switchvotes = 0;              // consecutive corroborated reads of a NEW language
-    const SWITCH_VOTES_NEEDED = 2;    // require 2 in a row before changing a locked language
-    /** Update ctx.lang from one utterance's STT language-ID + transcript heuristic. */
+    // Per-call language lock. Azure runs in AT-START mode (one language decision per
+    // call), so we take that decision from the first real utterance and keep it — no
+    // per-sentence re-detection, which is what caused the mid-call flapping. We wait
+    // for a 3+ word utterance before locking so a bare "hello" doesn't pin the call.
+    let langConfirmed = false;
     const updateLang = (utterance: string, sttLang: string) => {
-      const az: 'en' | 'af' | 'zu' = sttLang.startsWith('zu') ? 'zu' : sttLang.startsWith('af') ? 'af' : 'en';
+      if (langConfirmed) return; // already locked for this call
+      const az: 'en' | 'af' | 'zu' | '' =
+        sttLang.startsWith('zu') ? 'zu' : sttLang.startsWith('af') ? 'af' : sttLang.startsWith('en') ? 'en' : '';
       const tx: 'en' | 'af' | 'zu' = detectZulu(utterance) ? 'zu' : detectAfrikaans(utterance) ? 'af' : 'en';
-      // Only act when BOTH signals agree; disagreement = uncertain, keep current language.
-      if (az !== tx) { switchvotesReset(); return; }
-      const candidate = az;
-      if (!langConfirmed) { ctx.lang = candidate; langConfirmed = true; switchvotesReset(); return; }
-      if (candidate === ctx.lang) { switchvotesReset(); return; }
-      switchvotes = candidate === switchCand ? switchvotes + 1 : 1;
-      switchCand = candidate;
-      if (switchvotes >= SWITCH_VOTES_NEEDED) { ctx.lang = candidate; switchvotesReset(); }
+      // English is the safe default (almost everyone here understands it). Only switch
+      // the voice to Afrikaans/isiZulu when Azure's at-start decision AND the transcript
+      // heuristic agree on the SAME non-English language — so the worst case (answering
+      // a caller in a language they don't speak) needs two independent signals, not one.
+      ctx.lang = az !== '' && az !== 'en' && az === tx ? az : 'en';
+      if (utterance.trim().split(/\s+/).length >= 3) langConfirmed = true; // lock on first real sentence
     };
-    const switchvotesReset = () => { switchvotes = 0; switchCand = null; };
 
     const handleUtterance = async (text: string) => {
       if (ctx.thinking || ctx.closed) return; // one turn at a time
@@ -316,6 +313,8 @@ export function attachMediaStream(server: Server) {
       };
 
       try {
+        if (ctx.setupReady) await ctx.setupReady; // ensure client + conversation are loaded
+        if (ctx.closed || !ctx.convo.id) return;
         await saveMessage(ctx.convo.id, 'in', text);
         const history = await getHistory(ctx.convo.id);
         console.log(`[lat] db (save+history) +${Date.now() - t0}ms`);
@@ -361,21 +360,29 @@ export function attachMediaStream(server: Server) {
             teardown();
             break;
           }
+          // Load ONLY the clinic before greeting (one quick read), then greet
+          // immediately. The client + conversation records are loaded in the
+          // background (ctx.setupReady) so the caller isn't met with dead air while
+          // we hit the DB — handleUtterance awaits setupReady before its first turn.
+          let clinic: any;
           try {
-            const clinic = await getClinic(params.clinicId);
-            if (!clinic) { console.error('[mediaStream] unknown clinic in start frame'); teardown(); break; }
-            const { client: customer, isNew } = await getOrCreateClient(clinic.id, params.from || '');
-            const convo = await getOrCreateConversation(clinic.id, customer.id);
-            ctx.clinic = clinic;
-            ctx.customer = customer;
-            ctx.convo = convo;
-            ctx.isFirstTurn = isNew;
+            clinic = await getClinic(params.clinicId);
           } catch (e) {
-            console.error('[mediaStream] start/setup error', e);
-            teardown();
-            break;
+            console.error('[mediaStream] getClinic error', e); teardown(); break;
           }
-          const greeting = `Thanks for calling ${ctx.clinic?.name ?? 'the clinic'}. I'm Remi, the virtual assistant. How can I help you today?`;
+          if (!clinic) { console.error('[mediaStream] unknown clinic in start frame'); teardown(); break; }
+          ctx.clinic = clinic;
+          ctx.setupReady = (async () => {
+            const { client: customer, isNew } = await getOrCreateClient(clinic.id, params.from || '');
+            ctx.customer = customer;
+            ctx.convo = await getOrCreateConversation(clinic.id, customer.id);
+            ctx.isFirstTurn = isNew;
+          })();
+          ctx.setupReady.catch((e) => { console.error('[mediaStream] client/convo setup error', e); teardown(); });
+          // Greet in English (the language nearly everyone here understands) and warmly
+          // invite the caller to use Afrikaans or isiZulu — so they pick, rather than us
+          // guessing wrong and answering in a language they don't speak.
+          const greeting = `Hi, thanks for calling ${clinic.name}. You're speaking to Remi, the virtual assistant. Feel free to talk to me in English, Afrikaans, or isiZulu — whichever you prefer. How can I help you today?`;
           if (USE_AZURE) {
             // Azure STT auto-detects en-ZA/af-ZA/zu-ZA; barge-in on interim, turn on final.
             // Prefix the detected language so the brain knows which to mirror.
