@@ -264,6 +264,29 @@ export function attachMediaStream(server: Server) {
     const MAX_TURNS = parseInt(process.env.MAX_CALL_TURNS ?? '40', 10);
     let turnCount = 0;
 
+    // Per-call language lock. Rather than re-detect every sentence (which flaps across
+    // the 3 similar SA languages), we LOCK the call's language on the first confident
+    // read and only switch on sustained evidence — callers rarely change language
+    // mid-call, so this is far more reliable than per-utterance detection.
+    let langConfirmed = false;        // has a confident language been locked yet?
+    let switchCand: 'en' | 'af' | 'zu' | null = null;
+    let switchvotes = 0;              // consecutive corroborated reads of a NEW language
+    const SWITCH_VOTES_NEEDED = 2;    // require 2 in a row before changing a locked language
+    /** Update ctx.lang from one utterance's STT language-ID + transcript heuristic. */
+    const updateLang = (utterance: string, sttLang: string) => {
+      const az: 'en' | 'af' | 'zu' = sttLang.startsWith('zu') ? 'zu' : sttLang.startsWith('af') ? 'af' : 'en';
+      const tx: 'en' | 'af' | 'zu' = detectZulu(utterance) ? 'zu' : detectAfrikaans(utterance) ? 'af' : 'en';
+      // Only act when BOTH signals agree; disagreement = uncertain, keep current language.
+      if (az !== tx) { switchvotesReset(); return; }
+      const candidate = az;
+      if (!langConfirmed) { ctx.lang = candidate; langConfirmed = true; switchvotesReset(); return; }
+      if (candidate === ctx.lang) { switchvotesReset(); return; }
+      switchvotes = candidate === switchCand ? switchvotes + 1 : 1;
+      switchCand = candidate;
+      if (switchvotes >= SWITCH_VOTES_NEEDED) { ctx.lang = candidate; switchvotesReset(); }
+    };
+    const switchvotesReset = () => { switchvotes = 0; switchCand = null; };
+
     const handleUtterance = async (text: string) => {
       if (ctx.thinking || ctx.closed) return; // one turn at a time
       if (++turnCount > MAX_TURNS) {
@@ -359,16 +382,8 @@ export function attachMediaStream(server: Server) {
             ctx.azureStt = createAzureRecognizer({
               onInterim: () => bargeIn(ctx, twilioWs),
               onFinal: (utterance, lang) => {
-                // English is the default and is "sticky": only switch the voice to
-                // Afrikaans/isiZulu when BOTH signals agree — Azure's STT language-ID
-                // AND our text heuristic on the transcript. Either alone misfires
-                // (Azure mistags English; shared words trip the text check), which is
-                // what made the voice jump to Zulu / German-ish Afrikaans mid-call.
-                const az: 'en' | 'af' | 'zu' = lang.startsWith('zu') ? 'zu' : lang.startsWith('af') ? 'af' : 'en';
-                const tx: 'en' | 'af' | 'zu' = detectZulu(utterance) ? 'zu' : detectAfrikaans(utterance) ? 'af' : 'en';
-                const detected: 'en' | 'af' | 'zu' = az !== 'en' && az === tx ? az : 'en';
-                ctx.lang = detected; // drives the TTS voice for this whole turn
-                const tag = detected === 'zu' ? '[Caller is speaking isiZulu] ' : detected === 'af' ? '[Caller is speaking Afrikaans] ' : '';
+                updateLang(utterance, lang); // locks/keeps/switches ctx.lang with hysteresis
+                const tag = ctx.lang === 'zu' ? '[Caller is speaking isiZulu] ' : ctx.lang === 'af' ? '[Caller is speaking Afrikaans] ' : '';
                 void handleUtterance(`${tag}${utterance}`).catch((e) => console.error('[mediaStream] utterance error', e));
               },
             }, sttPhraseHints(ctx.clinic));
