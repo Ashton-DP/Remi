@@ -27,7 +27,7 @@ import {
   decideGrowthProposal, countPendingGrowthProposals, markGrowthProposalSent,
   listReferrals, rewardReferral,
 } from '../db';
-import { mergeGrowthSettings } from '../lib/growth';
+import { mergeGrowthSettings, isEnabled } from '../lib/growth';
 import { executeGrowthProposal } from '../lib/growthEngine';
 import { sumHours, startOfWeek, formatHours } from '../lib/teamOps';
 import { sendProactiveWhatsApp } from '../lib/twilio';
@@ -212,10 +212,16 @@ export async function handleCreatePackage(req: Request, res: Response) {
   const auth = getAuth(req);
   if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'Read-only access.' });
   const { client_id, name, sessions_total, expires_at } = req.body ?? {};
-  if (!client_id || !name || !sessions_total) return res.status(400).json({ error: 'client_id, name, sessions_total are required.' });
+  const total = Number(sessions_total);
+  if (!client_id || !name) return res.status(400).json({ error: 'client_id and name are required.' });
+  if (!Number.isInteger(total) || total <= 0) return res.status(400).json({ error: 'sessions_total must be a positive whole number.' });
+  // Guard: the client must belong to this clinic (clinic_id is forced below, so a
+  // foreign client_id would otherwise attach a package across tenants).
+  const client = await getClientProfile(String(client_id));
+  if (!client || client.clinic_id !== auth.clinicId) return res.status(404).json({ error: 'Client not found.' });
   const pkg = await upsertPackage(auth.clinicId, String(client_id), {
     name: String(name),
-    sessions_total: Number(sessions_total),
+    sessions_total: total,
     expires_at: expires_at ?? undefined,
   });
   res.status(201).json({ package: pkg });
@@ -239,7 +245,7 @@ export async function handleRewardReferral(req: Request, res: Response) {
   const auth = getAuth(req);
   if (!roleAtLeast(auth.role, 'admin')) return res.status(403).json({ error: 'Read-only access.' });
   const r = await rewardReferral(auth.clinicId, String(req.params.id));
-  if (!r) return res.status(404).json({ error: 'Not found.' });
+  if (!r) return res.status(409).json({ error: 'Only a referral that has booked (and not yet been rewarded) can be rewarded.' });
   const phone = (r as any).referrer?.phone;
   const clinic = await getClinic(auth.clinicId);
   if (phone) {
@@ -269,10 +275,17 @@ export async function handleDecideGrowth(req: Request, res: Response) {
   const updated = await decideGrowthProposal(
     auth.clinicId, proposal.id, action === 'approve' ? 'approved' : 'declined', auth.email || auth.userId, ownerInput,
   );
+  // Lost a concurrent decide race (row was no longer pending) — bail, don't execute.
+  if (!updated) return res.status(409).json({ error: 'Already decided.' });
   // On approve, run it now (target lists are small) so the owner sees what went out.
   if (action === 'approve') {
     try {
       const [clinic, settings] = await Promise.all([getClinic(auth.clinicId), getGrowthSettings(auth.clinicId)]);
+      // Re-check the feature is still enabled — the owner may have turned this growth
+      // type off after the proposal was generated; don't run a now-disabled campaign.
+      if (!isEnabled(updated.type, settings)) {
+        return res.json({ proposal: updated, results: { skipped: 'this growth type is currently disabled' } });
+      }
       const results = await executeGrowthProposal(clinic, updated, settings);
       const sent = await markGrowthProposalSent(updated.id, results);
       return res.json({ proposal: sent, results });

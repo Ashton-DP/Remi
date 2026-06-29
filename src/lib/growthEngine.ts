@@ -5,7 +5,7 @@
  */
 import { computeFreeSlots } from './slots';
 import { getBookingProvider } from './booking';
-import { sendProactiveWhatsApp } from './twilio';
+import { sendMarketingWhatsApp } from './twilio';
 import { allowedDiscount, isEnabled, isAuto, type GrowthSettings } from './growth';
 import {
   listWaitlist, getLapsedClients, markReactivated,
@@ -88,7 +88,7 @@ export async function executeGapFill(clinic: any, proposal: any, settings: Growt
     if (!t.phone) continue;
     const deal = discount > 0 ? ` — and ${discount}% off as a thank-you` : '';
     try {
-      await sendProactiveWhatsApp(t.phone, {
+      await sendMarketingWhatsApp(clinic.id, t.phone, {
         fallbackBody: `Hi ${t.name}! 👋 A few openings have just come up at ${clinic.name} (${whenLabel})${deal}. Would you like me to grab one for you? Reply here and I'll book you in 💛`,
       });
       sent++;
@@ -123,7 +123,7 @@ export async function executeWinback(clinic: any, proposal: any, settings: Growt
     if (!t.phone) continue;
     const deal = discount > 0 ? ` We'd love to welcome you back with ${discount}% off your next visit.` : '';
     try {
-      await sendProactiveWhatsApp(t.phone, {
+      await sendMarketingWhatsApp(clinic.id, t.phone, {
         fallbackBody: `Hi ${t.name} 👋 It's been a little while since we saw you at ${clinic.name} — we'd love to have you back!${deal} Want me to find you a time? Just reply here 💛`,
       });
       sent++; await markReactivated(t.id).catch(() => {});
@@ -157,7 +157,7 @@ export async function executeOffpeak(clinic: any, proposal: any, settings: Growt
     if (!t.phone) continue;
     const deal = discount > 0 ? `${discount}% off` : 'a special rate';
     try {
-      await sendProactiveWhatsApp(t.phone, {
+      await sendMarketingWhatsApp(clinic.id, t.phone, {
         fallbackBody: `Hi ${t.name}! 🌟 This week ${clinic.name} has ${deal} on ${windows}. Want me to book you in? Just reply here 💛`,
       });
       sent++;
@@ -196,7 +196,7 @@ export async function executeReferral(clinic: any, proposal: any, _settings: Gro
       const share = link
         ? ` Share this link with them and they're all set: ${link}`
         : ` Just have them mention your code “${code}” when they book.`;
-      await sendProactiveWhatsApp(t.phone, {
+      await sendMarketingWhatsApp(clinic.id, t.phone, {
         fallbackBody: `Hi ${t.name}! 💛 So glad you've been enjoying ${clinic.name}. Know someone who'd love us too? Refer a friend and ${reward}.${share}`,
       });
       sent++;

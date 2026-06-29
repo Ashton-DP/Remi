@@ -90,7 +90,7 @@ export async function handleInboundCall(req: Request, res: Response) {
     }
     // Custom pipeline mode: stream raw audio to our Media Streams WS (own STT/TTS).
     if (config.voice.mode === 'mediastream') {
-      return res.type('text/xml').send(buildMediaStreamTwiml(clinic, from));
+      return res.type('text/xml').send(buildMediaStreamTwiml(clinic, from, callSid));
     }
 
     const { client: customer, isNew } = await getOrCreateClient(clinic.id, from);

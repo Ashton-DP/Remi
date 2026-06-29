@@ -1,4 +1,5 @@
 import type { Server } from 'node:http';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { config } from '../config';
 import {
@@ -29,15 +30,48 @@ const USE_AZURE = azureSpeechEnabled();
  * Gated behind VOICE_MODE=mediastream.
  */
 
-/** TwiML that streams the call's raw audio to our /ws/media WebSocket. */
-export function buildMediaStreamTwiml(clinic: any, from: string): string {
+// ── Media-stream auth ─────────────────────────────────────────────────────────
+// The /ws/media socket is public and Twilio Media Streams cannot send custom
+// headers, so we mint a short-lived HMAC token (signed with the Twilio auth token)
+// into the TwiML <Parameter>s and verify it in the `start` frame. This binds the
+// connection to the exact clinicId+from+callSid the TwiML was generated for, so a
+// stranger can't connect, forge an arbitrary clinic/caller, write conversation
+// history, or burn billable STT/LLM/TTS. Twilio connects within seconds of the
+// TwiML response, so a short TTL is plenty.
+const MEDIA_TOKEN_TTL_MS = 5 * 60_000;
+
+function signMediaToken(clinicId: string, from: string, callSid: string, exp: number): string {
+  return createHmac('sha256', config.twilio.authToken)
+    .update(`${clinicId}.${from}.${callSid}.${exp}`)
+    .digest('base64url');
+}
+
+/** Constant-time verify of the media-stream params; returns true iff valid & unexpired. */
+function verifyMediaToken(p: { clinicId?: string; from?: string; callSid?: string; exp?: string; token?: string }): boolean {
+  const exp = parseInt(p.exp ?? '', 10);
+  if (!Number.isFinite(exp) || Date.now() > exp) return false;
+  if (!p.token) return false;
+  const expected = signMediaToken(p.clinicId ?? '', p.from ?? '', p.callSid ?? '', exp);
+  const a = Buffer.from(expected);
+  const b = Buffer.from(p.token);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** TwiML that streams the call's raw audio to our /ws/media WebSocket (HMAC-gated). */
+export function buildMediaStreamTwiml(clinic: any, from: string, callSid: string): string {
+  const clinicId = clinic?.id ?? '';
+  const exp = Date.now() + MEDIA_TOKEN_TTL_MS;
+  const token = signMediaToken(clinicId, from, callSid, exp);
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<Response>',
     '  <Connect>',
     `    <Stream url="${xmlEscape(config.voice.mediaWsUrl)}">`,
-    `      <Parameter name="clinicId" value="${xmlEscape(clinic?.id ?? '')}"/>`,
+    `      <Parameter name="clinicId" value="${xmlEscape(clinicId)}"/>`,
     `      <Parameter name="from" value="${xmlEscape(from)}"/>`,
+    `      <Parameter name="callSid" value="${xmlEscape(callSid)}"/>`,
+    `      <Parameter name="exp" value="${exp}"/>`,
+    `      <Parameter name="token" value="${token}"/>`,
     '    </Stream>',
     '  </Connect>',
     '</Response>',
@@ -218,8 +252,18 @@ export function attachMediaStream(server: Server) {
     maxTimer.unref?.();
     twilioWs.on('close', () => clearTimeout(maxTimer));
 
+    // Absolute cap on conversational turns per call — a second guard (alongside the
+    // duration timer) against a stuck or abusive session driving unbounded LLM cost.
+    const MAX_TURNS = parseInt(process.env.MAX_CALL_TURNS ?? '40', 10);
+    let turnCount = 0;
+
     const handleUtterance = async (text: string) => {
       if (ctx.thinking || ctx.closed) return; // one turn at a time
+      if (++turnCount > MAX_TURNS) {
+        console.warn('[mediaStream] max turns reached — closing');
+        teardown();
+        return;
+      }
       ctx.thinking = true;
       const abort = { aborted: false };
       ctx.turnAbort = abort;
@@ -269,8 +313,16 @@ export function attachMediaStream(server: Server) {
         case 'start': {
           ctx.streamSid = msg.start?.streamSid ?? msg.streamSid ?? '';
           const params = msg.start?.customParameters ?? {};
+          // Auth gate: the params must carry a valid, unexpired HMAC token that this
+          // server minted in the TwiML. Without it the socket is just a stranger.
+          if (!verifyMediaToken(params)) {
+            console.warn('[mediaStream] rejected unauthenticated/expired stream connection');
+            teardown();
+            break;
+          }
           try {
-            const clinic = await getClinic(params.clinicId || config.defaultClinicId);
+            const clinic = await getClinic(params.clinicId);
+            if (!clinic) { console.error('[mediaStream] unknown clinic in start frame'); teardown(); break; }
             const { client: customer, isNew } = await getOrCreateClient(clinic.id, params.from || '');
             const convo = await getOrCreateConversation(clinic.id, customer.id);
             ctx.clinic = clinic;
@@ -279,6 +331,8 @@ export function attachMediaStream(server: Server) {
             ctx.isFirstTurn = isNew;
           } catch (e) {
             console.error('[mediaStream] start/setup error', e);
+            teardown();
+            break;
           }
           const greeting = `Thanks for calling ${ctx.clinic?.name ?? 'the clinic'}. I'm Remi, the virtual assistant. How can I help you today?`;
           if (USE_AZURE) {
@@ -290,17 +344,17 @@ export function attachMediaStream(server: Server) {
                 const isZu = lang.startsWith('zu') || detectZulu(utterance);
                 const isAf = !isZu && (lang.startsWith('af') || detectAfrikaans(utterance));
                 const tag = isZu ? '[Caller is speaking isiZulu] ' : isAf ? '[Caller is speaking Afrikaans] ' : '';
-                handleUtterance(`${tag}${utterance}`);
+                void handleUtterance(`${tag}${utterance}`).catch((e) => console.error('[mediaStream] utterance error', e));
               },
             }, sttPhraseHints(ctx.clinic));
-            speak(ctx, twilioWs, greeting);
+            void speak(ctx, twilioWs, greeting).catch((e) => console.error('[mediaStream] greeting error', e));
           } else {
             // Fallback: Deepgram STT (English).
             ctx.dg = openDeepgram(
-              (utterance) => handleUtterance(utterance),
+              (utterance) => void handleUtterance(utterance).catch((e) => console.error('[mediaStream] utterance error', e)),
               () => bargeIn(ctx, twilioWs),
             );
-            const greet = () => speak(ctx, twilioWs, greeting);
+            const greet = () => void speak(ctx, twilioWs, greeting).catch((e) => console.error('[mediaStream] greeting error', e));
             if (ctx.dg.readyState === WebSocket.OPEN) greet();
             else ctx.dg.on('open', greet);
           }

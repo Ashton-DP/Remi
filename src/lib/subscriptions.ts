@@ -122,8 +122,14 @@ export async function confirmMembershipReturn(
     case 'stripe': {
       const sessionId = String(query.session_id ?? '');
       if (!sessionId) return null;
-      const { subscriptionId, active } = await retrieveStripeSubscriptionFromSession(cfg.stripe.secret_key, sessionId);
+      const { subscriptionId, active, clientReferenceId } = await retrieveStripeSubscriptionFromSession(cfg.stripe.secret_key, sessionId);
       if (!subscriptionId || !active) return null;
+      // Bind the verified session to THIS membership — a valid session for a
+      // different membership/clinic must not be replayable into this return URL.
+      if (clientReferenceId !== membership.id) {
+        console.warn(`[membership] stripe session ref ${clientReferenceId} != membership ${membership.id} — refusing`);
+        return null;
+      }
       let renewsAt: string | null = null;
       try { renewsAt = (await retrieveStripeSubscription(cfg.stripe.secret_key, subscriptionId)).currentPeriodEnd; } catch { /* best-effort */ }
       return { externalId: subscriptionId, renewsAt };
@@ -132,6 +138,12 @@ export async function confirmMembershipReturn(
       // Paystack returns the transaction reference in the callback query.
       const reference = String(query.reference ?? query.trxref ?? '');
       if (!reference) return null;
+      // We mint the reference as `mem_<membershipId>_<ts>` — bind it back so a valid
+      // success reference for another membership can't be pasted into this return URL.
+      if (!reference.startsWith(`mem_${membership.id}_`)) {
+        console.warn(`[membership] paystack reference ${reference} not for membership ${membership.id} — refusing`);
+        return null;
+      }
       const out = await confirmPaystackSubscription(cfg.paystack.secret_key, reference);
       if (!out) return null;
       return { externalId: out.subscriptionCode, renewsAt: out.renewsAt };

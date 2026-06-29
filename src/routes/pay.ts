@@ -153,6 +153,15 @@ export async function handlePayfastNotify(req: Request, res: Response) {
       if (!validatePayfastNotify(body, passphrase)) { console.warn('[payfast] bad signature for membership', membershipId); return; }
       const token = body.token || body.subscription_token;
       if (body.payment_status === 'COMPLETE' && token) {
+        // Verify the amount actually charged matches the plan price — the PayFast
+        // form is client-submitted, so without this a caller could tamper the amount
+        // down and still activate a full membership off a valid-signature ITN.
+        const paid = Number(body.amount_gross);
+        const expected = Number(membership.amount_zar);
+        if (Number.isFinite(paid) && Number.isFinite(expected) && Math.abs(paid - expected) > 0.01) {
+          console.warn(`[payfast] membership ${membershipId} amount mismatch: paid ${paid} vs ${expected} — NOT activating`);
+          return;
+        }
         // First payment activates; each recurring payment refreshes the renewal date.
         if (membership.status !== 'active' || !membership.external_subscription_id) {
           await activateMembership(membership.id, token, body.billing_date || null);

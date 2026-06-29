@@ -102,7 +102,8 @@ test('paystackInterval maps month→monthly, year→annually', () => {
 test('mapPaystackStatus maps statuses', () => {
   assert.equal(mapPaystackStatus('active'), 'active');
   assert.equal(mapPaystackStatus('attention'), 'past_due');
-  assert.equal(mapPaystackStatus('non-renewing'), 'cancelled');
+  // 'non-renewing' = still active until the paid period ends (then → 'completed').
+  assert.equal(mapPaystackStatus('non-renewing'), 'active');
   assert.equal(mapPaystackStatus('completed'), 'cancelled');
   assert.equal(mapPaystackStatus('cancelled'), 'cancelled');
   assert.equal(mapPaystackStatus('surprise-status'), null); // unknown → don't guess

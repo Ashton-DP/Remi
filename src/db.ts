@@ -1537,9 +1537,12 @@ export async function hasOpenGrowthProposal(clinicId: string, type: GrowthType):
 export async function decideGrowthProposal(
   clinicId: string, id: string, status: 'approved' | 'declined', decidedBy: string, ownerInput?: any,
 ) {
+  // Guard the transition on the CURRENT status being 'pending' so two concurrent
+  // approvals can't both succeed (which would double-send / double-discount). Only
+  // the first update matches a pending row; the loser gets no row back.
   const { data } = await supabase.from('growth_proposals')
     .update({ status, decided_by: decidedBy, decided_at: new Date().toISOString(), ...(ownerInput ? { owner_input: ownerInput } : {}) })
-    .eq('clinic_id', clinicId).eq('id', id).select().single();
+    .eq('clinic_id', clinicId).eq('id', id).eq('status', 'pending').select().maybeSingle();
   return data;
 }
 
@@ -1666,8 +1669,12 @@ export async function listReferrals(clinicId: string) {
 }
 
 export async function rewardReferral(clinicId: string, id: string) {
+  // Only a referral that actually converted ('booked') can be rewarded, and only
+  // once — the status guard makes a double-click (or replay) a no-op rather than
+  // granting a second reward or rewarding a friend who never booked.
   const { data } = await supabase.from('referrals')
     .update({ status: 'rewarded', rewarded_at: new Date().toISOString() })
-    .eq('clinic_id', clinicId).eq('id', id).select('*, referrer:referrer_client_id(name,phone)').maybeSingle();
+    .eq('clinic_id', clinicId).eq('id', id).eq('status', 'booked')
+    .select('*, referrer:referrer_client_id(name,phone)').maybeSingle();
   return data;
 }

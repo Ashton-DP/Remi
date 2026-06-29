@@ -97,10 +97,13 @@ export async function cancelPaystackSubscription(secretKey: string, code: string
 export function mapPaystackStatus(status: string | undefined): MembershipStatus | null {
   switch (String(status ?? '').toLowerCase()) {
     case 'active':
+    // 'non-renewing' = won't auto-renew, but still ACTIVE until the paid period
+    // ends (Paystack then reports 'completed'). Keep access until then; don't
+    // prematurely flip a paid-up member to cancelled.
+    case 'non-renewing':
       return 'active';
     case 'attention':
       return 'past_due';
-    case 'non-renewing':
     case 'cancelled':
     case 'canceled':
     case 'completed':

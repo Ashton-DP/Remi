@@ -82,7 +82,7 @@ export async function createStripeSubscriptionCheckout(secretKey: string, o: {
 /** Read a Checkout session and return the subscription id it created (if any). */
 export async function retrieveStripeSubscriptionFromSession(
   secretKey: string, sessionId: string,
-): Promise<{ subscriptionId: string | null; active: boolean }> {
+): Promise<{ subscriptionId: string | null; active: boolean; clientReferenceId: string | null }> {
   const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`, {
     headers: { Authorization: `Bearer ${secretKey}` },
   });
@@ -91,7 +91,10 @@ export async function retrieveStripeSubscriptionFromSession(
   const subscriptionId = typeof data.subscription === 'string' ? data.subscription : data.subscription?.id ?? null;
   // 'paid' for the first invoice, or 'no_payment_required' for a trial.
   const active = data.payment_status === 'paid' || data.payment_status === 'no_payment_required';
-  return { subscriptionId, active };
+  // We stamp client_reference_id = membershipId at checkout — return it so the
+  // caller can verify this session actually belongs to the membership it's activating.
+  const clientReferenceId = typeof data.client_reference_id === 'string' ? data.client_reference_id : null;
+  return { subscriptionId, active, clientReferenceId };
 }
 
 /** Current status + next renewal of a subscription (for the periodic sync job). */
