@@ -92,6 +92,7 @@ interface CallCtx {
   thinking: boolean;
   ttsAbort: AbortController | null;
   closed: boolean;
+  lang: 'en' | 'af' | 'zu'; // caller's current language (from STT auto-detect)
 }
 
 const DG_URL = () =>
@@ -197,8 +198,13 @@ async function elevenLabsSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string) 
 async function speak(ctx: CallCtx, twilioWs: WebSocket, text: string) {
   const clean = speechNormalize(text);
   if (USE_AZURE) {
-    if (detectZulu(clean)) return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceZu, 'zu-ZA');
-    if (detectAfrikaans(clean)) return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceAf, 'af-ZA');
+    // Pick the language: trust strong reply-text signals first, but fall back to the
+    // caller's STT-detected language (ctx.lang) so a short Afrikaans/isiZulu reply that
+    // doesn't trip text detection still gets the right voice+locale — otherwise it'd be
+    // spoken by the English voice and sound foreign/Germanic.
+    const lang = detectZulu(clean) ? 'zu' : detectAfrikaans(clean) ? 'af' : ctx.lang;
+    if (lang === 'zu') return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceZu, 'zu-ZA');
+    if (lang === 'af') return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceAf, 'af-ZA');
     return azureSpeak(ctx, twilioWs, clean, config.voice.azureVoiceEn, 'en-ZA');
   }
   return elevenLabsSpeak(ctx, twilioWs, clean); // fallback only when no Azure key
@@ -233,6 +239,7 @@ export function attachMediaStream(server: Server) {
       thinking: false,
       ttsAbort: null,
       closed: false,
+      lang: 'en',
     };
 
     // Absolute safety cap: tear the session down after MAX_CALL_MINUTES so a stuck
@@ -269,12 +276,17 @@ export function attachMediaStream(server: Server) {
       ctx.turnAbort = abort;
 
       // Speak streamed sentences strictly in order: one at a time, as they arrive.
+      // Latency breakdown (→ Railway logs) so we can see where the seconds go:
+      // db = saveMessage+getHistory, brain = LLM time to first spoken sentence.
+      const t0 = Date.now();
+      let firstAudio = false;
       const queue: string[] = [];
       let pumping = false;
       const pump = async () => {
         if (pumping) return;
         pumping = true;
         while (queue.length && !ctx.closed && !abort.aborted) {
+          if (!firstAudio) { firstAudio = true; console.log(`[lat] first audio out +${Date.now() - t0}ms`); }
           await speak(ctx, twilioWs, queue.shift()!);
         }
         pumping = false;
@@ -283,15 +295,21 @@ export function attachMediaStream(server: Server) {
       try {
         await saveMessage(ctx.convo.id, 'in', text);
         const history = await getHistory(ctx.convo.id);
+        console.log(`[lat] db (save+history) +${Date.now() - t0}ms`);
+        let firstSentence = false;
         const reply = await runAgentStream(
           ctx.clinic, ctx.customer, ctx.convo, history, ctx.isFirstTurn, true,
-          (sentence) => { if (!abort.aborted && !ctx.closed) { queue.push(sentence); void pump(); } },
+          (sentence) => {
+            if (!firstSentence) { firstSentence = true; console.log(`[lat] brain first sentence +${Date.now() - t0}ms`); }
+            if (!abort.aborted && !ctx.closed) { queue.push(sentence); void pump(); }
+          },
           abort,
         );
         ctx.isFirstTurn = false;
         if (reply && !abort.aborted) await saveMessage(ctx.convo.id, 'out', reply);
         // Wait for the queued sentences to finish before ending the turn.
         while ((queue.length || pumping) && !ctx.closed && !abort.aborted) await sleep(50);
+        console.log(`[lat] turn complete +${Date.now() - t0}ms`);
       } catch (e) {
         console.error('[mediaStream] turn error', e);
         if (!ctx.closed && !abort.aborted) await speak(ctx, twilioWs, 'Sorry, could you say that again?');
@@ -343,6 +361,7 @@ export function attachMediaStream(server: Server) {
               onFinal: (utterance, lang) => {
                 const isZu = lang.startsWith('zu') || detectZulu(utterance);
                 const isAf = !isZu && (lang.startsWith('af') || detectAfrikaans(utterance));
+                ctx.lang = isZu ? 'zu' : isAf ? 'af' : 'en'; // remember for TTS voice selection
                 const tag = isZu ? '[Caller is speaking isiZulu] ' : isAf ? '[Caller is speaking Afrikaans] ' : '';
                 void handleUtterance(`${tag}${utterance}`).catch((e) => console.error('[mediaStream] utterance error', e));
               },
