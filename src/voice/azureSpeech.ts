@@ -91,7 +91,7 @@ export interface AzureRecognizer {
 export function createAzureRecognizer(handlers: {
   onInterim: () => void;
   onFinal: (text: string, language: string) => void;
-}): AzureRecognizer {
+}, phrases: string[] = []): AzureRecognizer {
   // STT uses azureSttRegion (westeurope/eastus) — southafricanorth does NOT support
   // af-ZA continuous language ID and silently falls back to English-only recognition.
   const speechConfig = sdk.SpeechConfig.fromSubscription(config.voice.azureSpeechKey, config.voice.azureSttRegion);
@@ -106,6 +106,14 @@ export function createAzureRecognizer(handlers: {
   const pushStream = sdk.AudioInputStream.createPushStream(format);
   const audioConfig = sdk.AudioConfig.fromStreamInput(pushStream);
   const recognizer = sdk.SpeechRecognizer.FromConfig(speechConfig, autoDetect, audioConfig);
+
+  // Phrase hints — bias the recogniser toward this clinic's own vocabulary
+  // (service/treatment names, common booking words) so domain terms transcribe
+  // correctly instead of being mangled into similar-sounding everyday words.
+  if (phrases.length) {
+    const pl = sdk.PhraseListGrammar.fromRecognizer(recognizer);
+    for (const p of phrases) { const t = String(p ?? '').trim(); if (t) pl.addPhrase(t); }
+  }
 
   recognizer.recognizing = (_s, e) => {
     if ((e.result?.text ?? '').trim()) handlers.onInterim(); // caller talking → barge-in

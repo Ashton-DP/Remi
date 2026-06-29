@@ -41,7 +41,7 @@ export const config = {
   // Voice mode: 'gather' (TwiML <Gather>/<Say> — works today) or 'conversationrelay'
   // (real-time WebSocket + ElevenLabs natural voice — needs Twilio CR onboarding).
   voice: {
-    mode: opt('VOICE_MODE', 'gather'),
+    mode: opt('VOICE_MODE', 'mediastream'),
     elevenLabsVoiceId: opt('ELEVENLABS_VOICE_ID'),
     // Public wss:// URL of this server's ConversationRelay WebSocket endpoint.
     wsUrl: opt('PUBLIC_WS_URL', 'wss://www.remireception.com/ws/voice'),
@@ -75,7 +75,7 @@ export const config = {
     azureVoiceAf: opt('AZURE_VOICE_AF', 'en-GB-AdaMultilingualNeural'),
     azureVoiceZu: opt('AZURE_VOICE_ZU', 'zu-ZA-ThandoNeural'),
     // How long Azure waits for silence before finalising a caller's utterance.
-    azureSttSilenceMs: parseInt(opt('AZURE_STT_SILENCE_MS', '500'), 10),
+    azureSttSilenceMs: parseInt(opt('AZURE_STT_SILENCE_MS', '400'), 10),
   },
   // WhatsApp Business API approved-template Content SIDs (HX…). Set after Meta
   // approval; when blank, proactive sends fall back to free-form text (sandbox).

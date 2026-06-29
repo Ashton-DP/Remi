@@ -90,6 +90,18 @@ function openDeepgram(
   return dg;
 }
 
+// Common booking vocabulary + the clinic's own service names — fed to STT as
+// phrase hints so domain words transcribe correctly over noisy phone audio.
+const BASE_PHRASES = [
+  'booking', 'appointment', 'reschedule', 'cancel', 'confirm', 'availability',
+  'deposit', 'reservation', 'check in', 'check out', 'this week', 'next week',
+  'morning', 'afternoon', 'tomorrow', 'consultation', 'follow up',
+];
+function sttPhraseHints(clinic: any): string[] {
+  const services = (clinic?.services_json ?? []).map((s: any) => String(s?.service ?? '').trim()).filter(Boolean);
+  return [...new Set([...services, clinic?.name, ...BASE_PHRASES].filter(Boolean))].slice(0, 80);
+}
+
 /** Stream Azure TTS μ-law 8k to Twilio — Remi's voice, per reply language. */
 function azureSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string, voice: string, locale: string): Promise<void> {
   ctx.botSpeaking = true;
@@ -280,7 +292,7 @@ export function attachMediaStream(server: Server) {
                 const tag = isZu ? '[Caller is speaking isiZulu] ' : isAf ? '[Caller is speaking Afrikaans] ' : '';
                 handleUtterance(`${tag}${utterance}`);
               },
-            });
+            }, sttPhraseHints(ctx.clinic));
             speak(ctx, twilioWs, greeting);
           } else {
             // Fallback: Deepgram STT (English).
