@@ -51,8 +51,14 @@ export const config = {
     elevenLabsVoiceId: opt('ELEVENLABS_VOICE_ID'),
     // Public wss:// URL of this server's ConversationRelay WebSocket endpoint.
     wsUrl: opt('PUBLIC_WS_URL', 'wss://www.remireception.com/ws/voice'),
-    ttsProvider: opt('CR_TTS_PROVIDER', 'ElevenLabs'),
+    ttsProvider: opt('CR_TTS_PROVIDER', 'Google'),
     transcriptionProvider: opt('CR_STT_PROVIDER', 'Deepgram'),
+    // ConversationRelay voices (Google). English is primary; Afrikaans is added as a
+    // <Language> so an Afrikaans reply is spoken in the Afrikaans voice. (No isiZulu
+    // voice exists on Twilio's Google/Amazon catalog — zu is text/WhatsApp only.)
+    crLanguage: opt('CR_LANGUAGE', 'en-GB'),
+    crVoiceEn: opt('CR_VOICE_EN', 'en-GB-Chirp3-HD-Kore'),
+    crVoiceAf: opt('CR_VOICE_AF', 'af-ZA-Standard-A'),
     // Optional ElevenLabs model suffix appended to the voice id (e.g. 'turbo_v2_5'
     // for more natural output than the default 'flash_v2_5'). Blank = Twilio default.
     elevenLabsModel: opt('CR_ELEVENLABS_MODEL', ''),

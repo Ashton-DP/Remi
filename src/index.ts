@@ -112,6 +112,7 @@ app.get('/health/db', async (_req, res) => {
 app.get('/health/voice', (_req, res) => {
   res.json({
     mode: config.voice.mode,
+    cr: { ttsProvider: config.voice.ttsProvider, transcriptionProvider: config.voice.transcriptionProvider, voiceEn: config.voice.crVoiceEn, voiceAf: config.voice.crVoiceAf, wsUrl: config.voice.wsUrl },
     mediaWsUrl: config.voice.mediaWsUrl,
     azureSpeechKey: Boolean(config.voice.azureSpeechKey),
     azureSpeechRegion: config.voice.azureSpeechRegion,

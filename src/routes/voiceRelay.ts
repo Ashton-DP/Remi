@@ -9,6 +9,7 @@ import {
   getHistory,
 } from '../db';
 import { runAgent } from '../brain/agent';
+import { detectAfrikaans } from '../voice/azureSpeech';
 
 /**
  * Normalize text for natural speech (TTS reads symbols/numbers literally otherwise).
@@ -49,22 +50,23 @@ export function buildConversationRelayTwiml(clinic: any, from: string): string {
   const greeting = speechNormalize(
     `Thanks for calling ${clinic?.name ?? 'the clinic'}. I'm Remi, the virtual assistant. How can I help you today?`,
   );
-  // Append an ElevenLabs model suffix (e.g. turbo_v2_5) if configured, for a more
-  // natural voice than the default flash model.
-  const voice = config.voice.elevenLabsModel
-    ? `${config.voice.elevenLabsVoiceId}-${config.voice.elevenLabsModel}`
-    : config.voice.elevenLabsVoiceId;
+  const provider = config.voice.ttsProvider; // 'Google'
+  const stt = config.voice.transcriptionProvider;
+  // English is the primary language/voice; Afrikaans is offered as an additional
+  // <Language> so an Afrikaans reply (tagged lang="af-ZA" by the WS handler) is spoken
+  // in the Afrikaans voice. Per-language provider+voice is supported by ConversationRelay.
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<Response>',
     '  <Connect>',
     `    <ConversationRelay url="${xmlEscape(config.voice.wsUrl)}"` +
       ` welcomeGreeting="${xmlEscape(greeting)}"` +
-      ` ttsProvider="${xmlEscape(config.voice.ttsProvider)}"` +
-      ` voice="${xmlEscape(voice)}"` +
-      ` transcriptionProvider="${xmlEscape(config.voice.transcriptionProvider)}"` +
-      ` elevenlabsTextNormalization="on"` +
-      ` language="en-GB" interruptByDtmf="true">`,
+      ` ttsProvider="${xmlEscape(provider)}"` +
+      ` voice="${xmlEscape(config.voice.crVoiceEn)}"` +
+      ` transcriptionProvider="${xmlEscape(stt)}"` +
+      ` language="${xmlEscape(config.voice.crLanguage)}" interruptByDtmf="true">`,
+    `      <Language code="${xmlEscape(config.voice.crLanguage)}" ttsProvider="${xmlEscape(provider)}" voice="${xmlEscape(config.voice.crVoiceEn)}" transcriptionProvider="${xmlEscape(stt)}"/>`,
+    `      <Language code="af-ZA" ttsProvider="${xmlEscape(provider)}" voice="${xmlEscape(config.voice.crVoiceAf)}" transcriptionProvider="${xmlEscape(stt)}"/>`,
     `      <Parameter name="clinicId" value="${xmlEscape(clinic?.id ?? '')}"/>`,
     `      <Parameter name="from" value="${xmlEscape(from)}"/>`,
     '    </ConversationRelay>',
@@ -138,7 +140,11 @@ export function attachVoiceRelay(server: Server) {
           );
           session.isFirstTurn = false;
           await saveMessage(session.convo.id, 'out', reply);
-          ws.send(JSON.stringify({ type: 'text', token: speechNormalize(reply), last: true }));
+          // If the reply is in Afrikaans, tag the token so ConversationRelay speaks it
+          // with the Afrikaans <Language> voice; otherwise it uses the primary English voice.
+          const token = speechNormalize(reply);
+          const lang = detectAfrikaans(token) ? 'af-ZA' : undefined;
+          ws.send(JSON.stringify({ type: 'text', token, last: true, ...(lang ? { lang } : {}) }));
         } catch (e) {
           console.error('[voiceRelay] prompt error', e);
           ws.send(
