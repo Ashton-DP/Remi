@@ -354,7 +354,7 @@ export async function handleCancelMembership(req: Request, res: Response) {
   } catch (e: any) {
     return res.status(502).json({ error: `Could not cancel at provider: ${e?.message ?? 'failed'}` });
   }
-  const updated = await setMembershipStatus(membership.id, 'cancelled');
+  const updated = await setMembershipStatus(auth.clinicId, membership.id, 'cancelled');
   res.json({ membership: updated });
 }
 

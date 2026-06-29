@@ -35,7 +35,7 @@ export async function handleMembershipStart(req: Request, res: Response) {
     const start = await startMembershipCheckout(clinic, membership);
     // Persist the checkout ref so the daily job can reconcile this payment even
     // if the client never makes it back to the confirm URL.
-    if (start.checkoutRef) await setMembershipCheckoutRef(membership.id, start.checkoutRef).catch(() => {});
+    if (start.checkoutRef) await setMembershipCheckoutRef(membership.clinic_id, membership.id, start.checkoutRef).catch(() => {});
     if (start.kind === 'redirect') return res.redirect(start.url);
     // PayFast: auto-submit the signed subscription form.
     const fields = Object.entries(start.fields)
@@ -60,7 +60,7 @@ export async function handleMembershipReturn(req: Request, res: Response) {
 
     const confirmed = await confirmMembershipReturn(clinic, membership, req.query as Record<string, any>);
     if (confirmed) {
-      await activateMembership(membership.id, confirmed.externalId, confirmed.renewsAt);
+      await activateMembership(membership.clinic_id, membership.id, confirmed.externalId, confirmed.renewsAt);
       return res.type('text/html').send(note("You're a member! 🎉", `Welcome to ${esc(clinic.name)}'s ${esc(membership.plan_name)}. Your subscription is active.`));
     }
     // PayFast (ITN-confirmed) or still-processing — reassure, the webhook/sync finishes it.

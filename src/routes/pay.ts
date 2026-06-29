@@ -166,19 +166,19 @@ export async function handlePayfastNotify(req: Request, res: Response) {
         }
         // First payment activates; each recurring payment refreshes the renewal date.
         if (membership.status !== 'active' || !membership.external_subscription_id) {
-          await activateMembership(membership.id, token, body.billing_date || null);
+          await activateMembership(membership.clinic_id, membership.id, token, body.billing_date || null);
           console.log(`[payfast] membership ${membershipId} activated`);
         } else if (body.billing_date) {
-          await setMembershipStatus(membership.id, 'active', body.billing_date);
+          await setMembershipStatus(membership.clinic_id, membership.id, 'active', body.billing_date);
         }
       } else if (body.payment_status === 'CANCELLED') {
-        await setMembershipStatus(membership.id, 'cancelled');
+        await setMembershipStatus(membership.clinic_id, membership.id, 'cancelled');
         console.log(`[payfast] membership ${membershipId} cancelled via ITN`);
       } else if (body.payment_status === 'FAILED') {
         // A recurring collection failed — flag past_due so the member shows as
         // needing attention (the daily sync / next ITN can restore active).
         if (membership.status === 'active') {
-          await setMembershipStatus(membership.id, 'past_due');
+          await setMembershipStatus(membership.clinic_id, membership.id, 'past_due');
           console.log(`[payfast] membership ${membershipId} → past_due (recurring charge failed)`);
         }
       }

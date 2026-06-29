@@ -203,13 +203,30 @@ async function _tick() {
 
 // ---- Daily jobs: owner summary + reactivation (run once/day after DAILY_HOUR) ----
 const DAILY_HOUR = parseInt(process.env.DAILY_JOBS_HOUR ?? '18', 10);
-let _lastDailyDate = '';
+
+// Per-process fast-path for daily claims, so we don't hit the DB every 60s once a
+// job has run. Keyed by the claim string; cleared on (server-)day rollover so it
+// can't grow unbounded. The DB claim (claimSchedulerRun) stays authoritative across
+// restarts + instances — this Set only avoids redundant DB calls within a process.
+const _dailyDone = new Set<string>();
+let _dailyClearDay = '';
 
 function clinicNow(tz = 'Africa/Johannesburg') {
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
   const hour = parseInt(now.toLocaleString('en-GB', { timeZone: tz, hour: '2-digit', hour12: false }), 10);
   return { dateStr, hour };
+}
+
+/** Claim a once-per-day unit of work. Returns true at most once per `key` per day
+ *  across the whole fleet: an in-memory Set short-circuits repeat ticks in this
+ *  process, and claimSchedulerRun is the authoritative cross-restart/instance lock. */
+async function claimDaily(key: string): Promise<boolean> {
+  const serverDay = clinicNow().dateStr;
+  if (serverDay !== _dailyClearDay) { _dailyDone.clear(); _dailyClearDay = serverDay; }
+  if (_dailyDone.has(key)) return false;
+  _dailyDone.add(key); // mark attempted so we don't re-hit the DB this process/day
+  return claimSchedulerRun(`daily:${key}`);
 }
 
 async function ownerSummary(clinicId: string) {
@@ -328,13 +345,13 @@ async function briefRecipients() {
 /** Morning "here's your day" brief — today's appointments + overdue/escalation
  *  flags. Runs once each morning on/after HUDDLE_HOUR, for every opted-in clinic. */
 async function maybeRunHuddle() {
-  const { dateStr, hour } = clinicNow();
-  if (!inBriefWindow(hour, HUDDLE_HOUR)) return;
   for (const clinic of await briefRecipients()) {
+    const tz = clinic.timezone ?? 'Africa/Johannesburg';
+    const { dateStr, hour } = clinicNow(tz);     // each clinic's own local time
+    if (!inBriefWindow(hour, HUDDLE_HOUR)) continue;
     const to = clinic.owner_summary_phone || clinic.escalation_contact;
     if (!to || await alreadySent(`${clinic.id}:${dateStr}:morning`, dateStr)) continue;
     try {
-      const tz = clinic.timezone ?? 'Africa/Johannesburg';
       const [bookings, overdue, esc] = await Promise.all([
         getTodaysBookings(clinic.id, tz),
         getChaseableInvoices(clinic.id),
@@ -356,13 +373,13 @@ async function maybeRunHuddle() {
 /** Evening wrap — what happened today + tomorrow's schedule + open items.
  *  Runs once each evening on/after EVENING_HOUR, for every opted-in clinic. */
 async function maybeRunEveningBrief() {
-  const { dateStr, hour } = clinicNow();
-  if (!inBriefWindow(hour, EVENING_HOUR)) return;
   for (const clinic of await briefRecipients()) {
+    const tz = clinic.timezone ?? 'Africa/Johannesburg';
+    const { dateStr, hour } = clinicNow(tz);     // each clinic's own local time
+    if (!inBriefWindow(hour, EVENING_HOUR)) continue;
     const to = clinic.owner_summary_phone || clinic.escalation_contact;
     if (!to || await alreadySent(`${clinic.id}:${dateStr}:evening`, dateStr)) continue;
     try {
-      const tz = clinic.timezone ?? 'Africa/Johannesburg';
       const tomorrowStr = new Date(Date.now() + 86_400_000).toLocaleDateString('en-CA', { timeZone: tz });
       const [today, tomorrow, overdue, esc] = await Promise.all([
         getTodaysBookings(clinic.id, tz),
@@ -476,7 +493,7 @@ async function syncMemberships(clinicId: string) {
       }
       const renews = synced.renewsAt ?? m.renews_at;
       if (synced.status !== m.status || (synced.renewsAt && synced.renewsAt !== m.renews_at)) {
-        await setMembershipStatus(m.id, synced.status, renews);
+        await setMembershipStatus(m.clinic_id, m.id, synced.status, renews);
         console.log(`[scheduler] membership ${m.id} → ${synced.status}`);
       }
     } catch (e: any) {
@@ -497,7 +514,7 @@ async function reconcilePendingMemberships(clinicId: string) {
     try {
       const confirmed = await reconcilePendingMembership(clinic, m);
       if (confirmed) {
-        await activateMembership(m.id, confirmed.externalId, confirmed.renewsAt);
+        await activateMembership(m.clinic_id, m.id, confirmed.externalId, confirmed.renewsAt);
         console.log(`[scheduler] reconciled stranded membership ${m.id} → active`);
         if (m.clients?.phone) {
           await sendProactiveWhatsApp(m.clients.phone, {
@@ -527,30 +544,35 @@ async function growthCampaigns(clinic: any) {
 }
 
 async function maybeRunDailyJobs() {
-  const { dateStr, hour } = clinicNow();
-  if (dateStr === _lastDailyDate || hour < DAILY_HOUR) return;
-  _lastDailyDate = dateStr; // per-process fast-path
-  // Authoritative cross-restart / cross-instance guard: only one run per day wins.
-  if (!(await claimSchedulerRun(`daily:${dateStr}`))) return;
-  console.log('[scheduler] running daily jobs for', dateStr);
-  // POPIA data-retention purge — runs regardless of a default clinic.
-  const retentionDays = parseInt(process.env.RETENTION_DAYS ?? '730', 10);
-  await purgeExpiredData(retentionDays).catch((e) => console.error('[retention]', e));
-  await purgeOldSchedulerRuns().catch((e) => console.error('[scheduler-runs purge]', e));
-  // Auto-verify pending white-label email domains (flips to live once DNS lands).
-  await verifyPendingEmailDomains().catch((e) => console.error('[email-domains]', e));
-  // Per-tenant daily jobs run for EVERY onboarded clinic, not just a default one.
-  // Each job self-guards (owner phone, consent, etc.); a failure in one clinic
-  // never aborts the rest.
-  const clinics = await getActiveClinics();
-  const monthKey = dateStr.slice(0, 7);
-  const day = parseInt(dateStr.slice(8, 10), 10);
   const reportDay = parseInt(process.env.MONTHLY_REPORT_DAY ?? '1', 10);
-  // Once-per-month, durably (claim survives restarts within the month).
-  const doMonthly = day >= reportDay && (await claimSchedulerRun(`monthly:${monthKey}`));
 
+  // Fleet-wide maintenance (tz-agnostic): once per server-day, after DAILY_HOUR SAST.
+  if (clinicNow().hour >= DAILY_HOUR && (await claimDaily(`maint:${clinicNow().dateStr}`))) {
+    const retentionDays = parseInt(process.env.RETENTION_DAYS ?? '730', 10);
+    await purgeExpiredData(retentionDays).catch((e) => console.error('[retention]', e));
+    await purgeOldSchedulerRuns().catch((e) => console.error('[scheduler-runs purge]', e));
+    await verifyPendingEmailDomains().catch((e) => console.error('[email-domains]', e));
+  }
+
+  // Per-tenant daily jobs fire on EACH clinic's OWN local date + hour, so a clinic
+  // in another timezone gets its sends at its local DAILY_HOUR, not SAST. The claim
+  // is keyed per clinic+local-date so it runs once per clinic-day across restarts +
+  // instances. Each job self-guards (owner phone, consent, etc.) and a failure in
+  // one clinic never aborts the rest.
+  const clinics = await getActiveClinics();
+  let ran = 0;
   for (const clinic of clinics as any[]) {
     const id = clinic.id;
+    const tz = clinic.timezone ?? 'Africa/Johannesburg';
+    const { dateStr, hour } = clinicNow(tz);
+    if (hour < DAILY_HOUR) continue;                       // not yet this clinic's hour
+    if (!(await claimDaily(`${id}:${dateStr}`))) continue; // already ran (or another instance won)
+    ran++;
+    const monthKey = dateStr.slice(0, 7);
+    const day = parseInt(dateStr.slice(8, 10), 10);
+    // Once-per-month per clinic, durably (claim survives restarts within the month).
+    const doMonthly = day >= reportDay && (await claimSchedulerRun(`monthly:${id}:${monthKey}`));
+
     await ownerSummary(id).catch((e) => console.error('[ownerSummary]', id, e));
     await reactivation(id).catch((e) => console.error('[reactivation]', id, e));
     await birthdayTouches(id).catch((e) => console.error('[birthday]', id, e));
@@ -561,7 +583,7 @@ async function maybeRunDailyJobs() {
     await growthCampaigns(clinic).catch((e) => console.error('[growth]', id, e));
     if (doMonthly) await monthlyReport(id).catch((e) => console.error('[monthlyReport]', id, e));
   }
-  console.log(`[scheduler] daily jobs ran for ${clinics.length} clinic(s)`);
+  if (ran) console.log(`[scheduler] daily jobs ran for ${ran} clinic(s)`);
 }
 
 let _started = false;

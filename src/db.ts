@@ -1389,13 +1389,15 @@ export async function createPendingMembership(
 }
 
 /** Mark a pending membership active once the provider confirms the subscription. */
-export async function activateMembership(id: string, externalSubscriptionId: string, renewsAt: string | null) {
+export async function activateMembership(clinicId: string, id: string, externalSubscriptionId: string, renewsAt: string | null) {
   // Only activate from pending/past_due — never re-open a cancelled membership via
   // a replayed/duplicate provider notification. maybeSingle() = no-op if it's
-  // already active or was cancelled (returns null instead of throwing).
+  // already active or was cancelled (returns null instead of throwing). The clinic_id
+  // filter is defence-in-depth so a wrong/forged id can never touch another tenant.
   const { data } = await supabase
     .from('memberships')
     .update({ status: 'active', external_subscription_id: externalSubscriptionId, renews_at: renewsAt })
+    .eq('clinic_id', clinicId)
     .eq('id', id)
     .in('status', ['pending', 'past_due'])
     .select()
@@ -1415,17 +1417,18 @@ export async function getMembershipsToSync(clinicId: string) {
 }
 
 /** Sync a membership's status + renewal date from the provider. */
-export async function setMembershipStatus(id: string, status: string, renewsAt?: string | null) {
+export async function setMembershipStatus(clinicId: string, id: string, status: string, renewsAt?: string | null) {
   const updates: Record<string, any> = { status };
   if (renewsAt !== undefined) updates.renews_at = renewsAt;
-  const { data } = await supabase.from('memberships').update(updates).eq('id', id).select().single();
+  const { data } = await supabase.from('memberships').update(updates)
+    .eq('clinic_id', clinicId).eq('id', id).select().maybeSingle();
   return data;
 }
 
 /** Store the provider checkout reference (Stripe session / Paystack ref) at signup,
  *  so a paid-but-not-returned membership can be reconciled later. */
-export async function setMembershipCheckoutRef(id: string, ref: string) {
-  await supabase.from('memberships').update({ checkout_ref: ref }).eq('id', id);
+export async function setMembershipCheckoutRef(clinicId: string, id: string, ref: string) {
+  await supabase.from('memberships').update({ checkout_ref: ref }).eq('clinic_id', clinicId).eq('id', id);
 }
 
 /** Pending memberships with a checkout ref, created within the last `days` — these
