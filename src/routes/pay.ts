@@ -3,7 +3,7 @@ import { config } from '../config';
 import { qp } from '../lib/dashboardAuth';
 import { getInvoiceById, getClinic, markInvoicePaidById, getMembershipById, activateMembership, setMembershipStatus } from '../db';
 import { getPaymentProvider } from '../lib/payments';
-import { payfastProcessUrl, buildPayfastParams, validatePayfastNotify } from '../lib/payments/payfast';
+import { payfastProcessUrl, buildPayfastParams, validatePayfastNotify, confirmPayfastNotify } from '../lib/payments/payfast';
 import { isMembershipPaymentId, membershipIdFromPaymentId } from '../lib/payments/payfastSubscriptions';
 import { initPaystackPayment, verifyPaystackTransaction } from '../lib/payments/paystack';
 import { createStripeCheckout, retrieveStripeSession } from '../lib/payments/stripe';
@@ -151,6 +151,8 @@ export async function handlePayfastNotify(req: Request, res: Response) {
       // Without a passphrase the signature is forgeable — refuse to act on the ITN.
       if (!passphrase) { console.warn('[payfast] no passphrase set — rejecting membership ITN', membershipId); return; }
       if (!validatePayfastNotify(body, passphrase)) { console.warn('[payfast] bad signature for membership', membershipId); return; }
+      // Defence-in-depth: confirm the ITN really came from PayFast (server postback).
+      if (!(await confirmPayfastNotify(body))) { console.warn('[payfast] postback NOT VALID for membership', membershipId); return; }
       const token = body.token || body.subscription_token;
       if (body.payment_status === 'COMPLETE' && token) {
         // Verify the amount actually charged matches the plan price — the PayFast
@@ -172,6 +174,13 @@ export async function handlePayfastNotify(req: Request, res: Response) {
       } else if (body.payment_status === 'CANCELLED') {
         await setMembershipStatus(membership.id, 'cancelled');
         console.log(`[payfast] membership ${membershipId} cancelled via ITN`);
+      } else if (body.payment_status === 'FAILED') {
+        // A recurring collection failed — flag past_due so the member shows as
+        // needing attention (the daily sync / next ITN can restore active).
+        if (membership.status === 'active') {
+          await setMembershipStatus(membership.id, 'past_due');
+          console.log(`[payfast] membership ${membershipId} → past_due (recurring charge failed)`);
+        }
       }
       return;
     }
@@ -183,6 +192,7 @@ export async function handlePayfastNotify(req: Request, res: Response) {
     const passphrase = clinic?.payment_config?.payfast?.passphrase;
     if (!passphrase) { console.warn('[payfast] no passphrase set — rejecting invoice ITN', invoiceId); return; }
     if (!validatePayfastNotify(body, passphrase)) { console.warn('[payfast] bad signature for', invoiceId); return; }
+    if (!(await confirmPayfastNotify(body))) { console.warn('[payfast] postback NOT VALID for invoice', invoiceId); return; }
     if (body.payment_status === 'COMPLETE') {
       // Verify the amount actually paid matches what's owed — don't mark a R5000
       // invoice "paid" off an R5 ITN.

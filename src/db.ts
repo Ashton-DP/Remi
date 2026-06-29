@@ -1446,9 +1446,8 @@ export async function getPendingMembershipsToReconcile(clinicId: string, days = 
 // ── Birthday / anniversary helpers ────────────────────────────────────────────
 
 /** Clients with birthday today (MM-DD match), consent_at set. */
-export async function getClientsWithBirthdayToday(clinicId: string) {
-  const today = new Date();
-  const mmdd = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+export async function getClientsWithBirthdayToday(clinicId: string, timeZone = 'Africa/Johannesburg') {
+  const mmdd = new Date().toLocaleDateString('en-CA', { timeZone }).slice(5); // clinic-local MM-DD
   const { data } = await supabase
     .from('clients')
     .select('id, name, phone, birthday')
@@ -1463,9 +1462,8 @@ export async function getClientsWithBirthdayToday(clinicId: string) {
 }
 
 /** Clients with anniversary today (MM-DD match), consent_at set. */
-export async function getClientsWithAnniversaryToday(clinicId: string) {
-  const today = new Date();
-  const mmdd = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+export async function getClientsWithAnniversaryToday(clinicId: string, timeZone = 'Africa/Johannesburg') {
+  const mmdd = new Date().toLocaleDateString('en-CA', { timeZone }).slice(5); // clinic-local MM-DD
   const { data } = await supabase
     .from('clients')
     .select('id, name, phone, anniversary')

@@ -65,9 +65,13 @@ export async function confirmPaystackSubscription(
   // List the customer's subscriptions and pick the one for this plan (most recent).
   const subs = await paystack(secretKey, `/subscription?customer=${encodeURIComponent(String(customerId))}`);
   const list: any[] = Array.isArray(subs) ? subs : [];
-  const match = list
-    .filter((s) => !planId || s?.plan?.id === planId || s?.plan?.plan_code === planId)
-    .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())[0] ?? list[0];
+  const byRecency = (a: any, b: any) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
+  // When we know the plan, require a plan match — never fall back to an arbitrary
+  // subscription (a customer with multiple memberships could otherwise be attached
+  // to the wrong sub). Only when the plan is unknown do we take the most recent.
+  const match = planId
+    ? list.filter((s) => s?.plan?.id === planId || s?.plan?.plan_code === planId).sort(byRecency)[0]
+    : list.slice().sort(byRecency)[0];
   if (!match?.subscription_code) return null;
   return { subscriptionCode: match.subscription_code, renewsAt: match.next_payment_date ?? null };
 }

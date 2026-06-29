@@ -408,11 +408,11 @@ async function verifyPendingEmailDomains() {
 async function birthdayTouches(clinicId: string) {
   const clinic = await getClinic(clinicId);
   if (!clinic) return;
-  const clients = await getClientsWithBirthdayToday(clinicId);
+  const clients = await getClientsWithBirthdayToday(clinicId, clinic.timezone);
   for (const c of clients as any[]) {
     if (!c.phone) continue;
     try {
-      await sendProactiveWhatsApp(c.phone, {
+      await sendMarketingWhatsApp(clinic.id, c.phone, {
         fallbackBody: `Happy birthday${c.name ? `, ${c.name}` : ''}! 🎂 Treat yourself today — we'd love to see you soon. Book anytime right here.`,
       });
       console.log(`[scheduler] birthday touch → ${c.name ?? c.phone}`);
@@ -426,11 +426,11 @@ async function birthdayTouches(clinicId: string) {
 async function anniversaryTouches(clinicId: string) {
   const clinic = await getClinic(clinicId);
   if (!clinic) return;
-  const clients = await getClientsWithAnniversaryToday(clinicId);
+  const clients = await getClientsWithAnniversaryToday(clinicId, clinic.timezone);
   for (const c of clients as any[]) {
     if (!c.phone) continue;
     try {
-      await sendProactiveWhatsApp(c.phone, {
+      await sendMarketingWhatsApp(clinic.id, c.phone, {
         fallbackBody: `Happy anniversary${c.name ? `, ${c.name}` : ''}! 🎉 Wishing you a wonderful day. Remember, we're always here when you need a little pampering.`,
       });
       console.log(`[scheduler] anniversary touch → ${c.name ?? c.phone}`);

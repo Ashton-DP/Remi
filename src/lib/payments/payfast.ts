@@ -62,3 +62,33 @@ export function validatePayfastNotify(body: Record<string, any>, passphrase?: st
     return false;
   }
 }
+
+/** Host for the ITN server-confirmation postback (PayFast's documented step 3). */
+function payfastValidateUrl(): string {
+  return config.payments.payfastSandbox
+    ? 'https://sandbox.payfast.co.za/eng/query/validate'
+    : 'https://www.payfast.co.za/eng/query/validate';
+}
+
+/**
+ * Server-confirm an ITN by posting the received params back to PayFast — their
+ * documented defence (beyond the signature) against a forged notification. PayFast
+ * replies with 'VALID' or 'INVALID'. Returns true only on an explicit VALID.
+ * Defence-in-depth on top of validatePayfastNotify; network errors → false.
+ */
+export async function confirmPayfastNotify(body: Record<string, any>): Promise<boolean> {
+  try {
+    const form = new URLSearchParams();
+    // Echo the params back in the order received (PayFast matches on the raw payload).
+    for (const [k, v] of Object.entries(body)) form.set(k, String(v ?? ''));
+    const res = await fetch(payfastValidateUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    });
+    if (!res.ok) return false;
+    return (await res.text()).trim().toUpperCase().startsWith('VALID');
+  } catch {
+    return false;
+  }
+}

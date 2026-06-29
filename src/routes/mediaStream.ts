@@ -376,23 +376,12 @@ export function attachMediaStream(server: Server) {
           ctx.botSpeaking = false;
           break;
         case 'stop':
-          ctx.closed = true;
-          if (ctx.turnAbort) ctx.turnAbort.aborted = true;
-          if (ctx.dg) try { ctx.dg.close(); } catch {}
-          if (ctx.azureStt) try { ctx.azureStt.close(); } catch {}
-          if (ctx.azureTts) try { ctx.azureTts.stop(); } catch {}
+          teardown(); // single cleanup path — stops STT/TTS, aborts the turn, closes the socket
           break;
       }
     });
 
-    twilioWs.on('close', () => {
-      ctx.closed = true;
-      if (ctx.turnAbort) ctx.turnAbort.aborted = true;
-      if (ctx.ttsAbort) ctx.ttsAbort.abort();
-      if (ctx.dg) try { ctx.dg.close(); } catch {}
-      if (ctx.azureStt) try { ctx.azureStt.close(); } catch {}
-      if (ctx.azureTts) try { ctx.azureTts.stop(); } catch {}
-    });
+    twilioWs.on('close', teardown);
   });
 
   console.log('[mediaStream] Media Streams WebSocket attached at /ws/media');
