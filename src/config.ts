@@ -52,7 +52,7 @@ export const config = {
     // Public wss:// URL of this server's ConversationRelay WebSocket endpoint.
     wsUrl: opt('PUBLIC_WS_URL', 'wss://www.remireception.com/ws/voice'),
     ttsProvider: opt('CR_TTS_PROVIDER', 'Google'),
-    transcriptionProvider: opt('CR_STT_PROVIDER', 'Deepgram'),
+    transcriptionProvider: opt('CR_STT_PROVIDER', 'Google'),
     // ConversationRelay voices (Google). English is primary; Afrikaans is added as a
     // <Language> so an Afrikaans reply is spoken in the Afrikaans voice. (No isiZulu
     // voice exists on Twilio's Google/Amazon catalog — zu is text/WhatsApp only.)

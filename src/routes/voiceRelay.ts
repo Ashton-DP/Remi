@@ -51,7 +51,11 @@ export function buildConversationRelayTwiml(clinic: any, from: string): string {
     `Thanks for calling ${clinic?.name ?? 'the clinic'}. I'm Remi, the virtual assistant. How can I help you today?`,
   );
   const provider = config.voice.ttsProvider; // 'Google'
-  const stt = config.voice.transcriptionProvider;
+  // ConversationRelay STT: Google covers BOTH en-GB and af-ZA. Deepgram cannot
+  // transcribe af-ZA (Twilio error 64101), which fails the whole ConversationRelay
+  // and drops the call — so transcription is pinned to Google to match the Google
+  // voice stack and avoid any mixed-provider rejection.
+  const stt = 'Google';
   // English is the primary language/voice; Afrikaans is offered as an additional
   // <Language> so an Afrikaans reply (tagged lang="af-ZA" by the WS handler) is spoken
   // in the Afrikaans voice. Per-language provider+voice is supported by ConversationRelay.
@@ -64,7 +68,7 @@ export function buildConversationRelayTwiml(clinic: any, from: string): string {
       ` ttsProvider="${xmlEscape(provider)}"` +
       ` voice="${xmlEscape(config.voice.crVoiceEn)}"` +
       ` transcriptionProvider="${xmlEscape(stt)}"` +
-      ` language="${xmlEscape(config.voice.crLanguage)}" interruptByDtmf="true">`,
+      ` language="${xmlEscape(config.voice.crLanguage)}">`,
     `      <Language code="${xmlEscape(config.voice.crLanguage)}" ttsProvider="${xmlEscape(provider)}" voice="${xmlEscape(config.voice.crVoiceEn)}" transcriptionProvider="${xmlEscape(stt)}"/>`,
     `      <Language code="af-ZA" ttsProvider="${xmlEscape(provider)}" voice="${xmlEscape(config.voice.crVoiceAf)}" transcriptionProvider="${xmlEscape(stt)}"/>`,
     `      <Parameter name="clinicId" value="${xmlEscape(clinic?.id ?? '')}"/>`,
