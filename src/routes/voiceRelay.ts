@@ -51,13 +51,13 @@ export function buildConversationRelayTwiml(clinic: any, from: string): string {
   const greeting = speechNormalize(
     `I'm Remi, the virtual assistant. How can I help you today?`,
   );
-  const provider = config.voice.ttsProvider; // 'Google'
-  // ConversationRelay real-time transcription does NOT support af-ZA (Afrikaans) on
-  // either Google (global STT endpoint) or Deepgram — declaring an af-ZA <Language>
-  // makes Twilio reject the whole ConversationRelay (error 64101) and drops the call.
-  // So calls run English-only (en-GB Google/Chirp3). Afrikaans is still fully supported
-  // on WhatsApp/SMS/email; revisit voice Afrikaans if/when a provider supports af-ZA STT.
-  const stt = 'Google';
+  const provider = config.voice.ttsProvider; // 'Google' (Chirp3-HD TTS)
+  // English transcription: Deepgram Flux — fuses transcription with natural turn
+  // detection so the agent stops cutting callers off / lagging on replies. (Afrikaans
+  // can't use Deepgram/Flux — no af-ZA support — so it runs on the separate Azure
+  // media-stream pipeline instead.)
+  const stt = process.env.CR_STT_PROVIDER || 'Deepgram';
+  const sttModel = process.env.CR_SPEECH_MODEL || 'flux-general-en';
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<Response>',
@@ -67,8 +67,9 @@ export function buildConversationRelayTwiml(clinic: any, from: string): string {
       ` ttsProvider="${xmlEscape(provider)}"` +
       ` voice="${xmlEscape(config.voice.crVoiceEn)}"` +
       ` transcriptionProvider="${xmlEscape(stt)}"` +
+      ` speechModel="${xmlEscape(sttModel)}"` +
       ` language="${xmlEscape(config.voice.crLanguage)}">`,
-    `      <Language code="${xmlEscape(config.voice.crLanguage)}" ttsProvider="${xmlEscape(provider)}" voice="${xmlEscape(config.voice.crVoiceEn)}" transcriptionProvider="${xmlEscape(stt)}"/>`,
+    `      <Language code="${xmlEscape(config.voice.crLanguage)}" ttsProvider="${xmlEscape(provider)}" voice="${xmlEscape(config.voice.crVoiceEn)}" transcriptionProvider="${xmlEscape(stt)}" speechModel="${xmlEscape(sttModel)}"/>`,
     `      <Parameter name="clinicId" value="${xmlEscape(clinic?.id ?? '')}"/>`,
     `      <Parameter name="from" value="${xmlEscape(from)}"/>`,
     '    </ConversationRelay>',
