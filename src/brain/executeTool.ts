@@ -8,7 +8,7 @@ import {
   scheduleReminders, getClientWaitlist, setWaitlistStatus,
   getNextBooking, setBookingStatus, rescheduleBooking,
   addWaitlist, getNextWaitlist, setBookingDepositStatus, setClientName,
-  findConfirmedBooking, setConversationStatus,
+  findConfirmedBooking, findClientBookingAround, setConversationStatus,
   getTodaysBookings, listWaitlist, getOverdueChasedInvoices,
   addTask, getActivePackage, decrementPackage, getClientMembership, markReferralBooked,
 } from '../db';
@@ -40,12 +40,13 @@ export async function executeTool(
       const start = new Date(input.start_at);
       const end = new Date(start.getTime() + durationMin * 60000);
 
-      // Idempotency: if this exact appointment is already booked (e.g. a retried
-      // request, or the model calling the tool twice), return it instead of
-      // creating a second calendar event + DB row.
-      const existingDup = await findConfirmedBooking(
-        clinic.id, customer.id, input.service, start.toISOString(),
-      );
+      // Idempotency: if this client already has a confirmed booking at ~this time
+      // (the model called create_booking twice, or a retry), return it instead of
+      // creating a second event + row. Tolerant of exact-ISO/service mismatch so the
+      // just-made booking is reliably recognised (the cause of the "slot taken" loop).
+      const existingDup =
+        (await findConfirmedBooking(clinic.id, customer.id, input.service, start.toISOString())) ||
+        (await findClientBookingAround(clinic.id, customer.id, start.toISOString()));
       if (existingDup) {
         return { ok: true, booking_id: existingDup.id, when: existingDup.start_at, duplicate: true };
       }
@@ -60,6 +61,10 @@ export async function executeTool(
         const freeSlots = await computeFreeSlots(clinic, localDate, input.service);
         const stillFree = freeSlots.some((s) => Math.abs(new Date(s).getTime() - start.getTime()) < 60_000);
         if (freeSlots.length && !stillFree) {
+          // The slot shows taken — but if it's THIS client's own booking, it's a
+          // duplicate call, not a clash. Return it instead of bouncing them.
+          const own = await findClientBookingAround(clinic.id, customer.id, start.toISOString());
+          if (own) return { ok: true, booking_id: own.id, when: own.start_at, duplicate: true };
           return { error: 'That time was just taken — could you pick another slot? Let me check what else is open.', slot_taken: true };
         }
       } catch (e) {

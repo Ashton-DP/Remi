@@ -183,6 +183,32 @@ export async function findConfirmedBooking(
   return data;
 }
 
+/**
+ * Find THIS client's own confirmed booking near a given time, tolerant of exact-ISO
+ * and service mismatches (±windowMin). Used so a just-made booking isn't treated as a
+ * duplicate-creation or a "slot taken" clash when the model calls create_booking twice.
+ */
+export async function findClientBookingAround(
+  clinicId: string,
+  clientId: string,
+  startAtISO: string,
+  windowMin = 3,
+) {
+  const t = new Date(startAtISO).getTime();
+  const lo = new Date(t - windowMin * 60000).toISOString();
+  const hi = new Date(t + windowMin * 60000).toISOString();
+  const { data } = await supabase
+    .from('bookings')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .eq('client_id', clientId)
+    .eq('status', 'confirmed')
+    .gte('start_at', lo)
+    .lte('start_at', hi)
+    .limit(1);
+  return data?.[0] ?? null;
+}
+
 export async function logEvent(
   clinicId: string,
   type: string,

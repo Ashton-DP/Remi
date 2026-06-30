@@ -8,7 +8,7 @@ import {
   saveMessage,
   getHistory,
 } from '../db';
-import { runAgent } from '../brain/agent';
+import { runAgentStream } from '../brain/agent';
 
 /**
  * Normalize text for natural speech (TTS reads symbols/numbers literally otherwise).
@@ -84,6 +84,7 @@ interface RelaySession {
   convo: { id: string };
   isFirstTurn: boolean;
   busy: boolean;
+  history: { role: string; content: string }[]; // in-memory transcript (no per-turn DB read)
 }
 
 /** Attach the ConversationRelay WebSocket server to the shared HTTP server. */
@@ -117,7 +118,8 @@ export function attachVoiceRelay(server: Server) {
           const clinic = await getClinic(clinicId);
           const { client: customer, isNew } = await getOrCreateClient(clinic.id, from);
           const convo = await getOrCreateConversation(clinic.id, customer.id);
-          session = { clinic, customer, convo, isFirstTurn: isNew, busy: false };
+          const history = await getHistory(convo.id); // loaded once; kept in memory thereafter
+          session = { clinic, customer, convo, isFirstTurn: isNew, busy: false, history };
         } catch (e) {
           console.error('[voiceRelay] setup error', e);
         }
@@ -130,32 +132,32 @@ export function attachVoiceRelay(server: Server) {
         if (!text || session.busy) return;
         if (++turns > maxTurns) { console.warn('[voiceRelay] max turns reached — closing'); try { ws.close(); } catch { /* */ } return; }
         session.busy = true;
+        const abort = { aborted: false };
         try {
-          await saveMessage(session.convo.id, 'in', text);
-          const history = await getHistory(session.convo.id);
-          const reply = await runAgent(
-            session.clinic,
-            session.customer,
-            session.convo,
-            history,
-            session.isFirstTurn,
-            true, // isVoice
+          session.history.push({ role: 'user', content: text });
+          void saveMessage(session.convo.id, 'in', text).catch((e) => console.error('[voiceRelay] saveMessage(in)', e));
+          // Stream the reply sentence-by-sentence: ConversationRelay starts speaking the
+          // first sentence while the rest is still being generated — far lower latency
+          // than waiting for the whole reply before saying a word.
+          const reply = await runAgentStream(
+            session.clinic, session.customer, session.convo, session.history, session.isFirstTurn, true,
+            (sentence) => {
+              const token = speechNormalize(sentence);
+              if (token && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'text', token: token + ' ', last: false }));
+              }
+            },
+            abort,
           );
           session.isFirstTurn = false;
-          await saveMessage(session.convo.id, 'out', reply);
-          // If the reply is in Afrikaans, tag the token so ConversationRelay speaks it
-          // with the Afrikaans <Language> voice; otherwise it uses the primary English voice.
-          const token = speechNormalize(reply);
-          ws.send(JSON.stringify({ type: 'text', token, last: true }));
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'text', token: '', last: true }));
+          if (reply) {
+            session.history.push({ role: 'assistant', content: reply });
+            void saveMessage(session.convo.id, 'out', reply).catch((e) => console.error('[voiceRelay] saveMessage(out)', e));
+          }
         } catch (e) {
           console.error('[voiceRelay] prompt error', e);
-          ws.send(
-            JSON.stringify({
-              type: 'text',
-              token: "Sorry, I'm having a little trouble — could you say that again?",
-              last: true,
-            }),
-          );
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'text', token: "Sorry, I'm having a little trouble — could you say that again?", last: true }));
         } finally {
           session.busy = false;
         }

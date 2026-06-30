@@ -324,6 +324,9 @@ export function attachMediaStream(server: Server) {
     const maxTimer = setTimeout(() => { console.warn('[mediaStream] max call duration reached — closing'); teardown(); }, maxCallMs);
     maxTimer.unref?.();
     twilioWs.on('close', () => clearTimeout(maxTimer));
+    // Surface WS-level failures (Twilio error 31920) in the logs so a dropped Afrikaans
+    // stream tells us WHY instead of failing silently.
+    twilioWs.on('error', (e) => console.error('[mediaStream] twilioWs error', e));
 
     // Absolute cap on conversational turns per call — a second guard (alongside the
     // duration timer) against a stuck or abusive session driving unbounded LLM cost.
@@ -439,6 +442,7 @@ export function attachMediaStream(server: Server) {
           // voice/language for the whole call and skip at-start auto-detection.
           const forced = params.forceLang === 'af' ? 'af' : params.forceLang === 'zu' ? 'zu' : params.forceLang === 'en' ? 'en' : '';
           if (forced) { ctx.lang = forced; langConfirmed = true; }
+          console.log(`[mediaStream] start ok — lang=${ctx.lang}, USE_AZURE=${USE_AZURE}, clinic=${params.clinicId}`);
           ctx.setupReady = (async () => {
             const clinic = await getClinic(params.clinicId);
             if (!clinic) throw new Error('unknown clinic');
