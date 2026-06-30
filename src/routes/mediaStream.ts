@@ -1,4 +1,3 @@
-import type { Server } from 'node:http';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { config } from '../config';
@@ -281,8 +280,10 @@ function bargeIn(ctx: CallCtx, twilioWs: WebSocket) {
   ctx.botSpeaking = false;
 }
 
-export function attachMediaStream(server: Server) {
-  const wss = new WebSocketServer({ server, path: '/ws/media' });
+export function attachMediaStream() {
+  // noServer mode: index.ts routes the HTTP 'upgrade' event by path, so this and the
+  // ConversationRelay WS can share one server without fighting over the handshake.
+  const wss = new WebSocketServer({ noServer: true });
 
   wss.on('connection', (twilioWs: WebSocket) => {
     const ctx: CallCtx = {
@@ -514,4 +515,5 @@ export function attachMediaStream(server: Server) {
   });
 
   console.log('[mediaStream] Media Streams WebSocket attached at /ws/media');
+  return wss;
 }

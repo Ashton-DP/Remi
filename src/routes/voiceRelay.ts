@@ -1,4 +1,3 @@
-import type { Server } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { config } from '../config';
 import {
@@ -88,8 +87,10 @@ interface RelaySession {
 }
 
 /** Attach the ConversationRelay WebSocket server to the shared HTTP server. */
-export function attachVoiceRelay(server: Server) {
-  const wss = new WebSocketServer({ server, path: '/ws/voice' });
+export function attachVoiceRelay() {
+  // noServer mode: index.ts routes the HTTP 'upgrade' event by path, so this and the
+  // media-stream WS can share one server without fighting over the handshake.
+  const wss = new WebSocketServer({ noServer: true });
 
   wss.on('connection', (ws: WebSocket) => {
     let session: RelaySession | null = null;
@@ -175,4 +176,5 @@ export function attachVoiceRelay(server: Server) {
   });
 
   console.log('[voiceRelay] ConversationRelay WebSocket attached at /ws/voice');
+  return wss;
 }

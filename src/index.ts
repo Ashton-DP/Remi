@@ -298,15 +298,25 @@ attachErrorHandler(app);
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 // Use an explicit HTTP server so the ConversationRelay WebSocket can share the port.
 const server = http.createServer(app);
-// Attach ONLY the WebSocket endpoint the active voice mode needs. Binding two
-// `ws` servers to the same HTTP server via { server, path } makes them fight over
-// the 'upgrade' event — the non-matching one aborts the handshake with HTTP 400,
-// which dropped media-stream calls instantly. One mode → one WS server.
-if (config.voice.mode === 'conversationrelay') {
-  attachVoiceRelay(server); // /ws/voice (ConversationRelay)
-} else if (config.voice.mode === 'mediastream') {
-  attachMediaStream(server); // /ws/media (custom Azure / Deepgram+ElevenLabs pipeline)
-}
+// Both voice WS endpoints must be live at once for the bilingual hybrid: English runs
+// on ConversationRelay (/ws/voice) and Afrikaans on the Azure pipeline (/ws/media).
+// Each WebSocketServer runs in noServer mode and we route the single HTTP 'upgrade'
+// event by path — so they share one server WITHOUT fighting over the handshake (the
+// bug that previously dropped media-stream calls when both used { server, path }).
+const voiceWss = attachVoiceRelay();
+const mediaWss = attachMediaStream();
+server.on('upgrade', (req, socket, head) => {
+  let pathname = '/';
+  try { pathname = new URL(req.url || '/', 'http://localhost').pathname; }
+  catch { pathname = (req.url || '/').split('?')[0]; }
+  if (pathname === '/ws/voice') {
+    voiceWss.handleUpgrade(req, socket, head, (ws) => voiceWss.emit('connection', ws, req));
+  } else if (pathname === '/ws/media') {
+    mediaWss.handleUpgrade(req, socket, head, (ws) => mediaWss.emit('connection', ws, req));
+  } else {
+    socket.destroy();
+  }
+});
 server.listen(PORT, () => {
   console.log(`Remi listening on :${config.port} (model: ${config.model}, voice: ${config.voice.mode})`);
   void initMonitoring();
