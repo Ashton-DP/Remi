@@ -87,7 +87,7 @@ function buildLanguageGateTwiml(clinic: any): string {
     speechTimeout: 'auto',
     actionOnEmptyResult: true, // no choice → still POST to /route, which defaults to English
   } as any);
-  gather.say({ voice: SA_ENGLISH_VOICE }, `Thanks for calling ${name}. For English, just keep talking, or press 1.`);
+  gather.say({ voice: SA_ENGLISH_VOICE }, `Hello, and thanks for calling ${name}. To carry on in English, say English or press 1.`);
   gather.say({ voice: AFRIKAANS_VOICE, language: 'af-ZA' } as any, 'Vir Afrikaans, sê Afrikaans, of druk twee.');
   return vr.toString();
 }
