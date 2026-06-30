@@ -15,39 +15,44 @@
 <meta property="og:url" content="https://www.remireception.com/office">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Calistoga&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/duotone/style.css">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #0a0b0f; --surface: #13151f; --border: #1e2235; --text: #e2e8f0;
-    --muted: #64748b; --purple: #7c6fea; --teal: #2dd4bf; --green: #4ade80;
+    --bg: #0a0a0c; --surface: #15151c; --border: #26262f; --text: #ece8e1;
+    --muted: #8a8578; --purple: #f0a830; --teal: #f6c453; --green: #5fd08a;
+    --accent: #f0a830; --accent-deep: #c8821f;
   }
   html { scroll-behavior: smooth; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); background-image: radial-gradient(120% 70% at 80% 0%, rgba(240,168,48,0.05) 0%, transparent 55%), linear-gradient(180deg, #0c0b0e 0%, #0a0a0c 45%, #0b0a0d 100%); background-attachment: fixed; color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased; }
 
   /* NAV */
   nav { position: fixed; top: 0; width: 100%; z-index: 100; background: rgba(10,11,15,0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 5%; display: flex; align-items: center; justify-content: space-between; height: 60px; }
   .nav-logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; text-decoration: none; color: var(--text); }
-  .logo-dot { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, var(--purple), var(--teal)); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: #fff; }
+  .logo-dot { width: 32px; height: 32px; border-radius: 9px; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: #1a1206; }
   .nav-links { display: flex; align-items: center; gap: 28px; }
   .nav-links a.nav-link { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color .2s; }
   .nav-links a.nav-link:hover { color: var(--text); }
-  .nav-cta { background: var(--purple); color: #fff; padding: 8px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; transition: opacity .2s; }
+  .nav-cta { background: var(--accent); color: #1a1206; padding: 8px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 700; transition: opacity .2s; }
   .nav-cta:hover { opacity: .85; }
 
   /* HERO */
   .hero { min-height: 86vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 130px 5% 70px; position: relative; overflow: hidden; }
-  .hero::before { content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%); width: 800px; height: 800px; border-radius: 50%; background: radial-gradient(circle, rgba(45,212,191,0.11) 0%, transparent 70%); pointer-events: none; }
-  .badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(45,212,191,0.12); border: 1px solid rgba(45,212,191,0.3); color: #5eead4; padding: 5px 14px; border-radius: 20px; font-size: 13px; font-weight: 500; margin-bottom: 28px; }
+  .hero::before { content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%); width: 800px; height: 800px; border-radius: 50%; background: radial-gradient(circle, rgba(240,168,48,0.13) 0%, transparent 70%); pointer-events: none; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(240,168,48,0.12); border: 1px solid rgba(240,168,48,0.3); color: #f3c879; padding: 5px 14px; border-radius: 20px; font-size: 13px; font-weight: 500; margin-bottom: 28px; }
   .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
-  h1 { font-size: clamp(36px, 6vw, 64px); font-weight: 800; line-height: 1.08; letter-spacing: -1.5px; max-width: 840px; margin-bottom: 24px; }
-  h1 span { background: linear-gradient(135deg, var(--teal), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  h1 { font-family: 'Calistoga', Georgia, serif; font-size: clamp(36px, 6vw, 60px); font-weight: 400; line-height: 1.1; letter-spacing: -.5px; max-width: 840px; margin-bottom: 24px; text-wrap: balance; }
+  h1 span { color: var(--accent); }
   .hero-sub { font-size: clamp(16px, 2vw, 20px); color: var(--muted); max-width: 640px; margin-bottom: 40px; }
   .hero-buttons { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
-  .btn-primary { background: linear-gradient(135deg, var(--purple), #5b4fcc); color: #fff; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 16px; transition: transform .2s, box-shadow .2s; box-shadow: 0 4px 24px rgba(124,111,234,0.35); }
-  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(124,111,234,0.45); }
+  .btn-primary { background: var(--accent); color: #1a1206; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 16px; transition: transform .2s, opacity .2s; }
+  .btn-primary:hover { transform: translateY(-2px); opacity: .92; }
   .btn-secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 16px; transition: border-color .2s; }
-  .btn-secondary:hover { border-color: var(--purple); }
+  .btn-secondary:hover { border-color: var(--accent); }
   .hero-note { margin-top: 18px; font-size: 13px; color: var(--muted); }
 
   /* STATS */
@@ -61,7 +66,7 @@
   section { padding: 92px 5%; }
   .center { text-align: center; }
   .section-label { font-size: 12px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--purple); margin-bottom: 12px; }
-  h2 { font-size: clamp(28px, 4vw, 40px); font-weight: 800; letter-spacing: -.5px; margin-bottom: 16px; }
+  h2 { font-family: 'Calistoga', Georgia, serif; font-size: clamp(28px, 4vw, 42px); font-weight: 400; letter-spacing: -.3px; margin-bottom: 16px; text-wrap: balance; }
   .section-sub { font-size: 18px; color: var(--muted); max-width: 620px; margin-bottom: 56px; }
   .center .section-sub { margin-left: auto; margin-right: auto; }
   .alt { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
@@ -70,7 +75,15 @@
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; max-width: 1000px; margin: 0 auto; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
   .alt .card { background: var(--bg); }
-  .card-ico { font-size: 22px; margin-bottom: 12px; }
+  .card-ico { width: 46px; height: 46px; border-radius: 13px; margin-bottom: 14px; background: linear-gradient(160deg, rgba(240,168,48,0.2), rgba(240,168,48,0.05)); border: 1px solid rgba(240,168,48,0.22); display: flex; align-items: center; justify-content: center; transition: transform .35s cubic-bezier(.16,1,.3,1), border-color .3s; }
+  .card-ico i { font-size: 24px; color: var(--accent); line-height: 1; }
+  .card { transition: transform .35s cubic-bezier(.16,1,.3,1), border-color .3s, box-shadow .3s; }
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    .card:hover { transform: translateY(-4px); border-color: rgba(240,168,48,0.4); box-shadow: 0 24px 50px -28px rgba(0,0,0,0.75); }
+    .card:hover .card-ico { transform: scale(1.06); border-color: rgba(240,168,48,0.55); }
+  }
+  .logo-pill { display: inline-flex; align-items: center; gap: 8px; }
+  .logo-pill i { color: var(--accent); font-size: 18px; }
   .card h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
   .card p { font-size: 14px; color: var(--muted); }
   .logos { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; max-width: 760px; margin: 0 auto; }
@@ -104,6 +117,20 @@
     .stat:last-child { border-bottom: none; }
     nav .nav-cta { display: none; }
   }
+
+  /* "Room" treatment: the team back-office section sits in a treated office scene
+     that dissolves into the dark — same intentional-photo language as the homepage. */
+  #team { position: relative; overflow: hidden; }
+  #team::before {
+    content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background: url('/photo-agencies.jpg') center / cover;
+    filter: grayscale(.3) brightness(.4) contrast(1.05) sepia(.32) saturate(1.5) hue-rotate(-12deg);
+    opacity: .42;
+    -webkit-mask-image: radial-gradient(130% 92% at 28% 50%, #000 12%, transparent 72%);
+    mask-image: radial-gradient(130% 92% at 28% 50%, #000 12%, transparent 72%);
+  }
+  #team > * { position: relative; z-index: 1; }
+  #team .card { background: rgba(16,15,18,0.62); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-color: rgba(255,255,255,0.08); }
 </style>
 </head>
 <body>
@@ -148,10 +175,10 @@
 <section id="clients">
   <div class="center"><p class="section-label">Keep clients coming back</p><h2>A memory — and a money machine — for every client.</h2><p class="section-sub" style="margin-left:auto;margin-right:auto;">Remi turns one-off visits into regulars, and regulars into recurring revenue.</p></div>
   <div class="grid">
-    <div class="card"><div class="card-ico">🎟️</div><h3>Prepaid packages</h3><p>Sell session bundles once; Remi tracks every client's balance, counts down on each booking, and nudges them to rebook before it runs out.</p></div>
-    <div class="card"><div class="card-ico">♻️</div><h3>Recurring memberships</h3><p>Turn regulars into monthly revenue. Remi sends a signup link, bills it through your own PayFast, Paystack or Stripe, and keeps it renewing.</p></div>
-    <div class="card"><div class="card-ico">🗂️</div><h3>Rich client profiles</h3><p>Notes, preferences, allergies and tags on every client — so every visit feels personal and your whole team sees it instantly.</p></div>
-    <div class="card"><div class="card-ico">🎂</div><h3>Birthday &amp; win-back touches</h3><p>Consent-gated birthday and anniversary messages, plus gentle nudges to clients who've drifted — sent automatically, in their language.</p></div>
+    <div class="card"><div class="card-ico"><i class="ph-duotone ph-ticket"></i></div><h3>Prepaid packages</h3><p>Sell session bundles once; Remi tracks every client's balance, counts down on each booking, and nudges them to rebook before it runs out.</p></div>
+    <div class="card"><div class="card-ico"><i class="ph-duotone ph-arrows-clockwise"></i></div><h3>Recurring memberships</h3><p>Turn regulars into monthly revenue. Remi sends a signup link, bills it through your own PayFast, Paystack or Stripe, and keeps it renewing.</p></div>
+    <div class="card"><div class="card-ico"><i class="ph-duotone ph-identification-card"></i></div><h3>Rich client profiles</h3><p>Notes, preferences, allergies and tags on every client — so every visit feels personal and your whole team sees it instantly.</p></div>
+    <div class="card"><div class="card-ico"><i class="ph-duotone ph-cake"></i></div><h3>Birthday &amp; win-back touches</h3><p>Consent-gated birthday and anniversary messages, plus gentle nudges to clients who've drifted — sent automatically, in their language.</p></div>
   </div>
 </section>
 
@@ -159,10 +186,10 @@
 <section id="team" class="alt">
   <div class="center"><p class="section-label">Run your team — from WhatsApp</p><h2>Your staff back-office, in the chat they already use.</h2><p class="section-sub" style="margin-left:auto;margin-right:auto;">No app to install, no clock terminal on the wall. Staff just message Remi; you watch it all from one dashboard.</p></div>
   <div class="grid">
-    <div class="card"><div class="card-ico">🕐</div><h3>Clock in &amp; out</h3><p>Staff clock in and out by WhatsApp — "I'm here", "klaar" — and Remi stamps the time. No app, no terminal.</p></div>
-    <div class="card"><div class="card-ico">📋</div><h3>Live timesheets</h3><p>Hours tally automatically, per person, per week — payroll-ready, with a forgot-to-clock-out guard so nothing's left running.</p></div>
-    <div class="card"><div class="card-ico">🌴</div><h3>Leave requests</h3><p>Staff request leave over WhatsApp; you approve or decline from the dashboard, and Remi lets them know — no back-and-forth.</p></div>
-    <div class="card"><div class="card-ico">👥</div><h3>One team view</h3><p>See who's clocked in right now, this week's hours, and your leave inbox — all in the same dashboard as your bookings.</p></div>
+    <div class="card"><div class="card-ico"><i class="ph-duotone ph-clock"></i></div><h3>Clock in &amp; out</h3><p>Staff clock in and out by WhatsApp — "I'm here", "klaar" — and Remi stamps the time. No app, no terminal.</p></div>
+    <div class="card"><div class="card-ico"><i class="ph-duotone ph-clipboard-text"></i></div><h3>Live timesheets</h3><p>Hours tally automatically, per person, per week — payroll-ready, with a forgot-to-clock-out guard so nothing's left running.</p></div>
+    <div class="card"><div class="card-ico"><i class="ph-duotone ph-airplane-takeoff"></i></div><h3>Leave requests</h3><p>Staff request leave over WhatsApp; you approve or decline from the dashboard, and Remi lets them know — no back-and-forth.</p></div>
+    <div class="card"><div class="card-ico"><i class="ph-duotone ph-users-three"></i></div><h3>One team view</h3><p>See who's clocked in right now, this week's hours, and your leave inbox — all in the same dashboard as your bookings.</p></div>
   </div>
 </section>
 
@@ -172,12 +199,12 @@
   <h2>One login for your whole operation.</h2>
   <p class="section-sub" style="margin-left:auto;margin-right:auto;">Clients, packages, memberships, staff hours, bookings and invoices live in the same dashboard — and every client conversation, on any channel, in one unified inbox. Nothing scattered across apps and notebooks.</p>
   <div class="logos">
-    <span class="logo-pill">🗂️ Client CRM</span>
-    <span class="logo-pill">🎟️ Packages</span>
-    <span class="logo-pill">♻️ Memberships</span>
-    <span class="logo-pill">⏱️ Timesheets</span>
-    <span class="logo-pill">🌴 Leave inbox</span>
-    <span class="logo-pill">📥 Unified inbox</span>
+    <span class="logo-pill"><i class="ph-duotone ph-identification-card"></i> Client CRM</span>
+    <span class="logo-pill"><i class="ph-duotone ph-ticket"></i> Packages</span>
+    <span class="logo-pill"><i class="ph-duotone ph-arrows-clockwise"></i> Memberships</span>
+    <span class="logo-pill"><i class="ph-duotone ph-clipboard-text"></i> Timesheets</span>
+    <span class="logo-pill"><i class="ph-duotone ph-airplane-takeoff"></i> Leave inbox</span>
+    <span class="logo-pill"><i class="ph-duotone ph-tray"></i> Unified inbox</span>
   </div>
 </section>
 
