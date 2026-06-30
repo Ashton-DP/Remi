@@ -9,7 +9,7 @@
  */
 import { config } from '../config';
 import {
-  getClinic, getChaseableInvoices, advanceInvoiceChase, logInvoiceChase, isSuppressed,
+  getClinic, getChaseableInvoices, advanceInvoiceChase, logInvoiceChase, isSuppressed, getInvoiceById,
 } from '../db';
 import { sendProactiveWhatsApp } from './twilio';
 import { sendChaseEmail } from './email';
@@ -39,6 +39,12 @@ export async function runChaseForClinic(clinicId: string): Promise<number> {
       cadence,
     );
     if (!stage) continue;
+
+    // Stop-on-pay guard: the chaseable list was read at the top of this run, so a
+    // payment / dispute / opt-out that landed mid-run could still trigger one last
+    // stale chase. Re-read the invoice's CURRENT state right before sending.
+    const fresh = await getInvoiceById(inv.id);
+    if (!fresh || fresh.status !== 'overdue' || fresh.disputed) continue;
 
     const payUrl = hasPay ? payUrlForInvoice(inv.id) : null;
     const base = {

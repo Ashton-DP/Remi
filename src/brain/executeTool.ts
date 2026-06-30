@@ -10,7 +10,8 @@ import {
   addWaitlist, getNextWaitlist, setBookingDepositStatus, setClientName,
   findConfirmedBooking, findClientBookingAround, setConversationStatus,
   getTodaysBookings, listWaitlist, getOverdueChasedInvoices,
-  addTask, getActivePackage, decrementPackage, getClientMembership, markReferralBooked,
+  addTask, getActivePackage, decrementPackage, refundPackageSession, setBookingPackage,
+  getClientMembership, markReferralBooked,
 } from '../db';
 import { sessionsRemaining } from '../lib/clientOs';
 
@@ -171,6 +172,9 @@ export async function executeTool(
         if (pkg) {
           await decrementPackage(pkg.id);
           package_sessions_remaining = pkg.sessions_total - pkg.sessions_used - 1;
+          // Remember the package paid for this booking so a later cancel can refund
+          // the session (else cancel + rebook would charge the client twice).
+          if (booking?.id) await setBookingPackage(booking.id, pkg.id);
         }
       } catch (e) {
         console.error('[package] decrement error', e);
@@ -227,6 +231,14 @@ export async function executeTool(
         }
       }
       await setBookingStatus(existing.id, 'cancelled');
+
+      // If a prepaid package paid for this booking, refund the session so cancelling
+      // (and rebooking) doesn't double-charge the client. Clear the link to prevent a
+      // double refund. Best-effort — a refund hiccup must not block the cancellation.
+      if (existing.package_id) {
+        await refundPackageSession(existing.package_id).catch((e) => console.error('[package] refund error', e));
+        await setBookingPackage(existing.id, null).catch(() => {});
+      }
 
       // Offer freed slot to the next person on the waitlist for this service
       const waiter = await getNextWaitlist(clinic.id, existing.service);

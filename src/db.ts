@@ -1341,6 +1341,20 @@ export async function decrementPackage(packageId: string) {
   await supabase.rpc('increment_package_sessions_used', { pkg_id: packageId });
 }
 
+/** Refund one prepaid package session (atomic, floored at 0) — used when a
+ *  package-funded booking is cancelled so the client isn't charged for a no-visit. */
+export async function refundPackageSession(packageId: string) {
+  await supabase.rpc('decrement_package_sessions_used', { pkg_id: packageId });
+}
+
+/** Record (or clear) which prepaid package paid for a booking, so a later cancel can
+ *  refund the session. Best-effort — separate update so it can't fail the booking, and
+ *  tolerant of the package_id column not existing yet (logged, not thrown). */
+export async function setBookingPackage(bookingId: string, packageId: string | null) {
+  const { error } = await supabase.from('bookings').update({ package_id: packageId }).eq('id', bookingId);
+  if (error) console.error('[package] setBookingPackage failed (column missing?)', error.message);
+}
+
 export async function upsertPackage(
   clinicId: string,
   clientId: string,
