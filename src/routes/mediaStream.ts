@@ -453,9 +453,11 @@ export function attachMediaStream(server: Server) {
           // Greet in the chosen language. Callers reach this pipeline via the language
           // gate having picked Afrikaans, so greet in Afrikaans when that's locked;
           // otherwise greet in English and invite a language switch.
+          // The language gate already greeted + thanked the caller, so just introduce
+          // Remi in the chosen language and invite the request (no repeated thanks).
           const greeting = ctx.lang === 'af'
-            ? `Hallo, en dankie dat jy ${clinicName} bel. Jy praat met Remi, die virtuele assistent. Hoe kan ek jou vandag help?`
-            : `Hi, thanks for calling ${clinicName}. You're speaking to Remi, the virtual assistant. Feel free to talk to me in English, Afrikaans, or isiZulu — whichever you prefer. How can I help you today?`;
+            ? `Jy praat met Remi, die virtuele assistent. Hoe kan ek jou vandag help?`
+            : `You're speaking to Remi, the virtual assistant. How can I help you today?`;
           if (USE_AZURE) {
             // Azure STT auto-detects en-ZA/af-ZA/zu-ZA; barge-in on interim, turn on final.
             // Prefix the detected language so the brain knows which to mirror.

@@ -46,8 +46,10 @@ export function xmlEscape(s: string): string {
  * WS handler has context without re-deriving it.
  */
 export function buildConversationRelayTwiml(clinic: any, from: string): string {
+  // The language gate already said "thanks for calling <clinic>", so the in-call
+  // greeting just introduces Remi and invites the request — no repeated thanks.
   const greeting = speechNormalize(
-    `Thanks for calling ${clinic?.name ?? 'the clinic'}. I'm Remi, the virtual assistant. How can I help you today?`,
+    `I'm Remi, the virtual assistant. How can I help you today?`,
   );
   const provider = config.voice.ttsProvider; // 'Google'
   // ConversationRelay real-time transcription does NOT support af-ZA (Afrikaans) on
