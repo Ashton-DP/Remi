@@ -9,7 +9,7 @@
  */
 import { classifyInvoiceReply, phoneKey } from './chase';
 import {
-  getOverdueChasedInvoices, markInvoicePaidById, snoozeInvoice, disputeInvoice, addSuppression,
+  getOverdueChasedInvoices, markInvoicePaidById, snoozeInvoice, disputeInvoice, addSuppression, addTask,
 } from '../db';
 
 const SNOOZE_DAYS = 5;
@@ -31,9 +31,24 @@ export async function tryHandleInvoiceReply(clinicId: string, fromPhone: string,
       await addSuppression(clinicId, 'whatsapp', key, 'stop');
       await addSuppression(clinicId, 'sms', key, 'stop');
       return "Done — you won't receive any more payment reminders from us. Thank you.";
-    case 'paid':
-      for (const i of mine) await markInvoicePaidById(i.id);
-      return "Thank you! 🙏 We've marked that as settled on our side — if anything's still outstanding we'll be in touch.";
+    case 'paid': {
+      // Single outstanding invoice → safe to mark it settled.
+      if (mine.length === 1) {
+        await markInvoicePaidById(mine[0].id);
+        return "Thank you! 🙏 We've marked that as settled on our side — if anything's still outstanding we'll be in touch.";
+      }
+      // Multiple invoices outstanding → do NOT blanket-mark them all paid (that could
+      // wrongly zero genuinely-unpaid invoices). Pause the chases briefly and flag the
+      // clinic to reconcile which ones the payment actually covers.
+      const until = new Date(Date.now() + SNOOZE_DAYS * 86_400_000).toISOString();
+      for (const i of mine) await snoozeInvoice(i.id, until);
+      await addTask(clinicId, {
+        title: `Payment to reconcile — ${mine[0].contact_name ?? fromPhone}`,
+        note: `${mine[0].contact_name ?? fromPhone} replied that they've paid, but has ${mine.length} overdue invoices (${mine.map((i) => i.invoice_number).join(', ')}). Chasing paused ${SNOOZE_DAYS} days — please confirm which are settled and mark them paid.`,
+        source: 'chase-reply',
+      });
+      return "Thank you! 🙏 We've paused the reminders while we confirm which invoices that covers — we'll be in touch if anything's still outstanding.";
+    }
     case 'dispute':
       for (const i of mine) await disputeInvoice(i.id);
       return "Thanks for flagging that — we've paused the reminders and a team member will be in touch to sort it out.";
