@@ -82,13 +82,17 @@ function buildLanguageGateTwiml(clinic: any): string {
     numDigits: 1,
     action: '/webhooks/voice/route',
     method: 'POST',
-    language: RECOGNITION_LANG,
-    hints: 'English, Afrikaans, een, twee',
+    language: RECOGNITION_LANG, // en-GB recognises the words "English"/"Afrikaans" reliably
+    hints: 'English, Afrikaans',
     speechTimeout: 'auto',
-    actionOnEmptyResult: true, // no choice → still POST to /route, which defaults to English
+    actionOnEmptyResult: true, // no answer → still POST to /route, which defaults to English
   } as any);
-  gather.say({ voice: SA_ENGLISH_VOICE }, `Hello, and thanks for calling ${name}. To carry on in English, say English or press 1.`);
-  gather.say({ voice: AFRIKAANS_VOICE, language: 'af-ZA' } as any, 'Vir Afrikaans, sê Afrikaans, of druk twee.');
+  // ONE natural line, in the SAME premium voice as the English conversation — no second
+  // voice, no "press 1". The caller just says which language; /route sends English →
+  // ConversationRelay (premium) and Afrikaans → the Azure pipeline. (DTMF still works
+  // silently as a fallback, but we never mention it.)
+  const gateVoice = `Google.${config.voice.crVoiceEn}` as any;
+  gather.say({ voice: gateVoice }, `Hi, thanks for calling ${name}. You can talk to me in English or Afrikaans — which would you prefer?`);
   return vr.toString();
 }
 
