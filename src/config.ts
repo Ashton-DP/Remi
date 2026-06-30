@@ -93,7 +93,7 @@ export const config = {
     // Azure TTS voice per reply language. en/af use natural multilingual voices
     // (spoken via SSML in the right locale); zu uses the native isiZulu voice.
     azureVoiceEn: opt('AZURE_VOICE_EN', 'en-US-AvaMultilingualNeural'),
-    azureVoiceAf: opt('AZURE_VOICE_AF', 'en-GB-AdaMultilingualNeural'),
+    azureVoiceAf: opt('AZURE_VOICE_AF', 'af-ZA-AdriNeural'),
     azureVoiceZu: opt('AZURE_VOICE_ZU', 'zu-ZA-ThandoNeural'),
     // How long Azure waits for silence before finalising a caller's utterance.
     azureSttSilenceMs: parseInt(opt('AZURE_STT_SILENCE_MS', '400'), 10),

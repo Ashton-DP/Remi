@@ -26,7 +26,13 @@ const USE_AZURE = azureSpeechEnabled();
 // AND for a short tail afterwards, because the phone line echoes Remi's own voice back
 // into the inbound stream (there's no echo cancellation on Twilio media). Without this
 // the recogniser transcribes Remi's own greeting/replies and the bot talks to itself.
-const ECHO_GRACE_MS = parseInt(process.env.VOICE_ECHO_GRACE_MS ?? '800', 10);
+// After Twilio reports a TTS chunk finished PLAYING (the 'mark' event), keep ignoring
+// caller audio for this brief tail to swallow residual line echo. Far tighter than the
+// old blind 800ms because it starts from real playback-complete, not send-complete.
+const ECHO_TAIL_MS = parseInt(process.env.VOICE_ECHO_TAIL_MS ?? '200', 10);
+// Safety net: if a 'mark' is ever dropped, never leave Remi deaf — force back to
+// listening after this much silence-from-marks while playback is still "pending".
+const MARK_FALLBACK_MS = parseInt(process.env.VOICE_MARK_FALLBACK_MS ?? '20000', 10);
 
 /**
  * Custom voice pipeline using Twilio Media Streams (raw audio) + our OWN providers:
@@ -104,6 +110,8 @@ interface CallCtx {
   setupReady: Promise<void> | null; // resolves once client + conversation are loaded
   history: { role: string; content: string }[]; // in-memory transcript (avoids per-turn DB read)
   muteUntil: number; // epoch ms until which caller audio is ignored (echo suppression)
+  pendingMarks: number; // TTS chunks sent but not yet reported as finished playing
+  markFallback: ReturnType<typeof setTimeout> | null; // safety timer if a 'mark' is dropped
 }
 
 const DG_URL = () =>
@@ -161,10 +169,11 @@ function azureSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string, voice: stri
         twilioWs.send(JSON.stringify({ event: 'media', streamSid: ctx.streamSid, media: { payload: mulaw.toString('base64') } }));
       },
       onDone: () => {
-        if (!ctx.closed) twilioWs.send(JSON.stringify({ event: 'mark', streamSid: ctx.streamSid, mark: { name: 'eos' } }));
         if (ctx.azureTts === tts) ctx.azureTts = null;
-        ctx.muteUntil = Date.now() + ECHO_GRACE_MS; // ignore the echo tail of what we just said
-        ctx.botSpeaking = false;
+        // Keep the mic gated until Twilio reports this chunk actually finished PLAYING
+        // (the 'mark' below), not just finished sending. markReceived reopens the mic.
+        if (!ctx.closed) { twilioWs.send(JSON.stringify({ event: 'mark', streamSid: ctx.streamSid, mark: { name: 'eos' } })); markSent(ctx); }
+        else ctx.botSpeaking = false;
         resolve();
       },
     });
@@ -178,6 +187,7 @@ async function elevenLabsSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string) 
   const abort = new AbortController();
   ctx.ttsAbort = abort;
   ctx.botSpeaking = true;
+  let marked = false;
   try {
     const res = await fetch(url, {
       method: 'POST', signal: abort.signal,
@@ -191,14 +201,16 @@ async function elevenLabsSpeak(ctx: CallCtx, twilioWs: WebSocket, text: string) 
       if (done || ctx.closed || abort.signal.aborted) break;
       if (value?.length) twilioWs.send(JSON.stringify({ event: 'media', streamSid: ctx.streamSid, media: { payload: Buffer.from(value).toString('base64') } }));
     }
-    if (!ctx.closed && !abort.signal.aborted)
+    if (!ctx.closed && !abort.signal.aborted) {
       twilioWs.send(JSON.stringify({ event: 'mark', streamSid: ctx.streamSid, mark: { name: 'eos' } }));
+      markSent(ctx); marked = true;
+    }
   } catch (e: any) {
     if (e?.name !== 'AbortError') console.error('[mediaStream] ElevenLabs speak error', e);
   } finally {
     if (ctx.ttsAbort === abort) ctx.ttsAbort = null;
-    ctx.muteUntil = Date.now() + ECHO_GRACE_MS; // ignore the echo tail of what we just said
-    ctx.botSpeaking = false;
+    // If a mark was sent, markReceived reopens the mic; otherwise (error/abort) do it now.
+    if (!marked) { ctx.botSpeaking = false; ctx.muteUntil = Date.now() + ECHO_TAIL_MS; }
   }
 }
 
@@ -223,6 +235,38 @@ async function speak(ctx: CallCtx, twilioWs: WebSocket, text: string) {
   return elevenLabsSpeak(ctx, twilioWs, clean); // fallback only when no Azure key
 }
 
+/** Clear the dropped-mark safety timer. */
+function clearMarkTimer(ctx: CallCtx) {
+  if (ctx.markFallback) { clearTimeout(ctx.markFallback); ctx.markFallback = null; }
+}
+/** Arm the safety net: if marks stop coming while playback is pending, reopen the mic. */
+function armMarkFallback(ctx: CallCtx) {
+  clearMarkTimer(ctx);
+  ctx.markFallback = setTimeout(() => {
+    ctx.pendingMarks = 0;
+    ctx.botSpeaking = false;
+    ctx.muteUntil = Date.now() + ECHO_TAIL_MS;
+    ctx.markFallback = null;
+  }, MARK_FALLBACK_MS);
+  ctx.markFallback.unref?.();
+}
+/** We asked Twilio for a playback-complete 'mark' (one per spoken chunk). */
+function markSent(ctx: CallCtx) {
+  ctx.pendingMarks++;
+  armMarkFallback(ctx);
+}
+/** Twilio finished playing a chunk. Once every chunk is done, reopen the mic. */
+function markReceived(ctx: CallCtx) {
+  ctx.pendingMarks = Math.max(0, ctx.pendingMarks - 1);
+  if (ctx.pendingMarks === 0) {
+    clearMarkTimer(ctx);
+    ctx.botSpeaking = false;
+    ctx.muteUntil = Date.now() + ECHO_TAIL_MS; // brief tail for residual line echo
+  } else {
+    armMarkFallback(ctx); // more playback still pending — keep the net armed
+  }
+}
+
 /** Stop any in-progress TTS and flush Twilio's playback buffer (barge-in). */
 function bargeIn(ctx: CallCtx, twilioWs: WebSocket) {
   if (ctx.turnAbort) ctx.turnAbort.aborted = true; // stop LLM stream + sentence queue
@@ -231,6 +275,9 @@ function bargeIn(ctx: CallCtx, twilioWs: WebSocket) {
   if (ctx.botSpeaking && !ctx.closed) {
     twilioWs.send(JSON.stringify({ event: 'clear', streamSid: ctx.streamSid }));
   }
+  // 'clear' makes Twilio drop buffered audio AND its pending marks → reset our counter.
+  ctx.pendingMarks = 0;
+  clearMarkTimer(ctx);
   ctx.botSpeaking = false;
 }
 
@@ -256,6 +303,8 @@ export function attachMediaStream(server: Server) {
       setupReady: null,
       history: [],
       muteUntil: 0,
+      pendingMarks: 0,
+      markFallback: null,
     };
 
     // Absolute safety cap: tear the session down after MAX_CALL_MINUTES so a stuck
@@ -269,6 +318,7 @@ export function attachMediaStream(server: Server) {
       try { ctx.azureStt?.close(); } catch { /* */ }
       try { ctx.azureTts?.stop(); } catch { /* */ }
       try { twilioWs.close(); } catch { /* */ }
+      clearMarkTimer(ctx);
     };
     const maxCallMs = parseInt(process.env.MAX_CALL_MINUTES ?? '15', 10) * 60_000;
     const maxTimer = setTimeout(() => { console.warn('[mediaStream] max call duration reached — closing'); teardown(); }, maxCallMs);
@@ -445,8 +495,8 @@ export function attachMediaStream(server: Server) {
           break;
         }
         case 'mark':
-          // Playback of a TTS utterance finished.
-          ctx.botSpeaking = false;
+          // A spoken chunk finished PLAYING on Twilio's side — reopen the mic once all done.
+          markReceived(ctx);
           break;
         case 'stop':
           teardown(); // single cleanup path — stops STT/TTS, aborts the turn, closes the socket
