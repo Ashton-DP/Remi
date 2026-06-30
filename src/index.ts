@@ -54,6 +54,22 @@ const app = express();
 // Render/Railway terminate TLS and forward — trust the proxy so forwarded
 // host/proto are honoured (needed for correct Twilio signature validation).
 app.set('trust proxy', true);
+
+// Security headers (defence-in-depth + browser trust signals), applied to every
+// response including static HTML. HSTS forces HTTPS for a year; nosniff/frame/
+// referrer harden common attack surfaces. Permissions-Policy disables features we
+// never use but deliberately leaves `microphone` at its default (allowed for self)
+// so the ElevenLabs "Talk to Remi" voice widget keeps working. No CSP yet — the
+// widget + Google Fonts/Phosphor CDNs need careful allowlisting first.
+app.use((_req, res, next) => {
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), geolocation=(), browsing-topics=()');
+  next();
+});
+
 // Stripe webhook needs the RAW body for signature verification — must be mounted
 // BEFORE the json/urlencoded parsers so they don't consume the stream.
 app.post('/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
