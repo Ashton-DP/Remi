@@ -5,8 +5,8 @@
   "start_url": "/app/",
   "scope": "/app/",
   "display": "standalone",
-  "background_color": "#0a0b0f",
-  "theme_color": "#0a0b0f",
+  "background_color": "#0a0a0c",
+  "theme_color": "#0a0a0c",
   "icons": [
     { "src": "/logo-profile.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
