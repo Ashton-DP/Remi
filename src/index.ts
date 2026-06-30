@@ -4,7 +4,7 @@ import path from 'node:path';
 import { config, assertProductionConfig } from './config';
 import { installFetchTimeout } from './lib/httpTimeout';
 import { handleInboundWhatsApp } from './routes/whatsapp';
-import { handleInboundCall, handleVoiceGather, handleCallStatus } from './routes/voice';
+import { handleInboundCall, handleVoiceRoute, handleVoiceGather, handleCallStatus } from './routes/voice';
 import { generateReport, renderReportPage } from './report';
 import { renderDashboard } from './dashboard';
 import { supabase } from './lib/supabase';
@@ -161,6 +161,7 @@ app.post('/webhooks/sms', webhookLimiter, validateTwilioWebhook, inboundLimiter,
 
 // Voice (signature-validated)
 app.post('/webhooks/voice/inbound', webhookLimiter, validateTwilioWebhook, voiceLimiter, handleInboundCall);
+app.post('/webhooks/voice/route', webhookLimiter, validateTwilioWebhook, voiceLimiter, handleVoiceRoute);
 app.post('/webhooks/voice/gather', webhookLimiter, validateTwilioWebhook, voiceLimiter, handleVoiceGather);
 app.post('/webhooks/voice/status', webhookLimiter, validateTwilioWebhook, handleCallStatus);
 

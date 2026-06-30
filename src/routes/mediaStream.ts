@@ -64,7 +64,7 @@ function verifyMediaToken(p: { clinicId?: string; from?: string; callSid?: strin
 }
 
 /** TwiML that streams the call's raw audio to our /ws/media WebSocket (HMAC-gated). */
-export function buildMediaStreamTwiml(clinic: any, from: string, callSid: string): string {
+export function buildMediaStreamTwiml(clinic: any, from: string, callSid: string, forceLang: '' | 'en' | 'af' | 'zu' = ''): string {
   const clinicId = clinic?.id ?? '';
   const exp = Date.now() + MEDIA_TOKEN_TTL_MS;
   const token = signMediaToken(clinicId, from, callSid, exp);
@@ -79,6 +79,7 @@ export function buildMediaStreamTwiml(clinic: any, from: string, callSid: string
     `      <Parameter name="callSid" value="${xmlEscape(callSid)}"/>`,
     `      <Parameter name="exp" value="${exp}"/>`,
     `      <Parameter name="token" value="${token}"/>`,
+    `      <Parameter name="forceLang" value="${xmlEscape(forceLang)}"/>`,
     '    </Stream>',
     '  </Connect>',
     '</Response>',
@@ -384,6 +385,10 @@ export function attachMediaStream(server: Server) {
           // and prior history — loads in the background (ctx.setupReady); the first
           // caller turn awaits it (it finishes long before the greeting does).
           const clinicName = (params.clinicName || '').trim() || 'the clinic';
+          // If the caller explicitly chose a language at the gate, honour it: lock the
+          // voice/language for the whole call and skip at-start auto-detection.
+          const forced = params.forceLang === 'af' ? 'af' : params.forceLang === 'zu' ? 'zu' : params.forceLang === 'en' ? 'en' : '';
+          if (forced) { ctx.lang = forced; langConfirmed = true; }
           ctx.setupReady = (async () => {
             const clinic = await getClinic(params.clinicId);
             if (!clinic) throw new Error('unknown clinic');
@@ -395,10 +400,12 @@ export function attachMediaStream(server: Server) {
             ctx.history = await getHistory(ctx.convo.id); // load once; kept in memory thereafter
           })();
           ctx.setupReady.catch((e) => { console.error('[mediaStream] background setup error', e); teardown(); });
-          // Greet in English (the language nearly everyone here understands) and warmly
-          // invite the caller to use Afrikaans or isiZulu — so they pick, rather than us
-          // guessing wrong and answering in a language they don't speak.
-          const greeting = `Hi, thanks for calling ${clinicName}. You're speaking to Remi, the virtual assistant. Feel free to talk to me in English, Afrikaans, or isiZulu — whichever you prefer. How can I help you today?`;
+          // Greet in the chosen language. Callers reach this pipeline via the language
+          // gate having picked Afrikaans, so greet in Afrikaans when that's locked;
+          // otherwise greet in English and invite a language switch.
+          const greeting = ctx.lang === 'af'
+            ? `Hallo, en dankie dat jy ${clinicName} bel. Jy praat met Remi, die virtuele assistent. Hoe kan ek jou vandag help?`
+            : `Hi, thanks for calling ${clinicName}. You're speaking to Remi, the virtual assistant. Feel free to talk to me in English, Afrikaans, or isiZulu — whichever you prefer. How can I help you today?`;
           if (USE_AZURE) {
             // Azure STT auto-detects en-ZA/af-ZA/zu-ZA; barge-in on interim, turn on final.
             // Prefix the detected language so the brain knows which to mirror.

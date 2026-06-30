@@ -68,6 +68,69 @@ function gatherReply(text: string, lang: 'en-GB' | 'af-ZA'): string {
   return vr.toString();
 }
 
+/**
+ * Language gate: greet, then let the caller pick English or Afrikaans (by saying it
+ * or pressing a key). English → ConversationRelay (high quality); Afrikaans → the
+ * Azure media-stream pipeline (af-ZA STT/TTS, lesser quality). We must choose the
+ * pipeline up front because the inbound webhook fires before the caller speaks.
+ */
+function buildLanguageGateTwiml(clinic: any): string {
+  const name = clinic?.name ?? 'us';
+  const vr = voiceResponse();
+  const gather = vr.gather({
+    input: ['speech', 'dtmf'],
+    numDigits: 1,
+    action: '/webhooks/voice/route',
+    method: 'POST',
+    language: RECOGNITION_LANG,
+    hints: 'English, Afrikaans, een, twee',
+    speechTimeout: 'auto',
+    actionOnEmptyResult: true, // no choice → still POST to /route, which defaults to English
+  } as any);
+  gather.say({ voice: SA_ENGLISH_VOICE }, `Thanks for calling ${name}. For English, just keep talking, or press 1.`);
+  gather.say({ voice: AFRIKAANS_VOICE, language: 'af-ZA' } as any, 'Vir Afrikaans, sê Afrikaans, of druk twee.');
+  return vr.toString();
+}
+
+/**
+ * POST /webhooks/voice/route — second webhook, after the language gate. Routes the
+ * caller to the right voice engine based on their spoken/keyed choice. Fails safe to
+ * English ConversationRelay on anything ambiguous or on error.
+ */
+export async function handleVoiceRoute(req: Request, res: Response) {
+  const to: string = req.body.To ?? '';
+  const from: string = req.body.From ?? '';
+  const callSid: string = req.body.CallSid;
+  try {
+    const clinic = (await getClinicByNumber(to)) ?? (await getClinic(config.defaultClinicId));
+    if (!clinic) {
+      const vr = voiceResponse();
+      vr.say({ voice: SA_ENGLISH_VOICE }, "Sorry, this line isn't set up yet. Please try again later.");
+      vr.hangup();
+      return res.type('text/xml').send(vr.toString());
+    }
+    const digits = String(req.body.Digits ?? '').trim();
+    const speech = String(req.body.SpeechResult ?? '').toLowerCase();
+    const wantsAfrikaans = digits === '2' || /afrikaan/.test(speech) || detectAfrikaans(speech);
+    if (wantsAfrikaans) {
+      // Afrikaans → Azure media-stream (af-ZA forced so it honours the explicit choice).
+      return res.type('text/xml').send(buildMediaStreamTwiml(clinic, from, callSid, 'af'));
+    }
+    // English (digit 1, said "English", or no clear choice) → ConversationRelay.
+    return res.type('text/xml').send(buildConversationRelayTwiml(clinic, from));
+  } catch (e) {
+    console.error('[voice] route error — falling back to English', e);
+    try {
+      const clinic = (await getClinicByNumber(to)) ?? (await getClinic(config.defaultClinicId));
+      if (clinic) return res.type('text/xml').send(buildConversationRelayTwiml(clinic, from));
+    } catch { /* */ }
+    const vr = voiceResponse();
+    vr.say({ voice: SA_ENGLISH_VOICE }, 'Sorry, something went wrong. Please call back in a moment.');
+    vr.hangup();
+    res.type('text/xml').send(vr.toString());
+  }
+}
+
 /** POST /webhooks/voice/inbound — first webhook when a call arrives. */
 export async function handleInboundCall(req: Request, res: Response) {
   try {
@@ -83,10 +146,10 @@ export async function handleInboundCall(req: Request, res: Response) {
       return res.type('text/xml').send(vr.toString());
     }
 
-    // Natural-voice mode: hand the call to ConversationRelay (the WS server runs
-    // the AI + ElevenLabs TTS). Falls through to the <Gather>/<Say> flow otherwise.
+    // Natural-voice mode: greet + offer a language choice, then route English →
+    // ConversationRelay (high quality) or Afrikaans → Azure media-stream pipeline.
     if (config.voice.mode === 'conversationrelay') {
-      return res.type('text/xml').send(buildConversationRelayTwiml(clinic, from));
+      return res.type('text/xml').send(buildLanguageGateTwiml(clinic));
     }
     // Custom pipeline mode: stream raw audio to our Media Streams WS (own STT/TTS).
     if (config.voice.mode === 'mediastream') {
