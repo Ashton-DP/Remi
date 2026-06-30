@@ -6,6 +6,12 @@
       "runtimeExecutable": "/opt/local/bin/node",
       "runtimeArgs": ["node_modules/.bin/tsx", "src/index.ts"],
       "port": 3000
+    },
+    {
+      "name": "landing",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "4599", "--directory", "public"],
+      "port": 4599
     }
   ]
 }
